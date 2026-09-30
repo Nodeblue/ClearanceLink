@@ -105,6 +105,9 @@ public static class Derivations
         // a - b, e.g. GROUND ALTITUDE = elevation - height above ground
         "difference" => v[0] - v[1],
 
+        // sign flip, e.g. MSFS pitch is positive nose-down and bank positive left; X-Plane is the opposite
+        "negate" => -v[0],
+
         // table lookup on the (rounded) first input; unknown values fall back to 0
         "map" => map.Map.GetValueOrDefault((int)Math.Round(v[0])),
 

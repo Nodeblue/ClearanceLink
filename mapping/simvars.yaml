@@ -1,12 +1,272 @@
-# MSFS SimVar -> X-Plane mapping. Filled from the Phase 0 call inventory.
-# status: implemented | emulated | stubbed | unsupported
+# MSFS SimVar -> X-Plane 12 mapping, read by XPConnect.Server (MappingSet).
+# SimVars come from BATC's data definitions (recordings/samples/batc-1.8.21-setup.jsonl).
 #
-# - simvar: PLANE ALTITUDE
-#   units: feet
-#   xplane:
-#     dataref: sim/flightmodel/position/elevation
-#     units: meters
-#   convert: meters_to_feet
-#   status: implemented
-#   notes: ""
-[]
+# Fields:
+#   name      MSFS SimVar name. With indexed: true, "COM ACTIVE FREQUENCY:2" matches and {i} = 2, {i0} = 1.
+#   dataref   X-Plane dataref; array elements as name[n].
+#   units     units of the X-Plane value. Values are converted to whatever units the client asked for.
+#   const / const_text   fixed value when X-Plane has no equivalent.
+#   text      the dataref holds a byte-array string.
+#   derive + inputs      a named calculation (see Derivations in SimVarResolver.cs); map is its lookup table.
+#   status    implemented | emulated (approximation) | stubbed (fixed value) | unsupported
+#   verify    true until checked against a running X-Plane 12 (dataref name, units, sign).
+#
+# Anything not listed answers 0 and is logged as UNMAPPED once per connection.
+
+# --- Position and attitude ---
+- name: PLANE LATITUDE
+  dataref: sim/flightmodel/position/latitude
+  units: degrees
+- name: PLANE LONGITUDE
+  dataref: sim/flightmodel/position/longitude
+  units: degrees
+- name: PLANE ALTITUDE
+  dataref: sim/flightmodel/position/elevation
+  units: meters
+- name: INDICATED ALTITUDE CALIBRATED
+  dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+  units: feet
+- name: INDICATED ALTITUDE
+  dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+  units: feet
+- name: PRESSURE ALTITUDE
+  dataref: sim/flightmodel2/position/pressure_altitude
+  units: feet
+  verify: true
+- name: PLANE ALT ABOVE GROUND
+  dataref: sim/flightmodel/position/y_agl
+  units: meters
+- name: PLANE ALT ABOVE GROUND MINUS CG
+  dataref: sim/flightmodel/position/y_agl
+  units: meters
+  status: emulated
+  notes: X-Plane's y_agl is already close to the gear height on the ground.
+- name: GROUND ALTITUDE
+  derive: difference
+  inputs: [sim/flightmodel/position/elevation, sim/flightmodel/position/y_agl]
+  units: meters
+- name: PLANE HEADING DEGREES TRUE
+  dataref: sim/flightmodel/position/true_psi
+  units: degrees
+- name: PLANE HEADING DEGREES MAGNETIC
+  dataref: sim/flightmodel/position/mag_psi
+  units: degrees
+- name: PLANE PITCH DEGREES
+  derive: negate
+  inputs: [sim/flightmodel/position/true_theta]
+  units: degrees
+  notes: MSFS pitch is positive nose-down.
+- name: PLANE BANK DEGREES
+  derive: negate
+  inputs: [sim/flightmodel/position/true_phi]
+  units: degrees
+  notes: MSFS bank is positive to the left.
+- name: SIM ON GROUND
+  dataref: sim/flightmodel/failures/onground_any
+  units: bool
+
+# --- Speeds ---
+- name: AIRSPEED INDICATED
+  dataref: sim/flightmodel/position/indicated_airspeed
+  units: knots
+- name: GROUND VELOCITY
+  dataref: sim/flightmodel/position/groundspeed
+  units: meters per second
+
+# --- Radios ---
+- name: COM ACTIVE FREQUENCY
+  indexed: true
+  dataref: sim/cockpit2/radios/actuators/com{i}_frequency_hz_833
+  units: khz
+- name: COM STANDBY FREQUENCY
+  indexed: true
+  dataref: sim/cockpit2/radios/actuators/com{i}_standby_frequency_hz_833
+  units: khz
+- name: COM VOLUME
+  indexed: true
+  dataref: sim/cockpit2/radios/actuators/audio_volume_com{i}
+  units: ratio
+- name: COM STATUS
+  indexed: true
+  derive: map
+  inputs: [sim/cockpit2/switches/avionics_power_on]
+  map: {0: 2, 1: 0}
+  status: emulated
+  notes: MSFS 0 = working, 2 = no electricity. Taken from the avionics switch.
+- name: COM RECEIVE
+  indexed: true
+  dataref: sim/cockpit2/radios/actuators/audio_selection_com{i}
+  units: bool
+- name: COM TRANSMIT
+  indexed: true
+  derive: equals_by_index
+  inputs: [sim/cockpit2/radios/actuators/audio_com_selection]
+  map: {1: 6, 2: 7}
+  notes: X-Plane selects the transmitting radio with one value, 6 = COM1, 7 = COM2.
+- name: TRANSPONDER CODE
+  indexed: true
+  dataref: sim/cockpit2/radios/actuators/transponder_code
+  units: number
+  notes: Decimal digits (1200). A client asking in bco16 gets 0x1200.
+- name: TRANSPONDER STATE
+  indexed: true
+  derive: map
+  inputs: [sim/cockpit2/radios/actuators/transponder_mode]
+  map: {0: 0, 1: 1, 2: 3, 3: 4, 4: 2, 5: 4}
+  status: emulated
+  verify: true
+  notes: MSFS 0 off, 1 standby, 2 test, 3 on, 4 alt. X-Plane 0 off, 1 standby, 2 on, 3 alt, 4 test, 5 ground.
+- name: TRANSPONDER IDENT
+  indexed: true
+  dataref: sim/cockpit2/radios/indicators/transponder_id
+  units: bool
+
+# --- Time ---
+- name: ZULU TIME
+  dataref: sim/time/zulu_time_sec
+  units: seconds
+- name: LOCAL TIME
+  dataref: sim/time/local_time_sec
+  units: seconds
+- name: ZULU DAY OF YEAR
+  derive: zulu_day_of_year
+  inputs: [sim/time/local_date_days]
+  status: emulated
+  notes: X-Plane only has the local date; differs from Zulu for part of the day.
+- name: ZULU DAY OF WEEK
+  derive: zulu_day_of_week
+  inputs: [sim/time/local_date_days]
+  status: emulated
+- name: ZULU YEAR
+  derive: zulu_year
+  inputs: [sim/time/local_date_days]
+  status: emulated
+- name: ABSOLUTE TIME
+  derive: absolute_time
+  inputs: [sim/time/local_date_days, sim/time/zulu_time_sec]
+  units: seconds
+  status: emulated
+- name: TIME OF DAY
+  derive: time_of_day
+  inputs: [sim/graphics/scenery/sun_pitch_degrees, sim/time/local_time_sec]
+  status: emulated
+  notes: 0 dawn, 1 day, 2 dusk, 3 night, from the sun's height.
+
+# --- Weather ---
+- name: AMBIENT WIND DIRECTION
+  dataref: sim/weather/aircraft/wind_now_direction_degt
+  units: degrees
+  verify: true
+- name: AMBIENT WIND VELOCITY
+  dataref: sim/weather/aircraft/wind_now_speed_msc
+  units: meters per second
+  verify: true
+
+# --- Engines and configuration ---
+- name: GENERAL ENG COMBUSTION
+  indexed: true
+  dataref: sim/flightmodel2/engines/engine_is_burning_fuel[{i0}]
+  units: bool
+- name: TURB ENG N1
+  indexed: true
+  dataref: sim/flightmodel2/engines/N1_percent[{i0}]
+  units: percent
+- name: TURB ENG N2
+  indexed: true
+  dataref: sim/flightmodel2/engines/N2_percent[{i0}]
+  units: percent
+- name: GENERAL ENG THROTTLE LEVER POSITION
+  indexed: true
+  dataref: sim/cockpit2/engine/actuators/throttle_ratio[{i0}]
+  units: ratio
+- name: GEAR CENTER POSITION
+  dataref: sim/flightmodel2/gear/deploy_ratio[0]
+  units: ratio
+- name: GEAR LEFT POSITION
+  dataref: sim/flightmodel2/gear/deploy_ratio[1]
+  units: ratio
+- name: GEAR RIGHT POSITION
+  dataref: sim/flightmodel2/gear/deploy_ratio[2]
+  units: ratio
+- name: TRAILING EDGE FLAPS LEFT PERCENT
+  dataref: sim/flightmodel2/controls/flap1_deploy_ratio
+  units: ratio
+- name: TRAILING EDGE FLAPS RIGHT PERCENT
+  dataref: sim/flightmodel2/controls/flap1_deploy_ratio
+  units: ratio
+- name: SPOILERS LEFT POSITION
+  dataref: sim/flightmodel2/controls/speedbrake_ratio
+  units: ratio
+- name: SPOILERS RIGHT POSITION
+  dataref: sim/flightmodel2/controls/speedbrake_ratio
+  units: ratio
+- name: LIGHT NAV
+  dataref: sim/cockpit2/switches/navigation_lights_on
+  units: bool
+- name: LIGHT BEACON
+  dataref: sim/cockpit2/switches/beacon_on
+  units: bool
+- name: LIGHT LANDING
+  dataref: sim/cockpit2/switches/landing_lights_on
+  units: bool
+- name: LIGHT TAXI
+  dataref: sim/cockpit2/switches/taxi_light_on
+  units: bool
+- name: LIGHT STROBE
+  dataref: sim/cockpit2/switches/strobe_lights_on
+  units: bool
+
+# --- Aircraft identity and performance ---
+- name: ATC MODEL
+  dataref: sim/aircraft/view/acf_ICAO
+  text: true
+- name: ATC TYPE
+  dataref: sim/aircraft/view/acf_ICAO
+  text: true
+  status: emulated
+  notes: MSFS gives a type name ("Vision Jet"); X-Plane only has the ICAO code for sure.
+- name: ATC ID
+  dataref: sim/aircraft/view/acf_tailnum
+  text: true
+- name: TITLE
+  dataref: sim/aircraft/view/acf_ui_name
+  text: true
+  verify: true
+- name: ATC HEAVY
+  const: 0
+  status: stubbed
+- name: WING SPAN
+  const: 12
+  units: meters
+  status: stubbed
+  notes: No reliable X-Plane dataref; a light-jet value.
+- name: CAMERA STATE
+  const: 2
+  status: stubbed
+  notes: 2 = cockpit.
+- name: DESIGN SPEED VS0
+  dataref: sim/aircraft/view/acf_Vso
+  units: knots
+- name: DESIGN SPEED VS1
+  dataref: sim/aircraft/view/acf_Vs
+  units: knots
+- name: DESIGN SPEED CLIMB
+  const: 165
+  units: knots
+  status: stubbed
+- name: DESIGN TAKEOFF SPEED
+  const: 95
+  units: knots
+  status: stubbed
+- name: DESIGN CRUISE ALT
+  const: 31000
+  units: feet
+  status: stubbed
+- name: ESTIMATED CRUISE SPEED
+  const: 300
+  units: knots
+  status: stubbed
+- name: TYPICAL DESCENT RATE
+  const: 1500
+  units: feet per minute
+  status: stubbed
