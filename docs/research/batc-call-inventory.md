@@ -4,13 +4,13 @@ Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committ
 
 ## Go/no-go notes
 
-- **Looks like a go for the core path, pending runbook step 3** (the `fake` server test with MSFS closed has not been run yet).
+- **Go.** With MSFS closed, BATC connected both SimConnect connections to `XPConnect fake --identity msfs2024` (see "Stand-in test" below).
 - BATC opens **two** SimConnect connections. Both honour a `SimConnect.cfg` (one next to `simconnect_ws.exe`, one next to `BeyondATC.exe`), so both can be pointed at XPConnect over TCP without touching MSFS.
-- Sim detection is from the Open reply only: `simconnect_ws` logs `SimConnect OPEN: app='SunRise' version=12.2 -> msfs2024=true`. No system events are subscribed and no system states are requested.
+- Before connecting, BATC checks for a running process named `FlightSimulator2024.exe`; a do-nothing stub with that name passes. On the SimConnect side, sim detection is from the Open reply only: `simconnect_ws` logs `SimConnect OPEN: app='SunRise' version=12.2 -> msfs2024=true`. No system events are subscribed and no system states are requested.
 - Everything BATC needs about the **user aircraft** is two data definitions plus two COM events. All of it has an obvious X-Plane source.
 - **Facility data** is the large job: 80 requests for 66 airports, 34,271 replies.
 - **AI traffic** is fully driven by BATC: it creates objects, releases them from sim AI control and writes their position and animation state continuously. This is 99% of the packet volume and needs an X-Plane plugin. It can be left out of the first milestone (run BATC with traffic off).
-- Not yet known: PTT behaviour, process or file checks, and whether BATC reconnects after XPConnect restarts.
+- Not yet known: PTT and button behaviour, and whether BATC reconnects after XPConnect restarts. Both need the fake to return data first.
 
 ## Handshake
 
@@ -19,7 +19,7 @@ Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committ
 | 1 | `BeyondATC` (`simconnect_ws.exe`) | alias `RS`, 12.2.0.0, protocol 6 | `SunRise` app 12.2.282174.999, SimConnect 12.2.0.0 |
 | 2 | `BATCDLLSimConnection` (`BeyondATC.exe`) | alias `RS`, 12.2.0.0, protocol 6 | same |
 
-`ServerIdentity.Msfs2024` currently says 12.1 and SimConnect build 282174.999; the recorded values are 12.2 and 0.0.
+`ServerIdentity.Msfs2024` uses these recorded values.
 
 ## Connection 1: simconnect_ws (user state + facilities)
 
@@ -60,6 +60,23 @@ Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committ
 - 64 objects created with FSLTL and Asobo passive models; each gets `AssignedObjectId`, then `AIReleaseControl` and `FREEZE_LATITUDE_LONGITUDE_SET` / `FREEZE_ALTITUDE_SET` / `FREEZE_ATTITUDE_SET`.
 - BATC then writes each object continuously: define 4 and 5 (position, attitude, IAS), define 6 (N1/N2/throttle), define 0 (`Initial Position`), define 12, 14, 2, 1 (surfaces, gear, lights, engines), plus light, flap, gear and spoiler events (`SPOILERS_ON` 8,925 times).
 - It reads back per object: define 18 (GROUND ALTITUDE, PLANE ALTITUDE, GROUND VELOCITY), define 19 (PLANE ALT ABOVE GROUND MINUS CG), define 20 (PLANE ALTITUDE). Ground altitude under each AI aircraft is therefore something the sim side must supply.
+
+## Stand-in test (runbook step 3, MSFS closed)
+
+Source: `recordings/local/20260930-183230-fake.jsonl` and BATC's `Player.log`, 2026-09-30 08:32Z to 09:01Z. `XPConnect fake --listen tcp:5112 --identity msfs2024`.
+
+| Attempt | Result |
+|---|---|
+| No MSFS process | `Player.log`: `Detected Microsoft Flight Simulator 2020 is in use`, then `ERROR DIALOG: Flight Simulator is not running!`. `simconnect_ws.exe` is not launched and nothing connects. |
+| Stub window titled `Microsoft Flight Simulator 2024 - 1.8.16.0`, process name `SimStub` | Same error. The window title alone does not pass. |
+| Same stub, process name `FlightSimulator2024` | `Detected Microsoft Flight Simulator 2024 is in use`, `Flight Simulator Build Version: 1.0.0.0 \| module=FlightSimulator2024.exe size=0x2D000`. `simconnect_ws` starts and both connections open. |
+
+- The stub was an empty WinForms program. BATC read its file version (1.0.0.0) and module size and carried on, so there is no check of signature, path or real version.
+- `simconnect_ws` logged `SimConnect OPEN: app='SunRise' version=12.2 -> msfs2024=true` against the fake.
+- BATC then sent its 150 data definitions and 39 event mappings and polled define 17 (user aircraft, period once) about 10 times a second: 13,540 requests in 25 minutes. With no `SimObjectData` reply its UI showed "Waiting for connection to Sim..." and then a connection timeout. It kept polling and did not disconnect.
+- No facility requests were made in this state; they start once a flight is set up.
+- `--identity msfs2020` was not tried.
+- Consequence for XPConnect: it must run (or ship) a stub process named `FlightSimulator2024.exe`, and the first thing to implement is the `SimObjectData` reply for defines 300 and 17.
 
 ## Operational notes from the session
 - After an MSFS crash, add-ons it launched (FSUIPC7, BravoLED, TDS GTNXi) kept the dead process's TCP port 500 listener alive; the restarted MSFS could not bind 500 and connections to it hung with no Open reply. Ending those processes, or forwarding to the new MSFS's dynamic IPv4 port, fixes it.
