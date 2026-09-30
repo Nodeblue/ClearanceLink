@@ -181,6 +181,19 @@ public sealed class AirportFacilityTests
         Assert.True(onSpot <= 1, $"{onSpot} spurs within 1 m of their spot");
     }
     [Fact]
+    public void Frequency_names_are_callsigns_as_msfs_sends_them()
+    {
+        // MSFS YBBN: delivery and tower "BRISBANE", ground "North"/"South"/"Domestic", ATIS "YBBN".
+        var airport = Fixtures.Airport("YBBN");
+        var names = airport.Frequencies.ToDictionary(f => (f.Kind, f.Khz), f => MsfsCodes.FrequencyName(f, airport));
+
+        Assert.All(names.Where(n => n.Key.Kind is FrequencyKind.Clearance or FrequencyKind.Tower or FrequencyKind.Approach or FrequencyKind.Departure), n => Assert.Equal("BRISBANE", n.Value));
+        Assert.All(names.Where(n => n.Key.Kind == FrequencyKind.Atis), n => Assert.Equal("YBBN", n.Value));
+        Assert.All(names.Where(n => n.Key.Kind == FrequencyKind.Ground), n => Assert.Equal("BRISBANE", n.Value)); // "BRISBANE GND" in the Gateway file
+        Assert.Equal("North", MsfsCodes.FrequencyName(new Frequency(FrequencyKind.Ground, 124050, "SMC North"), airport)); // Orbx
+        Assert.Equal("BRISBANE", MsfsCodes.FrequencyName(new Frequency(FrequencyKind.Clearance, 118600, "ACD"), airport));
+    }
+    [Fact]
     public void Surrounding_airport_definition_encodes_without_taxi_data()
     {
         var root = AirportFacility.Build(Fixtures.Airport("YBBN"));

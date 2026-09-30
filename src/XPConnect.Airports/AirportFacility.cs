@@ -88,7 +88,7 @@ public static class AirportFacility
             root.Add(new FacilityObject("FREQUENCY")
                 .Set("TYPE", MsfsCodes.Frequency(frequency.Kind))
                 .Set("FREQUENCY", frequency.Khz * 1000)
-                .Set("NAME", frequency.Name));
+                .Set("NAME", MsfsCodes.FrequencyName(frequency, airport)));
         }
 
         foreach (var spot in taxi.Parking)
