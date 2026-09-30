@@ -1,6 +1,6 @@
 # BATC call inventory (Phase 0)
 
-Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committed, 2.9 GB). Pass-through recording between BeyondATC 1.8.21.EA (`simconnect_ws` 0.14.1.1) and MSFS 2024 1.8.16.0, YBBN to YTWB in a DA42, BATC traffic on, 2026-09-30 07:46Z to 08:16Z. 4,636,079 packets. The flight ended before landing and part of it was flown at increased sim rate. An earlier ground-only recording (`20260930-165631-record.jsonl`) agrees on connection 1.
+Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committed, 2.9 GB). Pass-through recording between BeyondATC 1.8.21.EA (`simconnect_ws` 0.14.1.1) and MSFS 2024 1.8.16.0, YBBN to YTWB in the Cirrus Vision Jet (ATC MODEL `SF50`; the SimBrief plan was filed as a DA42), BATC traffic on, 2026-09-30 07:46Z to 08:16Z. 4,636,079 packets. The flight ended before landing and part of it was flown at increased sim rate. An earlier ground-only recording (`20260930-165631-record.jsonl`) agrees on connection 1.
 
 ## Go/no-go notes
 
@@ -78,7 +78,18 @@ Source: `recordings/local/20260930-183230-fake.jsonl` and BATC's `Player.log`, 2
 - `--identity msfs2020` was not tried.
 - Consequence for XPConnect: it must run (or ship) a stub process named `FlightSimulator2024.exe`, and the first thing to implement is the `SimObjectData` reply for defines 300 and 17.
 
-## Operational notes from the session
-- After an MSFS crash, add-ons it launched (FSUIPC7, BravoLED, TDS GTNXi) kept the dead process's TCP port 500 listener alive; the restarted MSFS could not bind 500 and connections to it hung with no Open reply. Ending those processes, or forwarding to the new MSFS's dynamic IPv4 port, fixes it.
+## Stand-in with data (MSFS closed, 2026-09-30 09:23Z)
+
+Source: `recordings/local/20260930-191918-fake.jsonl`, `Player.log` and Ben's report. `fake --identity msfs2024 --facilities <facility packets from the two pass-through recordings>` plus the `FlightSimulator2024.exe` stub (console process, no window). BATC traffic set to 5/5/5/5.
+
+- BATC reported connected, took YBBN from the served position and loaded it from the replay in 10.9 s (8,610 packets; MSFS took 14.1 s), then YTWB (583 packets) and 15 surrounding airports. No facility request went unanswered.
+- The frequency list and the parking map displayed. The SimBrief plan loaded (departure 01R).
+- IFR clearance worked, including readback. BATC tuned COM1 with `COM_STBY_RADIO_SET_HZ` + `COM_RADIO_SET_HZ`: 118.850 (Clearance), then 122.250 (Ground). The fake applied them and BATC showed the new frequency.
+- Pushback/taxi request worked and produced a route on the map.
+- Not tested: PTT and the quick-button bindings that arrive as `EXTERNAL_SYSTEM_*` events, anything needing the aircraft to move, reconnects.
+- `EnumerateSimObjectsAndLiveries` (type 2) was sent once and not answered. No AI create calls followed, so BATC appears to wait for that list before injecting traffic. Nothing else was left unanswered.
+- So for BATC to run a ground session it needs only: the process stub, the Open reply, `SimObjectData` for defines 300 and 17, the two COM events, and facility data.
+
+## Operational notes from the session- After an MSFS crash, add-ons it launched (FSUIPC7, BravoLED, TDS GTNXi) kept the dead process's TCP port 500 listener alive; the restarted MSFS could not bind 500 and connections to it hung with no Open reply. Ending those processes, or forwarding to the new MSFS's dynamic IPv4 port, fixes it.
 - The MSFS crash itself was in ChasePlane's `CP.dll` (0xc000001d), unrelated to the recorder.
 - A 30-minute flight with traffic produces a 2.9 GB `.jsonl`. The recorder needs a way to drop or sample the high-rate AI `SetDataOnSimObject` / poll traffic.
