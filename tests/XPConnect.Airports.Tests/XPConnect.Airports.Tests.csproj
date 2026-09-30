@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\src\XPConnect.Airports\XPConnect.Airports.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\XPConnect.Protocol.Tests\FacilityFixture.cs" Link="FacilityFixture.cs" />
+  </ItemGroup>
+
 </Project>
