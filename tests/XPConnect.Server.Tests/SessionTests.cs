@@ -38,7 +38,8 @@ public sealed class SessionTests
         var block = header[28..];
         Assert.Equal(-27.4016, BinaryPrimitives.ReadDoubleLittleEndian(block), 6);
         Assert.Equal(153.1122, BinaryPrimitives.ReadDoubleLittleEndian(block[8..]), 6);
-        Assert.Equal(15.3, BinaryPrimitives.ReadDoubleLittleEndian(block[16..]), 6);
+        // Calibrated altitude is X-Plane's true altitude (4.67 m), not the pilot's altimeter reading.
+        Assert.Equal(4.67 / 0.3048, BinaryPrimitives.ReadDoubleLittleEndian(block[16..]), 6);
         Assert.Equal(ExpectedDefine17Size, block.Length);
         Assert.Empty(session.Stats.UnmappedNames.Where(n => !n.StartsWith("L:", StringComparison.Ordinal)).Intersect(Define17Names));
     }

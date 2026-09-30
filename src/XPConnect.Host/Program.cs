@@ -19,7 +19,7 @@ namespace XPConnect.Host
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--facilities <recording.jsonl>]
                     [--stub <path> | --no-stub] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
-                  SimConnect.cfg redirect points at), --xplane http://localhost:8086, --mapping ./mapping.
+                  SimConnect.cfg redirect points at), --xplane http://127.0.0.1:8086, --mapping ./mapping.
                   Starts the FlightSimulator2024 stub process BATC checks for, unless --no-stub.
               xpconnect xplane-check [--xplane <url>] [--mapping <dir>] [--seconds <n>]
                   Connect to X-Plane, read every mapped dataref and print what BATC would be sent. Checks the mapping.
@@ -216,7 +216,9 @@ namespace XPConnect.Host
             return null;
         }
 
-        private static Uri XPlaneUri(Options options) => new(options.Get("xplane") ?? "http://localhost:8086/");
+        // 127.0.0.1, not localhost: X-Plane listens on IPv4 only, and on Windows each request to localhost first
+        // tries ::1 and waits about two seconds before falling back.
+        private static Uri XPlaneUri(Options options) => new(options.Get("xplane") ?? "http://127.0.0.1:8086/");
 
         private static FacilityReplay? LoadFacilities(Options options)
         {

@@ -10,7 +10,7 @@ using XPConnect.Server;
 namespace XPConnect.XPlane;
 
 /// <summary>
-/// Talks to X-Plane 12's built-in Web API (REST + WebSocket, default http://localhost:8086, API v2, X-Plane 12.1.4+).
+/// Talks to X-Plane 12's built-in Web API (REST + WebSocket, default http://127.0.0.1:8086, API v2, X-Plane 12.1.4+).
 /// Watched datarefs are looked up by name over REST and subscribed over the WebSocket; X-Plane pushes changes and
 /// reads are answered from the cache. Writes and commands go over REST. Reconnects on its own when X-Plane restarts.
 /// </summary>
