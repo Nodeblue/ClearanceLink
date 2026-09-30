@@ -83,6 +83,15 @@ public sealed class MappingTests
     public void Qnh_altitude_follows_the_standard_atmosphere(double pressureAltitude, double qnh, double expected) =>
         Assert.InRange(Derivations.QnhAltitudeFeet(pressureAltitude, qnh), expected - 30, expected + 30);
 
+    [Theory]
+    [InlineData(10114.84, 30.33, 30.33, 10114.84)]   // QNH set: exactly the cockpit reading
+    [InlineData(10114.84, 30.33, 30.3026, 10090.6)]  // X-Plane 12.4.3 in the climb out of YBBN, 2026-09-30
+    [InlineData(-207.93, 29.92, 30.3026, 143.0)]     // baro left at standard on the ground
+    public void Altimeter_is_re_referenced_to_the_qnh(double indicated, double settingInHg, double qnhInHg, double expected) =>
+        Assert.InRange(
+            Derivations.AltimeterAtQnhFeet(indicated, settingInHg * 33.8638866667, qnhInHg * 33.8638866667),
+            expected - 3,
+            expected + 3);
     [Fact]
     public void Parked_airspeed_is_never_negative()
     {

@@ -114,6 +114,9 @@ public static class Derivations
         // altimeter reading at the local QNH, from pressure altitude (feet) and sea-level pressure (inHg)
         "qnh_altitude" => QnhAltitudeFeet(v[0], v[1] * 33.8638866667),
 
+        // altimeter reading (feet) and its baro setting (inHg), re-referenced to the sea-level pressure (inHg)
+        "altimeter_at_qnh" => AltimeterAtQnhFeet(v[0], v[1] * 33.8638866667, v[2] * 33.8638866667),
+
         // table lookup on the (rounded) first input; unknown values fall back to 0
         "map" => map.Map.GetValueOrDefault((int)Math.Round(v[0])),
 
@@ -132,6 +135,23 @@ public static class Derivations
         _ => throw new InvalidOperationException($"Unknown derivation '{name}' in mapping for {map.Name}"),
     };
 
+    /// <summary>
+    /// What an altimeter showing <paramref name="indicatedFeet"/> with <paramref name="settingHpa"/> dialled in would
+    /// show at <paramref name="qnhHpa"/>. Equal to the cockpit reading when the pilot has set the QNH. X-Plane's
+    /// pressure_altitude dataref is not used: it disagreed with the altimeter by about 70 ft at 10,000 ft (2026-09-30).
+    /// </summary>
+    public static double AltimeterAtQnhFeet(double indicatedFeet, double settingHpa, double qnhHpa)
+    {
+        if (settingHpa <= 0 || qnhHpa <= 0)
+        {
+            return indicatedFeet;
+        }
+
+        const double k = 145366.45;
+        const double n = 0.190284;
+        var staticHpa = settingHpa * Math.Pow(1 - (indicatedFeet / k), 1 / n);
+        return k * (1 - Math.Pow(staticHpa / qnhHpa, n));
+    }
     /// <summary>Standard-atmosphere altimeter: the height a barometric altimeter set to <paramref name="qnhHpa"/> shows.</summary>
     public static double QnhAltitudeFeet(double pressureAltitudeFeet, double qnhHpa)
     {
