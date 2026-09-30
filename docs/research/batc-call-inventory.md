@@ -1,6 +1,6 @@
 # BATC call inventory (Phase 0)
 
-Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committed, 2.9 GB). Pass-through recording between BeyondATC 1.8.21.EA (`simconnect_ws` 0.14.1.1) and MSFS 2024 1.8.16.0, YBBN to YTWB in a DA42, BATC traffic on, 2026-09-30 07:46Z to 08:16Z. 4,636,079 packets. The flight ended before landing and part of it was flown at increased sim rate. An earlier ground-only recording (`20260930-165631-record.jsonl`) agrees on connection 1.
+Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committed, 2.9 GB). Pass-through recording between BeyondATC 1.8.21.EA (`simconnect_ws` 0.14.1.1) and MSFS 2024 1.8.16.0, YBBN to YTWB in the Cirrus Vision Jet (ATC MODEL `SF50`; the SimBrief plan was filed as a DA42), BATC traffic on, 2026-09-30 07:46Z to 08:16Z. 4,636,079 packets. The flight ended before landing and part of it was flown at increased sim rate. An earlier ground-only recording (`20260930-165631-record.jsonl`) agrees on connection 1.
 
 ## Go/no-go notes
 

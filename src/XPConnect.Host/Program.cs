@@ -16,8 +16,10 @@ namespace XPConnect.Host
             Usage:
               xpconnect record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Pass-through: BATC connects to --listen, packets go to the real sim at --forward. Records both ways.
-              xpconnect fake [--listen <endpoint>] [--identity msfs2024|msfs2020] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
-                  Pretend to be MSFS: answer the handshake, record every request.
+              xpconnect fake [--listen <endpoint>] [--identity msfs2024|msfs2020] [--facilities <recording.jsonl>]
+                    [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
+                  Pretend to be MSFS: answer the handshake and user-aircraft data requests, record every request.
+                  --facilities replays the airport data MSFS sent in a pass-through recording.
               xpconnect summarize <file.jsonl> [--out <file.md>]
                   Write the call inventory (SimVars, events, facilities...) for a recording.
 
@@ -93,7 +95,13 @@ namespace XPConnect.Host
                     else
                     {
                         var identity = ServerIdentity.FromName(options.Get("identity") ?? "msfs2024");
-                        await new FakeSimServer(listener, identity, recorder).RunAsync(cts.Token);
+                        var facilities = options.Get("facilities") is { } source ? FacilityReplay.FromRecording(source) : null;
+                        if (facilities is not null)
+                        {
+                            PacketConsole.Info($"Facility replay: {facilities.Count} airport requests loaded from {options.Get("facilities")}");
+                        }
+
+                        await new FakeSimServer(listener, identity, recorder, facilities: facilities).RunAsync(cts.Token);
                     }
                 }
                 catch (OperationCanceledException)
