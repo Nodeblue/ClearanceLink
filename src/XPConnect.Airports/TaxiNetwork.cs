@@ -21,7 +21,8 @@ public sealed record ParkingSpot(StartLocation Start, int Type, int Name, int Nu
 /// </summary>
 public sealed class TaxiNetwork
 {
-    private const double SnapMeters = 8;
+    /// <summary>Closest a parking connection point comes to an existing node; also the spur length unit.</summary>
+    private const double SpurMeters = 5;
 
     public List<TaxiPoint> Points { get; } = [];
 
@@ -133,7 +134,8 @@ public sealed class TaxiNetwork
             if (edge.IsRunway)
             {
                 var runway = FindRunway(airport, edge.Name, nodes[edge.From]);
-                var (number, designator) = runway is null ? (0, 0) : Primary(runway);
+                var (from, to) = (nodes[edge.From], nodes[edge.To]);
+                var (number, designator) = runway is null ? (0, 0) : NearerEnd(runway, (from.Latitude + to.Latitude) / 2, (from.Longitude + to.Longitude) / 2);
                 Paths.Add(new TaxiPath(MsfsCodes.RunwayPath, index[edge.From], index[edge.To], 0, runway?.WidthMeters ?? 45, number, designator));
             }
             else
@@ -193,6 +195,17 @@ public sealed class TaxiNetwork
             .FirstOrDefault();
     }
 
+    /// <summary>
+    /// The runway end a runway path is tagged with: the end whose threshold is nearer the path, which is how most of
+    /// MSFS's YBBN runway paths are tagged (both ends of each runway appear, 01L as well as 19R).
+    /// </summary>
+    private static (int Number, int Designator) NearerEnd(Runway runway, double latitude, double longitude)
+    {
+        var to1 = Geo.DistanceMeters(latitude, longitude, runway.End1.Latitude, runway.End1.Longitude);
+        var to2 = Geo.DistanceMeters(latitude, longitude, runway.End2.Latitude, runway.End2.Longitude);
+        return MsfsCodes.Runway(to1 <= to2 ? runway.End1.Number : runway.End2.Number);
+    }
+
     /// <summary>MSFS makes the higher-numbered end the runway's primary end (19 of 01/19, 29 of 11/29).</summary>
     public static (int Number, int Designator) Primary(Runway runway)
     {
@@ -205,8 +218,9 @@ public sealed class TaxiNetwork
         MsfsCodes.Runway(runway.End1.Number).Number >= MsfsCodes.Runway(runway.End2.Number).Number;
 
     /// <summary>
-    /// Joins each parking spot to the nearest taxiway: to an existing point when one is within a few metres of the
-    /// nearest spot on the taxiway, otherwise to a new point that splits that taxiway path.
+    /// Joins each parking spot to the nearest taxiway through a taxi point of its own, as MSFS does (BATC fails to
+    /// load an airport where parking spots share a point). The point splits the taxiway where the spot projects onto
+    /// it; when that is at a taxiway's end, a short spur from the end node toward the spot is added instead.
     /// </summary>
     private void ConnectParking(LocalFrame frame)
     {
@@ -218,7 +232,7 @@ public sealed class TaxiNetwork
         }
 
         var splits = new Dictionary<int, List<(double T, int Parking)>>();
-        var direct = new List<(int Point, int Parking)>();
+        var links = new List<(int Point, int Parking)>();
         for (var p = 0; p < Parking.Count; p++)
         {
             var spot = frame.ToLocal(Parking[p].Start.Latitude, Parking[p].Start.Longitude);
@@ -239,15 +253,7 @@ public sealed class TaxiNetwork
 
             var path = Paths[best.Path];
             var length = Distance(local[path.Start], local[path.End]);
-            if (best.T * length < SnapMeters)
-            {
-                direct.Add((path.Start, p));
-            }
-            else if ((1 - best.T) * length < SnapMeters)
-            {
-                direct.Add((path.End, p));
-            }
-            else
+            if (best.T * length >= SpurMeters && (1 - best.T) * length >= SpurMeters)
             {
                 if (!splits.TryGetValue(best.Path, out var list))
                 {
@@ -255,7 +261,16 @@ public sealed class TaxiNetwork
                 }
 
                 list.Add((best.T, p));
+                continue;
             }
+
+            // Near a taxiway end: a spur from that node part of the way toward the spot.
+            var node = best.T < 0.5 ? path.Start : path.End;
+            var toSpot = Distance(local[node], spot);
+            var along = toSpot == 0 ? 0 : Math.Min(SpurMeters * 2, toSpot / 2) / toSpot;
+            var spur = AddLocal(frame, local, (local[node].X + ((spot.X - local[node].X) * along), local[node].Z + ((spot.Z - local[node].Z) * along)));
+            Paths.Add(new TaxiPath(MsfsCodes.TaxiwayPath, node, spur, path.NameIndex, path.Width));
+            links.Add((spur, p));
         }
 
         foreach (var (pathIndex, list) in splits)
@@ -265,19 +280,19 @@ public sealed class TaxiNetwork
             var b = local[path.End];
             var length = Distance(a, b);
             var chain = new List<int> { path.Start };
-            var lastT = 0.0;
-            foreach (var (t, parking) in list.OrderBy(s => s.T))
+            var ordered = list.OrderBy(s => s.T).ToList();
+            for (var i = 0; i < ordered.Count; i++)
             {
-                if ((t - lastT) * length >= SnapMeters || chain.Count == 1)
+                // Keep split points at least a metre apart so every spot has a distinct point.
+                var t = ordered[i].T;
+                if (i > 0 && (t - ordered[i - 1].T) * length < 1)
                 {
-                    var (lat, lon) = frame.FromLocal(a.X + ((b.X - a.X) * t), a.Z + ((b.Z - a.Z) * t));
-                    Points.Add(new TaxiPoint(lat, lon, MsfsCodes.NormalPoint));
-                    local.Add(frame.ToLocal(lat, lon));
-                    chain.Add(Points.Count - 1);
-                    lastT = t;
+                    t = Math.Min(ordered[i - 1].T + (1 / length), 1 - (1 / length));
+                    ordered[i] = (t, ordered[i].Parking);
                 }
 
-                direct.Add((chain[^1], parking));
+                chain.Add(AddLocal(frame, local, (a.X + ((b.X - a.X) * t), a.Z + ((b.Z - a.Z) * t))));
+                links.Add((chain[^1], ordered[i].Parking));
             }
 
             chain.Add(path.End);
@@ -288,10 +303,18 @@ public sealed class TaxiNetwork
             }
         }
 
-        foreach (var (point, parking) in direct.OrderBy(d => d.Parking))
+        foreach (var (point, parking) in links.OrderBy(d => d.Parking))
         {
             Paths.Add(new TaxiPath(MsfsCodes.ParkingPath, point, parking, 0, 10));
         }
+    }
+
+    private int AddLocal(LocalFrame frame, List<(double X, double Z)> local, (double X, double Z) position)
+    {
+        var (lat, lon) = frame.FromLocal(position.X, position.Z);
+        Points.Add(new TaxiPoint(lat, lon, MsfsCodes.NormalPoint));
+        local.Add(position);
+        return Points.Count - 1;
     }
 
     private static (double T, double Distance) Project((double X, double Z) p, (double X, double Z) a, (double X, double Z) b)
@@ -327,8 +350,10 @@ public sealed class TaxiNetwork
             var end1 = Add(frame, a, MsfsCodes.NormalPoint);
             var centre = Add(frame, middle, MsfsCodes.NormalPoint);
             var end2 = Add(frame, b, MsfsCodes.NormalPoint);
-            Paths.Add(new TaxiPath(MsfsCodes.RunwayPath, end1, centre, 0, runway.WidthMeters, number, designator));
-            Paths.Add(new TaxiPath(MsfsCodes.RunwayPath, centre, end2, 0, runway.WidthMeters, number, designator));
+            var (number1, designator1) = MsfsCodes.Runway(runway.End1.Number);
+            var (number2, designator2) = MsfsCodes.Runway(runway.End2.Number);
+            Paths.Add(new TaxiPath(MsfsCodes.RunwayPath, end1, centre, 0, runway.WidthMeters, number1, designator1));
+            Paths.Add(new TaxiPath(MsfsCodes.RunwayPath, centre, end2, 0, runway.WidthMeters, number2, designator2));
 
             var length = Distance(a, b);
             if (length == 0)
@@ -354,9 +379,15 @@ public sealed class TaxiNetwork
             }
         }
 
+        // Each spot gets its own point a little way toward the apron point, joined to it (BATC needs one point per spot).
         for (var p = 0; p < Parking.Count; p++)
         {
-            Paths.Add(new TaxiPath(MsfsCodes.ParkingPath, hubPoint, p, 0, 10));
+            var spot = frame.ToLocal(Parking[p].Start.Latitude, Parking[p].Start.Longitude);
+            var toHub = Distance(spot, hub);
+            var along = toHub == 0 ? 0 : Math.Min(15, toHub / 2) / toHub;
+            var spur = Add(frame, (spot.X + ((hub.X - spot.X) * along), spot.Z + ((hub.Z - spot.Z) * along)), MsfsCodes.NormalPoint);
+            Paths.Add(new TaxiPath(MsfsCodes.TaxiwayPath, spur, hubPoint, 0, 15));
+            Paths.Add(new TaxiPath(MsfsCodes.ParkingPath, spur, p, 0, 10));
         }
     }
 

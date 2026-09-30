@@ -110,14 +110,21 @@ public sealed class AirportFacilityTests
             Assert.InRange(Num(path, "NAME_INDEX"), 0, names.Count - 1);
         }
 
+        // Each spot has a taxi point of its own: BATC's route builder fails to load an airport where spots share one.
+        var starts = paths.Where(p => Num(p, "TYPE") == 3).Select(p => Num(p, "START")).ToList();
+        Assert.Equal(starts.Count, starts.Distinct().Count());
+        Assert.All(starts, s => Assert.Contains(paths, p => Num(p, "TYPE") != 3 && (Num(p, "START") == s || Num(p, "END") == s)));
+
         // Every parking spot is joined to the network exactly once.
         Assert.Equal(
             Enumerable.Range(0, parking.Count).Select(i => (double)i),
             paths.Where(p => Num(p, "TYPE") == 3).Select(p => Num(p, "END")).Order());
 
-        // Runway paths are tagged with their runway's primary end, as MSFS does (19L, 19R).
+        // Runway paths are tagged with the nearer runway end, so every end appears, as in MSFS's YBBN answer.
         var runwayPaths = paths.Where(p => Num(p, "TYPE") == 2).Select(p => (Num(p, "RUNWAY_NUMBER"), Num(p, "RUNWAY_DESIGNATOR"))).ToHashSet();
-        Assert.Equal([(19d, 1d), (19d, 2d)], runwayPaths.Order());
+        var msfsPaths = Fixtures.Msfs("YBBN").ChildrenOf("TAXI_PATH").Where(p => Num(p, "TYPE") == 2)
+            .Select(p => (Num(p, "RUNWAY_NUMBER"), Num(p, "RUNWAY_DESIGNATOR"))).ToHashSet();
+        Assert.Equal(msfsPaths.Order(), runwayPaths.Order());
     }
 
     [Fact]
@@ -130,6 +137,8 @@ public sealed class AirportFacilityTests
         Assert.Equal(network.Parking.Count, network.Paths.Count(p => p.Type == MsfsCodes.ParkingPath));
         Assert.Equal(72, network.Parking.Count);
         Assert.Equal(network.Parking.Count, network.Parking.Select(p => (p.Name, p.Number, p.Suffix)).Distinct().Count());
+        var starts = network.Paths.Where(p => p.Type == MsfsCodes.ParkingPath).Select(p => p.Start).ToList();
+        Assert.Equal(starts.Count, starts.Distinct().Count());
 
         // Every hold-short point is off the runway and linked both to a runway end and to the apron.
         var ends = network.Paths.Where(p => p.Type == MsfsCodes.RunwayPath).SelectMany(p => new[] { p.Start, p.End }).ToHashSet();
