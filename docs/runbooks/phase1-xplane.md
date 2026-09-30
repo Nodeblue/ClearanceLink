@@ -20,11 +20,20 @@ version; lines marked `VERIFY` need their values compared with the cockpit (unit
 1. Start X-Plane 12 and load the aircraft at a gate at YBBN.
 2. Start XPConnect:
    ```powershell
-   ./scripts/run.ps1 serve --facilities recordings\local\<the MSFS pass-through recording>.jsonl
+   ./scripts/run.ps1 serve
    ```
-   It starts the `FlightSimulator2024` stub itself and logs `xplane CONNECTED to X-Plane 12.x`.
+   It starts the `FlightSimulator2024` stub itself, logs `xplane CONNECTED to X-Plane 12.x` and
+   `airports: indexed N airports in M apt.dat files`. Airports come from the X-Plane folder X-Plane's installer lists
+   (`%LOCALAPPDATA%\x-plane_install_12.txt`); pass `--xplane-root "C:\X-Plane 12"` if it picks the wrong one.
+   Add `--facilities recordings\local\<MSFS recording>.jsonl` to answer recorded airports with MSFS's data instead.
 3. Start BATC. Expect "connected", YBBN loaded, and BATC's map showing the aircraft where X-Plane has it.
-4. Airport data only exists for airports in the recording (YBBN, YTWB and those around them) until Phase 2.
+   XPConnect logs one `airports: YBBN from <apt.dat>: ...` line per airport it builds.
+
+## Check an airport without BATC
+```powershell
+./scripts/run.ps1 airport YBBN --out recordings\local\YBBN.xplane.json
+```
+Writes what XPConnect would send BATC for that airport, and logs which apt.dat and CIFP file it came from.
 
 ## When something is wrong
 - XPConnect's console: `UNMAPPED SimVar`, `NOT FOUND dataref`, `holding aircraft data` (X-Plane not connected or no position),
