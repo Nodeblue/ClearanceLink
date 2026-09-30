@@ -29,6 +29,8 @@ namespace XPConnect.Host
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Pretend to be MSFS: answer the handshake and user-aircraft data requests, record every request.
                   --facilities replays the airport data MSFS sent in a pass-through recording.
+              xpconnect facility-dump <file.jsonl> <ICAO> [--out <file.json>]
+                  Decode the airport data answered for ICAO in a recording into readable JSON.
               xpconnect summarize <file.jsonl> [--out <file.md>]
                   Write the call inventory (SimVars, events, facilities...) for a recording.
 
@@ -55,6 +57,7 @@ namespace XPConnect.Host
                     "serve" => await RunServerAsync("serve", options),
                     "xplane-check" => await XPlaneCheckAsync(options),
                     "summarize" => Summarize(options),
+                    "facility-dump" => DumpFacility(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -230,6 +233,26 @@ namespace XPConnect.Host
             var facilities = FacilityReplay.FromRecording(source);
             PacketConsole.Info($"Facility replay: {facilities.Count} airport requests loaded from {source}");
             return facilities;
+        }
+
+        private static int DumpFacility(Options options)
+        {
+            if (options.Positional.Count < 2)
+            {
+                throw new ArgumentException("facility-dump needs <file.jsonl> <ICAO>");
+            }
+
+            var text = FacilityDump.Serialize(FacilityDump.FromRecording(options.Positional[0], options.Positional[1]));
+            if (options.Get("out") is { } output)
+            {
+                File.WriteAllText(output, text);
+            }
+            else
+            {
+                Console.WriteLine(text);
+            }
+
+            return 0;
         }
 
         private static int Summarize(Options options)
