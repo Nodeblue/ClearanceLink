@@ -12,13 +12,13 @@ _Update this file in every PR that changes behaviour._
 - Verified against an independent client (node-simconnect 4.2) over TCP, on both the SunRise and KittyHawk protocols.
 - Recorded a real BATC session against MSFS 2024 (YBBN to YTWB, 2026-09-30). BATC is redirected by a `SimConnect.cfg` next to `simconnect_ws.exe` and another next to `BeyondATC.exe`. Findings: `docs/research/batc-call-inventory.md`.
 - `ServerIdentity.Msfs2024` matches the recorded Open reply (SunRise 12.2.282174.999, SimConnect 12.2.0.0).
+- Stand-in test passed (2026-09-30): with MSFS closed, BATC connects both SimConnect connections to `fake --identity msfs2024` and accepts the handshake, provided a process named `FlightSimulator2024.exe` is running (a do-nothing stub passes). It then waits for user-aircraft data and times out, because `fake` does not answer data requests yet.
 - Recordings sample high-rate streams (AI position writes, SimObjectData) to one per second per stream by default (`--throttle-ms`). A full-rate 30-minute flight was 2.9 GB.
 
 ## Not yet verified
 - BATC's `simconnect_ws.exe` connecting to our named pipe on Windows (message-mode pipe, security).
-- Whether BATC needs MSFS running or installed beyond the SimConnect connection.
-- BATC's behaviour with MSFS closed and `fake` standing in (runbook step 3).
+- BATC's behaviour once it receives user-aircraft data without MSFS (how far it gets, reconnects, any install or file checks later in a flight).
 - What triggers the EXTERNAL_SYSTEM_SET/TOGGLE events BATC receives (probably key bindings inside MSFS).
 
 ## Next
-Runbook step 3 (stand-in test with MSFS closed), then Phase 1: answer the user-aircraft SimVar blocks and COM events from X-Plane.
+Phase 1: ship a `FlightSimulator2024.exe` stub process, answer the user-aircraft SimVar blocks (defines 300 and 17) and the COM events, first with fixed values and then from X-Plane.
