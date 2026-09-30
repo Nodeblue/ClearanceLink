@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\XPConnect.Protocol\XPConnect.Protocol.csproj" />
+  </ItemGroup>
+
 </Project>

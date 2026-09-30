@@ -27,3 +27,24 @@ public static class Geo
 
     private static double Radians(double degrees) => degrees * Math.PI / 180;
 }
+
+/// <summary>
+/// Flat east/north metres around a reference point, the frame MSFS uses for taxi point and parking BIAS_X (east)
+/// and BIAS_Z (north). Good to well under a metre across an airport.
+/// </summary>
+public readonly struct LocalFrame(double latitude, double longitude)
+{
+    private const double MetersPerDegree = 6_371_008.8 * Math.PI / 180;
+
+    public double Latitude { get; } = latitude;
+
+    public double Longitude { get; } = longitude;
+
+    private double Cos => Math.Cos(Latitude * Math.PI / 180);
+
+    public (double X, double Z) ToLocal(double latitude, double longitude) =>
+        ((longitude - Longitude) * MetersPerDegree * Cos, (latitude - Latitude) * MetersPerDegree);
+
+    public (double Latitude, double Longitude) FromLocal(double x, double z) =>
+        (Latitude + (z / MetersPerDegree), Longitude + (x / (MetersPerDegree * Cos)));
+}
