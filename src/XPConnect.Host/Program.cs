@@ -14,14 +14,16 @@ namespace XPConnect.Host
             XPConnect - BeyondATC to X-Plane 12 bridge (Phase 0 tools)
 
             Usage:
-              xpconnect record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--quiet]
+              xpconnect record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Pass-through: BATC connects to --listen, packets go to the real sim at --forward. Records both ways.
-              xpconnect fake [--listen <endpoint>] [--identity msfs2024|msfs2020] [--out <file.jsonl>] [--quiet]
+              xpconnect fake [--listen <endpoint>] [--identity msfs2024|msfs2020] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Pretend to be MSFS: answer the handshake, record every request.
               xpconnect summarize <file.jsonl> [--out <file.md>]
                   Write the call inventory (SimVars, events, facilities...) for a recording.
 
             Endpoints: pipe (default MSFS pipe), pipe:NAME, tcp:PORT, tcp:HOST:PORT
+            --throttle-ms: record at most one packet per high-rate stream (AI position writes, SimObjectData) per
+              interval; default 1000, 0 records everything. Forwarding is never throttled.
             """;
 
         public static async Task<int> RunAsync(string[] args)
@@ -73,7 +75,9 @@ namespace XPConnect.Host
                 .ToList();
 
             var inventory = new CallInventory();
-            using (var recorder = new JsonlRecorder(outPath))
+            var throttleMs = int.Parse(options.Get("throttle-ms") ?? "1000", System.Globalization.CultureInfo.InvariantCulture);
+            var throttle = new RecordThrottle(TimeSpan.FromMilliseconds(throttleMs));
+            using (var recorder = new JsonlRecorder(outPath, throttle: throttle))
             {
                 recorder.Recorded += inventory.Add;
                 await using var listener = Transports.Listen(listen);
@@ -97,6 +101,7 @@ namespace XPConnect.Host
                 }
             }
 
+            inventory.SampledOut = throttle.Skipped;
             var summaryPath = Path.ChangeExtension(outPath, ".md");
             await File.WriteAllTextAsync(summaryPath, inventory.ToMarkdown($"Call inventory: {Path.GetFileName(outPath)}"));
             PacketConsole.Info($"Stopped. {inventory.Count} packets. Summary: {Path.GetFullPath(summaryPath)}");

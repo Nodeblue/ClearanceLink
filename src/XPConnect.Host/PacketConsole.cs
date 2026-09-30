@@ -10,9 +10,9 @@ public static class PacketConsole
 
     public static bool Verbose { get; set; } = true;
 
-    public static void Print(RecordEntry e)
+    public static void Print(RecordEntry? e)
     {
-        if (!Verbose)
+        if (!Verbose || e is null)
         {
             return;
         }

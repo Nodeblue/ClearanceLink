@@ -1,8 +1,8 @@
 namespace XPConnect.Protocol;
 
 /// <summary>
-/// What the fake server claims to be in its reply to Open. The exact values MSFS sends are captured by a
-/// pass-through recording (docs/runbooks/phase0.md); replace these placeholders with the recorded ones.
+/// What the fake server claims to be in its reply to Open. BATC's simconnect_ws decides which sim it is talking to
+/// from the application name and version in this reply, so the values must match a real recording.
 /// </summary>
 public sealed record ServerIdentity(
     string ApplicationName,
@@ -15,10 +15,11 @@ public sealed record ServerIdentity(
     uint SimConnectBuildMajor,
     uint SimConnectBuildMinor)
 {
-    // Placeholder values until a real MSFS reply is recorded.
+    /// <summary>Placeholder: not yet recorded from a real MSFS 2020.</summary>
     public static readonly ServerIdentity Msfs2020 = new("KittyHawk", 11, 0, 282174, 999, 11, 0, 62651, 3);
 
-    public static readonly ServerIdentity Msfs2024 = new("SunRise", 12, 1, 282174, 999, 12, 1, 282174, 999);
+    /// <summary>Recorded from MSFS 2024 1.8.16.0 on 2026-09-30 (docs/research/batc-call-inventory.md).</summary>
+    public static readonly ServerIdentity Msfs2024 = new("SunRise", 12, 2, 282174, 999, 12, 2, 0, 0);
 
     public static ServerIdentity FromName(string name) => name.ToLowerInvariant() switch
     {

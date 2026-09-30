@@ -115,6 +115,17 @@ public static class PacketDecoder
                 f["initPositionHex"] = Convert.ToHexString(r.Bytes(r.Remaining - 4));
                 f["requestId"] = r.U32();
                 break;
+            case 0x2A: // AICreateSimulatedObject
+                f["containerTitle"] = r.Str(NameLength);
+                f["initPositionHex"] = Convert.ToHexString(r.Bytes(r.Remaining - 4));
+                f["requestId"] = r.U32();
+                break;
+            case 0x5A: // AICreateSimulatedObject_EX1
+                f["containerTitle"] = r.Str(NameLength);
+                f["livery"] = r.Str(NameLength);
+                f["initPositionHex"] = Convert.ToHexString(r.Bytes(r.Remaining - 4));
+                f["requestId"] = r.U32();
+                break;
             case 0x2B: // AIReleaseControl
             case 0x2C: // AIRemoveObject
                 f["objectId"] = r.U32();
@@ -259,6 +270,22 @@ public static class PacketDecoder
                 f["itemIndex"] = r.U32();
                 f["listSize"] = r.U32();
                 f["dataHex"] = Convert.ToHexString(r.Rest());
+                break;
+            case RecvId.EnumerateSimObjectAndLiveryList:
+                f["requestId"] = r.U32();
+                var count = r.U32();
+                f["arraySize"] = count;
+                f["entryNumber"] = r.U32();
+                f["outOf"] = r.U32();
+                var items = new List<string>();
+                for (var i = 0; i < count && r.Remaining >= 2 * NameLength; i++)
+                {
+                    var title = r.Str(NameLength);
+                    var livery = r.Str(NameLength);
+                    items.Add(livery.Length == 0 ? title : $"{title} | {livery}");
+                }
+
+                f["items"] = items;
                 break;
             case RecvId.FacilityDataEnd:
                 f["requestId"] = r.U32();
