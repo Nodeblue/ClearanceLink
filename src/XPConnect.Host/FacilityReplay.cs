@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text.Json;
 using XPConnect.Protocol;
 using XPConnect.Recorder;
+using XPConnect.Server;
 
 namespace XPConnect.Host;
 
@@ -10,15 +11,17 @@ namespace XPConnect.Host;
 /// exactly what MSFS sent for the same airport and facility definition. A stopgap until facility data is built
 /// from X-Plane's apt.dat and CIFP; it only knows the airports that were requested during the recording.
 /// </summary>
-public sealed class FacilityReplay
+public sealed class FacilityReplay : IFacilitySource
 {
     private readonly Dictionary<(string Icao, uint DefineId), List<byte[]>> _replies = [];
 
     public int Count => _replies.Count;
 
+    public string Description { get; private init; } = "a recording";
+
     public static FacilityReplay FromRecording(string path)
     {
-        var replay = new FacilityReplay();
+        var replay = new FacilityReplay { Description = $"recording {Path.GetFileName(path)}" };
         var open = new Dictionary<(int Conn, uint RequestId), (string Icao, uint DefineId, List<byte[]> Packets)>();
         foreach (var line in File.ReadLines(path))
         {

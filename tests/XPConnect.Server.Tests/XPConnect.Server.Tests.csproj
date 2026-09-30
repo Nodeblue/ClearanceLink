@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\XPConnect.Server\XPConnect.Server.csproj" />
     <ProjectReference Include="..\..\src\XPConnect.XPlane\XPConnect.XPlane.csproj" />
     <ProjectReference Include="..\..\src\XPConnect.Protocol\XPConnect.Protocol.csproj" />
+    <ProjectReference Include="..\..\src\XPConnect.Recorder\XPConnect.Recorder.csproj" />
     <ProjectReference Include="..\XPConnect.Protocol.Tests\XPConnect.Protocol.Tests.csproj" />
   </ItemGroup>
 

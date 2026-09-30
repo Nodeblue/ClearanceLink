@@ -15,10 +15,11 @@ public sealed class SimConnectSession(
     IXPlaneData xplane,
     Func<Packet, Task> send,
     Action<string> log,
+    IFacilitySource? facilities = null,
     TimeProvider? time = null)
 {
-    /// <summary>Object id reported for the user aircraft when a client asks for SIMCONNECT_OBJECT_ID_USER (0).</summary>
-    public const uint UserObjectId = 1;
+    /// <summary>Object id MSFS 2024 reports for the user aircraft in SimObjectData (recorded 2026-09-30).</summary>
+    public const uint UserObjectId = 524288;
 
     private static readonly TimeSpan FramePeriod = TimeSpan.FromMilliseconds(1000.0 / 30);
     private static readonly TimeSpan SecondPeriod = TimeSpan.FromSeconds(1);
@@ -65,16 +66,16 @@ public sealed class SimConnectSession(
                 break;
 
             case 0x05: // TransmitClientEvent
-                await ApplyEventAsync(U(f, "eventId"), U(f, "data")).ConfigureAwait(false);
+                await ApplyEventAsync(U(f, "objectId"), U(f, "eventId"), U(f, "data")).ConfigureAwait(false);
                 break;
 
             case 0x44: // TransmitClientEvent_EX1: objectId, eventId, groupId, flags, data0..4
                 var ex1 = new PayloadReader(packet.Payload);
-                ex1.U32();
+                var objectId = ex1.U32();
                 var eventId = ex1.U32();
                 ex1.U32();
                 ex1.U32();
-                await ApplyEventAsync(eventId, ex1.U32()).ConfigureAwait(false);
+                await ApplyEventAsync(objectId, eventId, ex1.U32()).ConfigureAwait(false);
                 break;
 
             case 0x0C: // AddToDataDefinition
@@ -130,31 +131,16 @@ public sealed class SimConnectSession(
                     force: true).ConfigureAwait(false);
                 break;
 
-            case 0x35: // RequestSystemState
-                await send(PacketBuilder.Server(RecvId.SystemState, _protocol)
-                    .U32(U(f, "requestId"))
-                    .U32(S(f, "state").Equals("Sim", StringComparison.OrdinalIgnoreCase) ? 1u : 0u)
-                    .F32(0)
-                    .Str("", 260)
-                    .Build()).ConfigureAwait(false);
-                break;
-
-            case 0x5B: // EnumerateSimObjectsAndLiveries: no models to offer yet
-                await send(PacketBuilder.Server(RecvId.EnumerateSimObjectAndLiveryList, _protocol)
-                    .U32(U(f, "requestId")).U32(0).U32(0).U32(1)
-                    .Build()).ConfigureAwait(false);
-                break;
-
             case 0x46: // RequestFacilityData
             case 0x4A: // RequestFacilityData_EX1
-                // Phase 2. MSFS answers an unknown airport with exception 1 and BATC retries later, so this is safe.
-                LogOnce($"facility:{f["icao"]}", $"#{connectionId} facility data for {f["icao"]} not available yet (Phase 2); sent exception");
-                await SendExceptionAsync(SimConnectException.Error, sendId).ConfigureAwait(false);
+                await RequestFacilityAsync(S(f, "icao"), U(f, "defineId"), U(f, "requestId"), sendId).ConfigureAwait(false);
                 break;
 
+            // Not answered, as in the stand-in test of 2026-09-30 where BATC ran fine without them: BATC waits for the
+            // livery list before creating AI traffic, so leaving it unanswered keeps traffic off (AI needs the plugin).
+            case 0x5B: // EnumerateSimObjectsAndLiveries
             case 0x27 or 0x28 or 0x29 or 0x2A or 0x57 or 0x58 or 0x59 or 0x5A: // AI object creation
-                LogOnce("ai-create", $"#{connectionId} AI traffic is not supported yet; refusing '{f.GetValueOrDefault("containerTitle")}' (turn BATC traffic off)");
-                await SendExceptionAsync(SimConnectException.Error, sendId).ConfigureAwait(false);
+                LogOnce($"ai:{packet.Name}", $"#{connectionId} {packet.Name} not answered: AI traffic is not supported yet");
                 break;
 
             case 0x10: // SetDataOnSimObject (AI traffic positions, L-vars): accepted, not applied yet
@@ -210,8 +196,7 @@ public sealed class SimConnectSession(
 
         if (request.ObjectId is not (0 or UserObjectId))
         {
-            LogOnce($"object:{request.ObjectId}", $"#{connectionId} data requested for object {request.ObjectId}; only the user aircraft exists");
-            await SendExceptionAsync(SimConnectException.UnrecognizedId, sendId).ConfigureAwait(false);
+            LogOnce($"object:{request.ObjectId}", $"#{connectionId} data requested for object {request.ObjectId}; only the user aircraft exists, not answered");
             return;
         }
 
@@ -247,6 +232,19 @@ public sealed class SimConnectSession(
             return;
         }
 
+        // Zeros would put the aircraft at 0,0 and BATC would load the wrong airports, so say nothing until X-Plane has
+        // delivered a position. BATC keeps asking (it polls with ONCE), and periodic requests retry on the next tick.
+        if (!xplane.IsConnected || datums.Any(d => IsPosition(d.Name) && resolver.Resolve(d.Name, d.Units).Status != ResolveStatus.Ok))
+        {
+            LogOnce("waiting-xplane", $"#{connectionId} holding aircraft data until X-Plane is connected and reports a position");
+            return;
+        }
+
+        lock (_gate)
+        {
+            _loggedOnce.Remove("waiting-xplane");
+        }
+
         var tagged = request.Flags.HasFlag(DataRequestFlags.Tagged);
         using var data = new MemoryStream();
         foreach (var datum in datums)
@@ -255,6 +253,11 @@ public sealed class SimConnectSession(
             if (status == ResolveStatus.Pending)
             {
                 Stats.Pending(datum.Name);
+            }
+
+            if (status != ResolveStatus.Ok && DataEncoder.IsText(datum.Type))
+            {
+                value = SimValue.Of("");
             }
 
             if (tagged)
@@ -285,8 +288,14 @@ public sealed class SimConnectSession(
             .Build()).ConfigureAwait(false);
     }
 
-    private async Task ApplyEventAsync(uint eventId, uint data)
+    private async Task ApplyEventAsync(uint objectId, uint eventId, uint data)
     {
+        // BATC also sends events (lights, throttle, gear) to its AI aircraft; only the user aircraft maps to X-Plane.
+        if (objectId is not (0 or UserObjectId))
+        {
+            return;
+        }
+
         string? name;
         lock (_gate)
         {
@@ -316,7 +325,7 @@ public sealed class SimConnectSession(
             }
             else if (map.Dataref is { } dataref)
             {
-                var value = Units.Convert(data, map.FromUnits, map.ToUnits);
+                var value = Units.Convert(unchecked((int)data), map.FromUnits, map.ToUnits);
                 await xplane.WriteAsync(dataref, value).ConfigureAwait(false);
                 log($"#{connectionId} {name}({data}) -> {dataref} = {value}");
             }
@@ -327,8 +336,27 @@ public sealed class SimConnectSession(
         }
     }
 
-    private Task SendExceptionAsync(SimConnectException exception, uint sendId) =>
-        send(PacketBuilder.Server(RecvId.Exception, _protocol).U32((uint)exception).U32(sendId).U32(0).Build());
+    private async Task RequestFacilityAsync(string icao, uint defineId, uint requestId, uint sendId)
+    {
+        if (facilities?.Find(icao, defineId, requestId) is { } replies)
+        {
+            log($"#{connectionId} RequestFacilityData {icao} define {defineId}: {replies.Count} packets from {facilities.Description}");
+            foreach (var reply in replies)
+            {
+                await send(reply).ConfigureAwait(false);
+            }
+
+            await send(PacketBuilder.Server(RecvId.FacilityDataEnd, _protocol).U32(requestId).Build()).ConfigureAwait(false);
+            return;
+        }
+
+        // MSFS answers an airport it does not have with exception 1, index 3 (recorded for YSAM); BATC carries on.
+        log($"#{connectionId} RequestFacilityData {icao} define {defineId}: no data, sent exception");
+        await SendExceptionAsync(SimConnectException.Error, sendId, 3).ConfigureAwait(false);
+    }
+
+    private Task SendExceptionAsync(SimConnectException exception, uint sendId, uint index = 0) =>
+        send(PacketBuilder.Server(RecvId.Exception, _protocol).U32((uint)exception).U32(sendId).U32(index).Build());
 
     private void LogOnce(string key, string message)
     {
@@ -342,6 +370,9 @@ public sealed class SimConnectSession(
 
         log(message);
     }
+
+    private static bool IsPosition(string simVar) =>
+        simVar.Equals("PLANE LATITUDE", StringComparison.OrdinalIgnoreCase) || simVar.Equals("PLANE LONGITUDE", StringComparison.OrdinalIgnoreCase);
 
     private static uint U(Dictionary<string, object?> f, string key) => f.GetValueOrDefault(key) is uint u ? u : 0;
 

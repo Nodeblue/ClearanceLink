@@ -35,6 +35,9 @@ public sealed class SimVarMap
     /// <summary>implemented | emulated | stubbed | unsupported.</summary>
     public string Status { get; set; } = "implemented";
 
+    /// <summary>True until the dataref name, units and sign have been checked against a running X-Plane 12.</summary>
+    public bool Verify { get; set; }
+
     public string? Notes { get; set; }
 }
 
