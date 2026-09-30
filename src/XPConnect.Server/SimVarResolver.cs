@@ -111,6 +111,9 @@ public static class Derivations
         // floor at zero, e.g. X-Plane's indicated airspeed is slightly negative when parked
         "non_negative" => Math.Max(0, v[0]),
 
+        // altimeter reading at the local QNH, from pressure altitude (feet) and sea-level pressure (inHg)
+        "qnh_altitude" => QnhAltitudeFeet(v[0], v[1] * 33.8638866667),
+
         // table lookup on the (rounded) first input; unknown values fall back to 0
         "map" => map.Map.GetValueOrDefault((int)Math.Round(v[0])),
 
@@ -128,6 +131,15 @@ public static class Derivations
 
         _ => throw new InvalidOperationException($"Unknown derivation '{name}' in mapping for {map.Name}"),
     };
+
+    /// <summary>Standard-atmosphere altimeter: the height a barometric altimeter set to <paramref name="qnhHpa"/> shows.</summary>
+    public static double QnhAltitudeFeet(double pressureAltitudeFeet, double qnhHpa)
+    {
+        const double k = 145366.45;
+        const double n = 0.190284;
+        var staticHpa = 1013.25 * Math.Pow(1 - (pressureAltitudeFeet / k), 1 / n);
+        return k * (1 - Math.Pow(staticHpa / qnhHpa, n));
+    }
 
     private static double TimeOfDay(double sunPitchDegrees, double localSeconds) => sunPitchDegrees switch
     {

@@ -67,6 +67,23 @@ public sealed class MappingTests
     }
 
     [Fact]
+    public void Calibrated_altitude_matches_msfs_at_ybbn()
+    {
+        // MSFS sent INDICATED ALTITUDE CALIBRATED 15.31 ft with PRESSURE ALTITUDE -358.16 ft at YBBN (QNH ~1027 hPa).
+        var (value, status) = new SimVarResolver(Fixtures.Mappings(), Fixtures.ParkedAtYbbn()).Resolve("INDICATED ALTITUDE CALIBRATED", "feet");
+
+        Assert.Equal(ResolveStatus.Ok, status);
+        Assert.InRange(value.Number, 10, 20);
+    }
+
+    [Theory]
+    [InlineData(0, 1013.25, 0)]
+    [InlineData(7000, 1013.25, 7000)]
+    [InlineData(0, 1023.25, 273)] // about 27 ft per hPa near sea level
+    public void Qnh_altitude_follows_the_standard_atmosphere(double pressureAltitude, double qnh, double expected) =>
+        Assert.InRange(Derivations.QnhAltitudeFeet(pressureAltitude, qnh), expected - 30, expected + 30);
+
+    [Fact]
     public void Parked_airspeed_is_never_negative()
     {
         var xp = Fixtures.ParkedAtYbbn();
