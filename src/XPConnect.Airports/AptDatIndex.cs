@@ -10,6 +10,7 @@ namespace XPConnect.Airports;
 public sealed class AptDatIndex
 {
     private readonly Dictionary<string, (string File, long Offset)> _airports = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<(string File, long Offset)>> _lower = new(StringComparer.OrdinalIgnoreCase);
 
     public int Count => _airports.Count;
 
@@ -32,13 +33,22 @@ public sealed class AptDatIndex
         return found;
     }
 
-    public Airport? Load(string icao)
-    {
-        if (!TryGet(icao, out var file, out var offset))
-        {
-            return null;
-        }
+    public Airport? Load(string icao) => TryGet(icao, out var file, out var offset) ? LoadAt(file, offset) : null;
 
+    /// <summary>The same airport as defined by lower-priority files (for example Global Airports under a custom scenery pack).</summary>
+    public IEnumerable<Airport> LoadOthers(string icao)
+    {
+        foreach (var (file, offset) in _lower.GetValueOrDefault(icao) ?? [])
+        {
+            if (LoadAt(file, offset) is { } airport)
+            {
+                yield return airport;
+            }
+        }
+    }
+
+    private static Airport? LoadAt(string file, long offset)
+    {
         using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 16);
         stream.Seek(offset, SeekOrigin.Begin);
         using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -81,9 +91,14 @@ public sealed class AptDatIndex
     private void Add(string icao, string file, long offset, HashSet<string> seen)
     {
         // Earlier files win; within a file the first definition wins.
-        if (seen.Add(icao))
+        if (seen.Add(icao) && !_airports.TryAdd(icao, (file, offset)))
         {
-            _airports.TryAdd(icao, (file, offset));
+            if (!_lower.TryGetValue(icao, out var list))
+            {
+                _lower[icao] = list = [];
+            }
+
+            list.Add((file, offset));
         }
     }
 

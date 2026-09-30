@@ -41,6 +41,25 @@ public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log)
     /// <summary>The airport's facility tree, or null when no scenery pack defines it. Built once per airport.</summary>
     public FacilityObject? Find(string icao) => _cache.GetOrAdd(icao.Trim(), key => new Lazy<FacilityObject?>(() => Build(key))).Value;
 
+    /// <summary>
+    /// Custom scenery often lists fewer frequencies than the Gateway airport (Orbx YBBN has no approach or departure),
+    /// and BATC hands off by frequency type, so kinds the chosen airport lacks are taken from lower-priority copies.
+    /// </summary>
+    public static string BorrowFrequencies(Airport airport, IEnumerable<Airport> others)
+    {
+        var have = airport.Frequencies.Select(f => f.Kind).ToHashSet();
+        var added = 0;
+        foreach (var other in others)
+        {
+            var missing = other.Frequencies.Where(f => !have.Contains(f.Kind)).ToList();
+            airport.Frequencies.AddRange(missing);
+            added += missing.Count;
+            have.UnionWith(missing.Select(f => f.Kind));
+        }
+
+        return added == 0 ? "" : $" ({added} from lower-priority scenery)";
+    }
+
     private FacilityObject? Build(string icao)
     {
         Start();
@@ -56,6 +75,8 @@ public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log)
         {
             return null;
         }
+
+        var borrowed = BorrowFrequencies(airport, index.LoadOthers(icao));
 
         var nav = _nav!.GetAwaiter().GetResult();
         var (lat, lon) = airport.ReferencePoint;
@@ -80,7 +101,7 @@ public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log)
         var taxi = TaxiNetwork.Build(airport);
         var root = AirportFacility.Build(airport, extras, taxi);
         var generated = taxi.Generated ? " (taxi routes generated)" : "";
-        log($"airports: {icao} from {file}: {root["N_RUNWAYS"]} runways, {root["N_TAXI_PARKINGS"]} parking, " +
+        log($"airports: {icao} from {file}: {root["N_RUNWAYS"]} runways, {root["N_TAXI_PARKINGS"]} parking, {root["N_FREQUENCIES"]} frequencies{borrowed}, " +
             $"{root["N_TAXI_POINTS"]} taxi points{generated}, {procedures}, magvar {extras.MagneticVariationEast?.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"} in {watch.ElapsedMilliseconds} ms");
         return root;
     }

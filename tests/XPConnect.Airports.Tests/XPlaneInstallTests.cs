@@ -71,6 +71,26 @@ public sealed class XPlaneInstallTests : IDisposable
     }
 
     [Fact]
+    public void Frequency_kinds_missing_from_custom_scenery_come_from_global_airports()
+    {
+        // The custom YTWB keeps only its first frequency row; Global Airports' YTWB has the rest.
+        var custom = Path.Combine(_root, "Custom Scenery", "Custom YTWB", "Earth nav data", "apt.dat");
+        var lines = File.ReadAllLines(custom).ToList();
+        var frequencies = lines.Where(l => l.StartsWith("105", StringComparison.Ordinal)).ToList();
+        Assert.True(frequencies.Count >= 2);
+        File.WriteAllLines(custom, lines.Where(l => l == frequencies[0] || !frequencies.Contains(l)));
+
+        var index = AptDatIndex.Build(new XPlaneInstall(_root).AirportFiles());
+        var airport = index.Load("YTWB")!;
+        Assert.Single(airport.Frequencies);
+        var note = XPlaneAirports.BorrowFrequencies(airport, index.LoadOthers("YTWB"));
+
+        // YTWB lists CTAF and ATIS: the custom copy keeps CTAF, ATIS comes from Global Airports, nothing is doubled.
+        Assert.Equal([FrequencyKind.Atis, FrequencyKind.Unicom], airport.Frequencies.Select(f => f.Kind).Order());
+        Assert.Contains("lower-priority", note, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Scenery_sequence_reads_enabled_packs_only()
     {
         var packs = XPlaneInstall.ScenerySequence(["SCENERY_PACK Custom Scenery/A/", "SCENERY_PACK_DISABLED Custom Scenery/B/", "SCENERY_PACK *GLOBAL_AIRPORTS*"]).ToList();
