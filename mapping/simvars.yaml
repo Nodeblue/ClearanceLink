@@ -24,10 +24,15 @@
   dataref: sim/flightmodel/position/elevation
   units: meters
 - name: INDICATED ALTITUDE CALIBRATED
-  dataref: sim/flightmodel/position/elevation
-  units: meters
+  derive: qnh_altitude
+  inputs: [sim/flightmodel2/position/pressure_altitude, sim/weather/barometer_sealevel_inhg]
+  units: feet
   status: emulated
-  notes: MSFS reports this with the correct local pressure applied whatever the pilot's altimeter is set to (15.31 ft against PLANE ALTITUDE 15.36 ft at YBBN in the 2026-09-30 recording). The pilot's altimeter read -208 ft there in X-Plane with the baro unset, so true altitude is used.
+  verify: true
+  notes: >-
+    What the altimeter reads when set to the local QNH, whatever the pilot has set. MSFS computes it the same way
+    (YBBN 2026-09-30 recording, 15.31 ft from pressure altitude -358.16 ft at QNH about 1027 hPa). True altitude was
+    about 200 ft off in the climb on a warm day (Ben, 2026-09-30).
 - name: INDICATED ALTITUDE
   dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
   units: feet
