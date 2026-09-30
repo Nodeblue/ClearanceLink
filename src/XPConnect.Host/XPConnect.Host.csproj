@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\XPConnect.Airports\XPConnect.Airports.csproj" />
     <ProjectReference Include="..\XPConnect.Protocol\XPConnect.Protocol.csproj" />
     <ProjectReference Include="..\XPConnect.Recorder\XPConnect.Recorder.csproj" />
     <ProjectReference Include="..\XPConnect.Server\XPConnect.Server.csproj" />

@@ -55,6 +55,8 @@ public sealed class FacilityReplay : IFacilitySource
         return replay;
     }
 
+    public IReadOnlyList<Packet>? Find(FacilityRequest request) => Find(request.Icao, request.DefineId, request.RequestId);
+
     /// <summary>The recorded FacilityData packets for this airport and definition, readdressed to a new request id.</summary>
     public IReadOnlyList<Packet>? Find(string icao, uint defineId, uint requestId)
     {

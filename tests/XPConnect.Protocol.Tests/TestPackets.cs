@@ -32,6 +32,9 @@ public static class TestPackets
     public static Packet TransmitClientEvent(uint objectId, uint eventId, uint data, uint sendId = 6) =>
         PacketBuilder.Client(0x05, SunRise, sendId).U32(objectId).U32(eventId).U32(data).U32(0).U32(16).Build();
 
+    public static Packet AddToFacilityDefinition(uint defineId, string fieldName, uint sendId = 6) =>
+        PacketBuilder.Client(0x45, SunRise, sendId).U32(defineId).Str(fieldName, 256).Build();
+
     public static Packet RequestFacilityData(uint defineId, uint requestId, string icao, uint sendId = 7) =>
         PacketBuilder.Client(0x46, SunRise, sendId).U32(defineId).U32(requestId).Str(icao, 16).Str("", 4).Build();
 }

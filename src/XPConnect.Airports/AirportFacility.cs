@@ -27,10 +27,10 @@ public static class AirportFacility
 {
     private const double FeetToMeters = 0.3048;
 
-    public static FacilityObject Build(Airport airport, AirportExtras? extras = null)
+    public static FacilityObject Build(Airport airport, AirportExtras? extras = null, TaxiNetwork? taxi = null)
     {
         extras ??= new AirportExtras();
-        var taxi = TaxiNetwork.Build(airport);
+        taxi ??= TaxiNetwork.Build(airport);
         var (lat, lon) = airport.ReferencePoint;
         var frame = new LocalFrame(lat, lon);
         var elevation = airport.ElevationFeet * FeetToMeters;

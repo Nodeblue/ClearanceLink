@@ -46,7 +46,21 @@ YTWB with define 444, as a run-length sequence of `type x count`:
 - `AIRLINE` (child of TAXI_PARKING) is defined but was never sent: every parking spot recorded had N_AIRLINES 0.
 - Type 7 legs appear under approach transitions (parent type 6), arrivals/departures (10, 11), runway transitions (12) and enroute transitions (13).
 - MSFS leaves leftover memory after the terminator in some strings (seen in NAME64). Send zeros.
-- BIAS_X / BIAS_Z of taxi points and parking are metres east / north of the airport reference point (the AIRPORT latitude/longitude). Not yet verified numerically; check against a parking spot with a known position before relying on it.
+- BIAS_X / BIAS_Z of taxi points and parking are metres east / north of the airport reference point (the AIRPORT latitude/longitude). Verified: with this reading MSFS's YBBN parking spots lie a median 15 m from X-Plane's ramp starts (other readings gave over 500 m).
+- Fields that do not apply are left as uninitialised memory by MSFS (for example RUNWAY_NUMBER on taxiway paths). We send zeros.
+
+## Values read off MSFS's answers (used by `src/XPConnect.Airports`)
+| Field | Values seen |
+|---|---|
+| RUNWAY | LATITUDE/LONGITUDE is the runway centre. The primary end is the higher number (19 of 01/19, 29 of 11/29) and HEADING is its true heading. DESIGNATOR 0 none, 1 L, 2 R, 3 C. SURFACE 4 asphalt. PATTERN_ALTITUDE 304.8 (1,000 ft). |
+| START | One per runway end at the runway end, NUMBER + DESIGNATOR. Helipads also appear as starts (NUMBER 1, 2, DESIGNATOR 0); we do not send them. |
+| AIRPORT | ALTITUDE in metres. MAGVAR 349 at YTWB and YBAF (11 E stored west-positive) but 11 at YBBN; we send west-positive. |
+| FREQUENCY | TYPE 1 ATIS, 4 CTAF, 5 ground, 6 tower, 7 clearance, 8 approach, 9 departure, 10 centre, 12 AWOS. FREQUENCY in Hz. |
+| TAXI_PATH | TYPE 2 runway (RUNWAY_NUMBER/DESIGNATOR of the primary end), 3 parking (START a taxi point, END a parking index), 4 taxiway, 5 closed, 6 vehicle. NAME_INDEX into TAXI_NAME, whose entry 0 is the empty name. |
+| TAXI_POINT | TYPE 1 normal, 5 hold short, 6 (two at YBBN, probably ILS hold short). |
+| TAXI_PARKING | TYPE 2 GA small, 3 GA medium, 4 GA large, 8/9/10 gate small/medium/heavy, 12 fuel, 13 vehicles. NAME 1 PARKING, 10 GATE, 12-37 GATE_A-Z; SUFFIX uses the same values for a letter after the number. RADIUS in metres. |
+| APPROACH | TYPE 4 ILS, 10 RNAV. SUFFIX is the ASCII letter ('0', 48, when there is none). |
+| Legs | TYPE is the ARINC path terminator in alphabetical order (AF 1, CA 2, CF 4, DF 7, IF 15, RF 17, TF 18, VM 22). FIX_TYPE is an ASCII letter (W 87 waypoint, R 82 runway). APPROACH_ALT_DESC 0 none, 1 at, 2 at or above, 3 at or below, 4 between (ALTITUDE1 upper). Altitudes in metres. SPEED_LIMIT -1 when none, else knots with APPROACH_SPEED_DESC 3. COURSE and THETA in degrees. MSFS's FIX_LATITUDE/LONGITUDE are sometimes far from the fix (CF01L at YBAF's position), so BATC probably does not rely on them. |
 
 ### Size of the job (MSFS data)
 | Airport | Packets | Runways | Starts | Taxi points | Taxi paths | Parking | Taxi names | Frequencies |
