@@ -5,6 +5,7 @@
     <Project Path="src/XPConnect.Recorder/XPConnect.Recorder.csproj" />
     <Project Path="src/XPConnect.Server/XPConnect.Server.csproj" />
     <Project Path="src/XPConnect.XPlane/XPConnect.XPlane.csproj" />
+    <Project Path="src/XPConnect.SimStub/XPConnect.SimStub.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/XPConnect.Host.Tests/XPConnect.Host.Tests.csproj" />
