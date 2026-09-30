@@ -157,6 +157,29 @@ public sealed class AirportFacilityTests
         }
     }
 
+    [Theory]
+    [InlineData("YBBN")]
+    [InlineData("YTWB")]
+    public void No_two_taxi_points_share_a_position_and_no_spur_sits_on_its_spot(string icao)
+    {
+        // MSFS has neither (YBBN recording). BATC 1.8.21 crashed in TaxiPathCalculator.ConvertFlatToTaxiPoints on
+        // X-Plane data with 90 coincident point pairs on parking spots (2026-10-01).
+        var network = TaxiNetwork.Build(Fixtures.Airport(icao));
+        var points = network.Points;
+        for (var i = 0; i < points.Count; i++)
+        {
+            for (var j = i + 1; j < points.Count; j++)
+            {
+                Assert.True(Geo.DistanceMeters(points[i].Latitude, points[i].Longitude, points[j].Latitude, points[j].Longitude) >= 0.5, $"points {i} and {j} coincide");
+            }
+        }
+
+        var parkingPaths = network.Paths.Where(p => p.Type == MsfsCodes.ParkingPath).ToList();
+        Assert.Equal(parkingPaths.Count, parkingPaths.Select(p => p.Start).Distinct().Count());
+        var onSpot = parkingPaths.Count(p =>
+            Geo.DistanceMeters(points[p.Start].Latitude, points[p.Start].Longitude, network.Parking[p.End].Start.Latitude, network.Parking[p.End].Start.Longitude) < 1);
+        Assert.True(onSpot <= 1, $"{onSpot} spurs within 1 m of their spot");
+    }
     [Fact]
     public void Surrounding_airport_definition_encodes_without_taxi_data()
     {

@@ -237,6 +237,8 @@ public sealed class TaxiNetwork
 
         var splits = new Dictionary<int, List<(double T, int Parking)>>();
         var links = new List<(int Point, int Parking)>();
+        var backSpurs = new Dictionary<(int Node, int Other), int>();
+        var spursFrom = new Dictionary<int, int>();
         for (var p = 0; p < Parking.Count; p++)
         {
             var spot = frame.ToLocal(Parking[p].Start.Latitude, Parking[p].Start.Longitude);
@@ -271,8 +273,27 @@ public sealed class TaxiNetwork
             // Near a taxiway end: a spur from that node part of the way toward the spot.
             var node = best.T < 0.5 ? path.Start : path.End;
             var toSpot = Distance(local[node], spot);
-            var along = toSpot == 0 ? 0 : Math.Min(SpurMeters * 2, toSpot / 2) / toSpot;
-            var spur = AddLocal(frame, local, (local[node].X + ((spot.X - local[node].X) * along), local[node].Z + ((spot.Z - local[node].Z) * along)));
+            (double X, double Z) spurAt;
+            if (toSpot >= SpurMeters * 2)
+            {
+                // Spots in a row off the same node would otherwise get spurs on top of each other.
+                var earlier = spursFrom.GetValueOrDefault(node);
+                spursFrom[node] = earlier + 1;
+                var along = Math.Min((SpurMeters * 2) + (2 * earlier), toSpot - SpurMeters) / toSpot;
+                spurAt = (local[node].X + ((spot.X - local[node].X) * along), local[node].Z + ((spot.Z - local[node].Z) * along));
+            }
+            else
+            {
+                // X-Plane's taxi route runs into the spot: put the spur back along the route, clear of the spot.
+                // A point on or near the spot made BATC 1.8.21 drop the airport's gate links (2026-10-01).
+                var other = node == path.Start ? path.End : path.Start;
+                var taken = backSpurs.GetValueOrDefault((node, other));
+                backSpurs[(node, other)] = taken + 1;
+                var back = Math.Min((SpurMeters * 2) + (2 * taken), length * 0.8) / length;
+                spurAt = (local[node].X + ((local[other].X - local[node].X) * back), local[node].Z + ((local[other].Z - local[node].Z) * back));
+            }
+
+            var spur = AddLocal(frame, local, spurAt);
             Paths.Add(new TaxiPath(MsfsCodes.TaxiwayPath, node, spur, path.NameIndex, path.Width));
             links.Add((spur, p));
         }
@@ -321,6 +342,65 @@ public sealed class TaxiNetwork
             }
 
             Paths.Add(new TaxiPath(MsfsCodes.ParkingPath, point, parking, 0, 10));
+        }
+
+        ShiftPointsOffSpots(frame, local);
+    }
+
+    /// <summary>
+    /// Moves every taxi point that lies within <see cref="SpurMeters"/> of a parking spot (X-Plane routes end or pass
+    /// at the spot) that far from the spot, toward its neighbours. MSFS has no taxi point on a spot, and BATC 1.8.21
+    /// merged such points with its gate points and then failed on the missing ones (2026-10-01).
+    /// </summary>
+    private void ShiftPointsOffSpots(LocalFrame frame, List<(double X, double Z)> local)
+    {
+        var spots = Parking.Select(s => frame.ToLocal(s.Start.Latitude, s.Start.Longitude)).ToList();
+        if (spots.Count == 0)
+        {
+            return;
+        }
+
+        var neighbours = new Dictionary<int, List<int>>();
+        foreach (var path in Paths.Where(p => p.Type != MsfsCodes.ParkingPath))
+        {
+            foreach (var (a, b) in new[] { (path.Start, path.End), (path.End, path.Start) })
+            {
+                if (!neighbours.TryGetValue(a, out var list))
+                {
+                    neighbours[a] = list = [];
+                }
+
+                list.Add(b);
+            }
+        }
+
+        for (var i = 0; i < local.Count; i++)
+        {
+            var nearest = spots.MinBy(s => Distance(s, local[i]));
+            if (Distance(nearest, local[i]) >= SpurMeters || !neighbours.TryGetValue(i, out var around))
+            {
+                continue;
+            }
+
+            var centre = (X: around.Average(n => local[n].X), Z: around.Average(n => local[n].Z));
+            var length = Distance(centre, nearest);
+            if (length < SpurMeters)
+            {
+                continue;
+            }
+
+            // Step further out if another point already sits there (two routes into the same spot).
+            var step = SpurMeters;
+            (double X, double Z) moved;
+            do
+            {
+                moved = (nearest.X + ((centre.X - nearest.X) / length * step), nearest.Z + ((centre.Z - nearest.Z) / length * step));
+                step += 2;
+            }
+            while (step < length && local.Where((q, j) => j != i && Distance(q, moved) < 1).Any());
+            var (lat, lon) = frame.FromLocal(moved.X, moved.Z);
+            Points[i] = Points[i] with { Latitude = lat, Longitude = lon };
+            local[i] = moved;
         }
     }
 
