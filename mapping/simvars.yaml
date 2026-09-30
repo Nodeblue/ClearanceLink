@@ -69,8 +69,10 @@
 
 # --- Speeds ---
 - name: AIRSPEED INDICATED
-  dataref: sim/flightmodel/position/indicated_airspeed
+  derive: non_negative
+  inputs: [sim/flightmodel/position/indicated_airspeed]
   units: knots
+  notes: X-Plane reports small negative speeds when parked (-7.2 kt at YBBN, 2026-09-30); MSFS sends 0.
 - name: GROUND VELOCITY
   dataref: sim/flightmodel/position/groundspeed
   units: meters per second

@@ -108,6 +108,9 @@ public static class Derivations
         // sign flip, e.g. MSFS pitch is positive nose-down and bank positive left; X-Plane is the opposite
         "negate" => -v[0],
 
+        // floor at zero, e.g. X-Plane's indicated airspeed is slightly negative when parked
+        "non_negative" => Math.Max(0, v[0]),
+
         // table lookup on the (rounded) first input; unknown values fall back to 0
         "map" => map.Map.GetValueOrDefault((int)Math.Round(v[0])),
 
