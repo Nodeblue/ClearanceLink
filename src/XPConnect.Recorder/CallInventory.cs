@@ -28,6 +28,9 @@ public sealed class CallInventory
 
     public int Count { get; private set; }
 
+    /// <summary>High-rate packets the recorder sampled out; they were forwarded but not written.</summary>
+    public IReadOnlyDictionary<string, long> SampledOut { get; set; } = new Dictionary<string, long>();
+
     public static CallInventory FromFile(string path)
     {
         var inventory = new CallInventory();
@@ -133,6 +136,19 @@ public sealed class CallInventory
         foreach (var (name, count) in _replies)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {count} |");
+        }
+
+        if (SampledOut.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Sampled out (forwarded, not recorded)");
+            sb.AppendLine();
+            sb.AppendLine("| Call or message | Count |");
+            sb.AppendLine("|---|---|");
+            foreach (var (name, count) in SampledOut.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {count} |");
+            }
         }
 
         Section(sb, "SimVars (name | units | data type)", _simVars);

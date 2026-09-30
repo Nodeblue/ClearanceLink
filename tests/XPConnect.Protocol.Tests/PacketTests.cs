@@ -98,3 +98,51 @@ public class PacketTests
         await Assert.ThrowsAsync<InvalidDataException>(() => PacketFramer.ReadAsync(stream, Direction.ClientToServer));
     }
 }
+
+public class RecordedLayoutTests
+{
+    [Fact]
+    public void Msfs2024_identity_matches_the_recorded_open_reply()
+    {
+        // Recorded from MSFS 2024 on 2026-09-30: "SunRise" app 12.2.282174.999, SimConnect 12.2.0.0.
+        var f = PacketDecoder.Decode(ServerIdentity.Msfs2024.BuildOpenReply(TestPackets.SunRise));
+
+        Assert.Equal("SunRise", f["applicationName"]);
+        Assert.Equal(12u, f["appVersionMajor"]);
+        Assert.Equal(2u, f["appVersionMinor"]);
+        Assert.Equal(282174u, f["appBuildMajor"]);
+        Assert.Equal(999u, f["appBuildMinor"]);
+        Assert.Equal(2u, f["simConnectVersionMinor"]);
+        Assert.Equal(0u, f["simConnectBuildMajor"]);
+    }
+
+    [Fact]
+    public void Decodes_ai_create_simulated_object_ex1()
+    {
+        var packet = PacketBuilder.Client(0x5A, TestPackets.SunRise, 4)
+            .Str("FSLTL A320 QFA", 256).Str("QFA", 256).Bytes(new byte[56]).U32(42)
+            .Build();
+
+        var f = PacketDecoder.Decode(packet);
+
+        Assert.Equal("AICreateSimulatedObject_EX1", packet.Name);
+        Assert.Equal("FSLTL A320 QFA", f["containerTitle"]);
+        Assert.Equal("QFA", f["livery"]);
+        Assert.Equal(42u, f["requestId"]);
+        Assert.False(f.ContainsKey("decodeWarning"));
+    }
+
+    [Fact]
+    public void Decodes_simobject_and_livery_list()
+    {
+        var packet = PacketBuilder.Server(RecvId.EnumerateSimObjectAndLiveryList, TestPackets.SunRise)
+            .U32(3).U32(2).U32(0).U32(1)
+            .Str("Airbus A320neo", 256).Str("", 256)
+            .Str("Boeing 737", 256).Str("QFA", 256)
+            .Build();
+
+        var items = (List<string>)PacketDecoder.Decode(packet)["items"]!;
+
+        Assert.Equal(["Airbus A320neo", "Boeing 737 | QFA"], items);
+    }
+}
