@@ -71,6 +71,29 @@ public static partial class MsfsCodes
         _ => 0,
     };
 
+    /// <summary>
+    /// FREQUENCY NAME the way MSFS fills it, which BATC uses as the controller's callsign: the ICAO for ATIS, the
+    /// sector for ground ("North", "Domestic"), and the city in capitals for the rest ("BRISBANE" for delivery, tower,
+    /// approach and departure at YBBN). X-Plane's names are service labels ("ACD", "SMC North", "TWR EAST"), which
+    /// BATC read out as "Acd Delivery" (2026-10-01).
+    /// </summary>
+    public static string FrequencyName(Frequency frequency, Airport airport)
+    {
+        var city = airport.Metadata.GetValueOrDefault("city") is { Length: > 0 } c ? c : airport.Name;
+        switch (frequency.Kind)
+        {
+            case FrequencyKind.Atis:
+                return airport.Icao;
+            case FrequencyKind.Ground:
+                var words = frequency.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(w => w.ToUpperInvariant() is not ("SMC" or "GND" or "GROUND" or "APRON" or "GRD")
+                        && !city.Split(' ').Contains(w, StringComparer.OrdinalIgnoreCase))
+                    .ToArray();
+                return words.Length > 0 ? string.Join(' ', words) : city.ToUpperInvariant();
+            default:
+                return city.ToUpperInvariant();
+        }
+    }
     /// <summary>TAXI_PARKING NAME: 1 PARKING, 10 GATE, 12-37 GATE_A to GATE_Z. SUFFIX uses the same values.</summary>
     public const int ParkingName = 1;
     public const int GateName = 10;
