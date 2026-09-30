@@ -13,7 +13,7 @@ _Update this file in every PR that changes behaviour._
 - Verified against an independent client (node-simconnect 4.2) over TCP, on both the SunRise and KittyHawk protocols.
 - Recorded a real BATC session against MSFS 2024 (YBBN to YTWB, 2026-09-30). BATC is redirected by a `SimConnect.cfg` next to `simconnect_ws.exe` and another next to `BeyondATC.exe`. Findings: `docs/research/batc-call-inventory.md`.
 - `ServerIdentity.Msfs2024` matches the recorded Open reply (SunRise 12.2.282174.999, SimConnect 12.2.0.0).
-- Stand-in test passed (2026-09-30): with MSFS closed, BATC connects both SimConnect connections to `fake --identity msfs2024` and accepts the handshake, provided a process named `FlightSimulator2024.exe` is running (a do-nothing stub passes). With user-aircraft data served, BATC reports connected, picks YBBN from the position and requests its facility data.
+- Stand-in test passed (2026-09-30): with MSFS closed, BATC connects both SimConnect connections to `fake --identity msfs2024` and accepts the handshake, provided a process named `FlightSimulator2024.exe` is running (a do-nothing stub passes). With user-aircraft data and replayed facility data served, BATC loads YBBN and the flight plan, gives IFR clearance, tunes COM1 through us and issues a taxi route, all without MSFS (2026-09-30).
 - Recordings sample high-rate streams (AI position writes, SimObjectData) to one per second per stream by default (`--throttle-ms`). A full-rate 30-minute flight was 2.9 GB.
 
 ## Not yet verified
