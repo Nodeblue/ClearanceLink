@@ -1,0 +1,12 @@
+{
+  "name": "xpconnect-node-client",
+  "private": true,
+  "description": "Independent SimConnect client (node-simconnect) used to smoke-test XPConnect's server side.",
+  "type": "commonjs",
+  "scripts": {
+    "smoke": "node smoke.js"
+  },
+  "dependencies": {
+    "node-simconnect": "^4.0.0"
+  }
+}
