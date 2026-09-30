@@ -34,6 +34,7 @@ public static class Fixtures
             ["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 15.3,
             ["sim/flightmodel2/position/pressure_altitude"] = -358.16,
             ["sim/weather/barometer_sealevel_inhg"] = 1026.9 / 33.8638866667,
+            ["sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot"] = 1026.9 / 33.8638866667,
             ["sim/flightmodel/position/true_psi"] = 297.0,
             ["sim/flightmodel/position/mag_psi"] = 285.9,
             ["sim/flightmodel/position/true_theta"] = 1.5,
