@@ -1,0 +1,21 @@
+root = true
+
+[*]
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+end_of_line = lf
+
+[*.{cs,csproj,props,slnx}]
+indent_size = 4
+
+[*.{json,yml,yaml,md,js}]
+indent_size = 2
+
+[*.cs]
+# Library code is not localised; logs and recordings are invariant by design.
+dotnet_diagnostic.CA1303.severity = none
+# Readable sentence-style test names use underscores.
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2007.severity = none
