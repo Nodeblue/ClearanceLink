@@ -27,6 +27,8 @@ public sealed class ServerTests : IDisposable
         var path = Path.Combine(_dir, "fake.jsonl");
         using (var recorder = new JsonlRecorder(path))
         {
+            var recorded = 0;
+            recorder.Recorded += _ => Interlocked.Increment(ref recorded);
             await using var listener = Transports.Listen(endpoint);
             var server = new FakeSimServer(listener, ServerIdentity.Msfs2024, recorder).RunAsync(cts.Token);
 
@@ -34,7 +36,7 @@ public sealed class ServerTests : IDisposable
             await PacketFramer.WriteAsync(client, TestPackets.Open(), cts.Token);
             var reply = await PacketFramer.ReadAsync(client, Direction.ServerToClient, cts.Token);
             await PacketFramer.WriteAsync(client, TestPackets.AddToDataDefinition(1, "PLANE ALTITUDE", "feet"), cts.Token);
-            await WaitForAsync(() => File.ReadLines(path).Count() >= 3, cts.Token);
+            await WaitForAsync(() => Volatile.Read(ref recorded) >= 3, cts.Token);
 
             Assert.Equal(RecvId.Open, (RecvId)reply!.TypeField);
             Assert.Equal("SunRise", PacketDecoder.Decode(reply)["applicationName"]);
