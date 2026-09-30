@@ -1,6 +1,6 @@
 # Facility data as BATC requests it and MSFS 2024 answers it
 
-Source: pass-through recordings on Ben's PC, 2026-09-30 (`20260930-165631-record.jsonl`, `20260930-174605-record.jsonl`), BATC 1.8.21.EA against MSFS 2024 1.8.16.0. Fixture: `recordings/samples/batc-1.8.21-facility-ytwb.jsonl` (the 573 `AddToFacilityDefinition` calls, the YTWB request and MSFS's 583-packet reply; one string tail of leftover memory bytes zeroed).
+Source: pass-through recordings on Ben's PC, 2026-09-30 (`20260930-165631-record.jsonl`, `20260930-174605-record.jsonl`), BATC 1.8.21.EA against MSFS 2024 1.8.16.0. Fixture: `recordings/samples/batc-1.8.21-facilities.jsonl`: the 573 `AddToFacilityDefinition` calls, then the request, MSFS's full reply and `FacilityDataEnd` for YBBN (define 444, 8,610 packets), YTWB (define 444, 583 packets) and YBAF (define 333, a surrounding airport, 76 packets). Three string tails of leftover memory bytes (airport NAME64) were zeroed; nothing else was changed.
 
 Everything below is read off the recordings. Sizes were checked by adding up the fields in the order BATC defined them.
 
