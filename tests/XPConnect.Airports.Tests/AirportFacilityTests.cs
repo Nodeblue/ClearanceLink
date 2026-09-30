@@ -114,6 +114,8 @@ public sealed class AirportFacilityTests
         var starts = paths.Where(p => Num(p, "TYPE") == 3).Select(p => Num(p, "START")).ToList();
         Assert.Equal(starts.Count, starts.Distinct().Count());
         Assert.All(starts, s => Assert.Contains(paths, p => Num(p, "TYPE") != 3 && (Num(p, "START") == s || Num(p, "END") == s)));
+        Assert.All(paths.Where(p => Num(p, "TYPE") == 3), p =>
+            Assert.InRange(Distance(Bias(points[(int)Num(p, "START")]), Bias(parking[(int)Num(p, "END")])), 4.99, 500));
 
         // Every parking spot is joined to the network exactly once.
         Assert.Equal(

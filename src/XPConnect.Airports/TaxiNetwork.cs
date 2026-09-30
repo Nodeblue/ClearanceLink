@@ -24,6 +24,10 @@ public sealed class TaxiNetwork
     /// <summary>Closest a parking connection point comes to an existing node; also the spur length unit.</summary>
     private const double SpurMeters = 5;
 
+    /// <summary>Nearest a parking spot's lead-in point may be (MSFS's closest at YBBN is 5.6 m), and where one is put when too near.</summary>
+    private const double MinLeadInMeters = 5;
+    private const double LeadInMeters = 8;
+
     public List<TaxiPoint> Points { get; } = [];
 
     public List<TaxiPath> Paths { get; } = [];
@@ -303,8 +307,19 @@ public sealed class TaxiNetwork
             }
         }
 
-        foreach (var (point, parking) in links.OrderBy(d => d.Parking))
+        foreach (var (anchor, parking) in links.OrderBy(d => d.Parking))
         {
+            // X-Plane's routes often run right into the gate, leaving the lead-in point on the spot itself. MSFS keeps
+            // it 5.6 m or more away, so such spots get a point of their own behind the parked aircraft.
+            var point = anchor;
+            var spot = frame.ToLocal(Parking[parking].Start.Latitude, Parking[parking].Start.Longitude);
+            if (Distance(local[anchor], spot) < MinLeadInMeters)
+            {
+                var back = (Parking[parking].Heading + 180) * Math.PI / 180;
+                point = AddLocal(frame, local, (spot.X + (Math.Sin(back) * LeadInMeters), spot.Z + (Math.Cos(back) * LeadInMeters)));
+                Paths.Add(new TaxiPath(MsfsCodes.TaxiwayPath, anchor, point, 0, 10));
+            }
+
             Paths.Add(new TaxiPath(MsfsCodes.ParkingPath, point, parking, 0, 10));
         }
     }
