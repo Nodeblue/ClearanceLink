@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\XPConnect.Protocol\XPConnect.Protocol.csproj" />
     <ProjectReference Include="..\XPConnect.Recorder\XPConnect.Recorder.csproj" />
+    <ProjectReference Include="..\XPConnect.Server\XPConnect.Server.csproj" />
+    <ProjectReference Include="..\XPConnect.XPlane\XPConnect.XPlane.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
