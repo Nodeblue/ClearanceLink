@@ -67,6 +67,15 @@ public sealed class MappingTests
     }
 
     [Fact]
+    public void Parked_airspeed_is_never_negative()
+    {
+        var xp = Fixtures.ParkedAtYbbn();
+        xp["sim/flightmodel/position/indicated_airspeed"] = -7.2;
+
+        Assert.Equal(0.0, new SimVarResolver(Fixtures.Mappings(), xp).Resolve("AIRSPEED INDICATED", "knots").Value.Number);
+    }
+
+    [Fact]
     public void Missing_dataref_is_pending_and_unknown_simvar_is_unmapped()
     {
         var resolver = new SimVarResolver(Fixtures.Mappings(), new InMemoryXPlane());
