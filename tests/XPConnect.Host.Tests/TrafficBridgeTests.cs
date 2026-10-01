@@ -150,6 +150,30 @@ public sealed class TrafficBridgeTests
         Assert.Equal(1, TrafficBridge.State(parked).Gear);
     }
 
+    [Fact]
+    public void Parked_nose_is_level_but_take_off_rotation_shows()
+    {
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var ai = registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXZE", new InitPosition(-27.39, 153.12, 20, -1.5, 0, 13, true, 0));
+        Assert.Equal(0, TrafficBridge.State(ai).Pitch);
+
+        ai.Set("PLANE PITCH DEGREES", -8, time.GetUtcNow());
+        ai.Set("GROUND VELOCITY", 150, time.GetUtcNow());
+        Assert.Equal(8, TrafficBridge.State(ai).Pitch);
+    }
+
+    [Fact]
+    public void A_stale_gear_position_write_does_not_retract_the_gear_on_approach()
+    {
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var arriving = registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXZT", new InitPosition(-27.30, 153.10, 1500, 0, 0, 13, false, 150));
+        arriving.Set("GEAR CENTER POSITION", 0, time.GetUtcNow());
+
+        Assert.Equal(1, TrafficBridge.State(arriving, groundFeet: 13).Gear);
+    }
+
     private static PluginStatus Connected() => new("0.1.0", 0, 100, [], DateTimeOffset.UnixEpoch);
 
     private static string RepoFile(params string[] parts)
