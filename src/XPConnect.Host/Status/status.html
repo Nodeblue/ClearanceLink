@@ -80,6 +80,11 @@
     </section>
 
     <section class="card wide">
+      <h2>BeyondATC traffic</h2>
+      <div id="traffic"><p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p></div>
+    </section>
+
+    <section class="card wide">
       <h2>Details</h2>
       <div class="row"><span class="k">Listening for BeyondATC on</span><span class="v"><code id="listen">–</code></span></div>
       <div class="row"><span class="k">Simulator check</span><span class="v" id="stub">–</span></div>
@@ -130,6 +135,14 @@
       ? '<p class="empty">None yet. BeyondATC asks for airports when you start a flight.</p>'
       : `<table><thead><tr><th>Airport</th><th>From</th><th class="num">Time</th><th class="num">At</th></tr></thead><tbody>${
           s.airports.map(a => `<tr><td><strong>${esc(a.icao)}</strong></td><td>${a.source ? esc(a.source) : '<span class="empty">not found, BeyondATC skips it</span>'}</td><td class="num">${a.source ? a.milliseconds + " ms" : ""}</td><td class="num">${time(a.at)}</td></tr>`).join("")
+        }</tbody></table>`;
+
+    const traffic = (s.traffic || []).filter(t => t.kind === "aircraft");
+    $("traffic").innerHTML = traffic.length === 0
+      ? '<p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p>'
+      : `<p>${traffic.length} aircraft${(s.traffic.length - traffic.length) ? `, ${s.traffic.length - traffic.length} ground vehicles` : ""}. Not drawn in X-Plane yet: that needs the XPConnect plugin.</p>
+         <table><thead><tr><th>Tail</th><th>Model</th><th>State</th><th class="num">Altitude</th><th class="num">Speed</th><th class="num">Heading</th><th class="num">Updated</th></tr></thead><tbody>${
+          traffic.map(t => `<tr><td><strong>${esc(t.tail)}</strong></td><td>${esc(t.model)}</td><td>${t.onGround ? "ground" : "airborne"}</td><td class="num">${t.altitudeFeet} ft</td><td class="num">${t.groundSpeedKnots} kt</td><td class="num">${t.heading}°</td><td class="num">${ago(t.secondsSinceUpdate)}</td></tr>`).join("")
         }</tbody></table>`;
   }
 
