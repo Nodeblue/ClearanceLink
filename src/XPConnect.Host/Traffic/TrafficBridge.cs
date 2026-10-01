@@ -39,6 +39,12 @@ public sealed class TrafficBridge(
 
     private const double FeetToMeters = 0.3048;
 
+    /// <summary>
+    /// Below this on the ground the nose is drawn level: BATC's parked pitch is MSFS's model attitude, which lifts a CSL
+    /// model's nose wheel off X-Plane's ground (live test 2026-10-01). Faster, BATC's pitch shows the take-off rotation.
+    /// </summary>
+    private const double RotateKnots = 40;
+
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly ConcurrentDictionary<uint, Drawn> _drawn = new();
     private int _nextPluginId;
@@ -124,7 +130,7 @@ public sealed class TrafficBridge(
             o.Longitude,
             o.AltitudeFeet,
             o.HeadingTrue,
-            -o.PitchDegrees,
+            o.OnGround && o.GroundSpeedKnots < RotateKnots ? 0 : -o.PitchDegrees,
             -o.BankDegrees,
             o.GroundSpeedKnots,
             o.OnGround,
@@ -144,11 +150,8 @@ public sealed class TrafficBridge(
             return 1;
         }
 
-        if (o.Has("GEAR CENTER POSITION"))
-        {
-            return Ratio(o.Get("GEAR CENTER POSITION"));
-        }
-
+        // In the air: BATC's GEAR_UP / GEAR_DOWN events. Its gear position writes are not used: it writes 0 once when it
+        // creates an aircraft (parked ones too) and not again, so that value goes stale.
         return o.LatestEvent("GEAR_UP", "GEAR_DOWN") switch
         {
             "GEAR_UP" => 0,
