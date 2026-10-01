@@ -26,7 +26,7 @@ namespace XPConnect.Host
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
-                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--status-port <port> | --no-status] [--open-status]
+                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--no-traffic] [--status-port <port> | --no-status] [--open-status]
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
                   SimConnect.cfg redirect points at), --xplane http://127.0.0.1:8086, --mapping ./mapping.
@@ -164,7 +164,10 @@ namespace XPConnect.Host
         {
             var mappings = LoadMappings(options);
             using var xplane = new XPlaneWebApiClient(XPlaneUri(options), PacketConsole.Info);
-            var facilities = ServeFacilities(options);
+            var ground = new AirportGround();
+            var traffic = new TrafficRegistry();
+            var liveries = LoadLiveries(options);
+            var facilities = ServeFacilities(options, ground);
             using var stub = new StubLauncher();
             var stubLine = "not started (--no-stub)";
             if (!options.Has("no-stub"))
@@ -174,11 +177,12 @@ namespace XPConnect.Host
             }
 
             var xplaneTask = xplane.RunAsync(ct);
-            var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities);
+            var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities, traffic, ground, liveries);
             var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(xplane.IsConnected, xplane.XPlaneVersion, XPlaneUri(options).ToString()), listener.Endpoint.ToString())
             {
                 Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
                 Recording = Path.GetFullPath(recorder.Path),
+                Traffic = () => traffic.Objects,
             };
             await using var plugin = StartPluginLink();
             board.Plugin = () => plugin?.Status;
@@ -412,6 +416,30 @@ namespace XPConnect.Host
             }
         }
 
+        /// <summary>
+        /// The model list sent for EnumerateSimObjectsAndLiveries: mapping/liveries.json, the titles and liveries MSFS
+        /// listed in the 2026-09-30 recording. BATC picks its traffic models from it. Null (no traffic) with --no-traffic.
+        /// </summary>
+        private static IReadOnlyList<(string Title, string Livery)>? LoadLiveries(Options options)
+        {
+            if (options.Has("no-traffic"))
+            {
+                PacketConsole.Info("Traffic: off (--no-traffic); BeyondATC will not create AI aircraft");
+                return null;
+            }
+
+            var dir = options.Get("mapping") ?? FindMappingDirectory();
+            var path = dir is null ? null : Path.Combine(dir, "liveries.json");
+            if (path is null || !File.Exists(path))
+            {
+                PacketConsole.Info("Traffic: mapping/liveries.json not found; BeyondATC will not create AI aircraft");
+                return null;
+            }
+
+            var list = System.Text.Json.JsonSerializer.Deserialize<string[][]>(File.ReadAllText(path)) ?? [];
+            PacketConsole.Info($"Traffic: {list.Length} models offered to BeyondATC from {Path.GetFullPath(path)}");
+            return [.. list.Where(e => e.Length >= 1).Select(e => (e[0], e.Length > 1 ? e[1] : ""))];
+        }
         private static MappingSet LoadMappings(Options options)
         {
             var dir = options.Get("mapping") ?? FindMappingDirectory()
@@ -455,7 +483,7 @@ namespace XPConnect.Host
         }
 
         /// <summary>Recorded answers first (when --facilities is given), then airports built from X-Plane's files.</summary>
-        private static FacilitySourceChain? ServeFacilities(Options options)
+        private static FacilitySourceChain? ServeFacilities(Options options, AirportGround? ground = null)
         {
             var sources = new List<IFacilitySource>();
             if (LoadFacilities(options) is { } replay)
@@ -467,7 +495,7 @@ namespace XPConnect.Host
             {
                 var airports = new XPlaneAirports(install, PacketConsole.Info);
                 airports.Start();
-                sources.Add(new XPlaneFacilitySource(airports));
+                sources.Add(new XPlaneFacilitySource(airports, ground));
                 PacketConsole.Info($"Airports: from X-Plane at {install.Root}");
             }
             else
