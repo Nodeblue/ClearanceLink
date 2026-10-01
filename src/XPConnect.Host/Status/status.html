@@ -140,7 +140,7 @@
     const traffic = (s.traffic || []).filter(t => t.kind === "aircraft");
     $("traffic").innerHTML = traffic.length === 0
       ? '<p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p>'
-      : `<p>${traffic.length} aircraft${(s.traffic.length - traffic.length) ? `, ${s.traffic.length - traffic.length} ground vehicles` : ""}. Not drawn in X-Plane yet: that needs the XPConnect plugin.</p>
+      : `<p>${traffic.length} aircraft${(s.traffic.length - traffic.length) ? `, ${s.traffic.length - traffic.length} ground vehicles` : ""}. ${!s.plugin ? "Not drawn in X-Plane: the XPConnect plugin is not running there." : s.plugin.models === 0 ? "Not drawn in X-Plane: no CSL aircraft models found." : "Drawn in X-Plane by the XPConnect plugin."}</p>
          <table><thead><tr><th>Tail</th><th>Model</th><th>State</th><th class="num">Altitude</th><th class="num">Speed</th><th class="num">Heading</th><th class="num">Updated</th></tr></thead><tbody>${
           traffic.map(t => `<tr><td><strong>${esc(t.tail)}</strong></td><td>${esc(t.model)}</td><td>${t.onGround ? "ground" : "airborne"}</td><td class="num">${t.altitudeFeet} ft</td><td class="num">${t.groundSpeedKnots} kt</td><td class="num">${t.heading}°</td><td class="num">${ago(t.secondsSinceUpdate)}</td></tr>`).join("")
         }</tbody></table>`;

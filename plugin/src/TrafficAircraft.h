@@ -7,6 +7,7 @@
 #include "XPMPAircraft.h"
 
 #include <optional>
+#include <string>
 
 namespace xpc {
 
@@ -27,6 +28,7 @@ public:
 private:
     void SetLabel(const Add& add);
 
+    std::string requested_;  // type, airline and livery last asked for, to skip re-matching on a repeated add
     Pos state_{};
     float stateTime_ = 0;
     bool hasState_ = false;

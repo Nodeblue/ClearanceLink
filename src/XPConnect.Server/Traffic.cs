@@ -26,6 +26,8 @@ public sealed class TrafficObject(uint objectId, int connection, TrafficKind kin
     private readonly Lock _gate = new();
     private readonly Dictionary<string, double> _values = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, uint> _events = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _eventOrder = new(StringComparer.OrdinalIgnoreCase);
+    private long _eventCount;
 
     public uint ObjectId { get; } = objectId;
 
@@ -127,11 +129,21 @@ public sealed class TrafficObject(uint objectId, int connection, TrafficKind kin
         }
     }
 
+    /// <summary>Which of these events was sent to this object last (GEAR_UP or GEAR_DOWN...); null if none was.</summary>
+    public string? LatestEvent(params string[] names)
+    {
+        lock (_gate)
+        {
+            return names.Where(_eventOrder.ContainsKey).OrderByDescending(n => _eventOrder[n]).FirstOrDefault();
+        }
+    }
+
     internal void SetEvent(string name, uint data)
     {
         lock (_gate)
         {
             _events[name] = data;
+            _eventOrder[name] = ++_eventCount;
         }
     }
 }

@@ -177,14 +177,18 @@ namespace XPConnect.Host
             }
 
             var xplaneTask = xplane.RunAsync(ct);
-            var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities, traffic, ground, liveries);
+            await using var plugin = StartPluginLink();
+
+            // BATC's traffic goes to the X-Plane plugin, and the plugin's terrain answers BATC's ground questions.
+            var bridge = plugin is null || liveries is null ? null : new TrafficBridge(traffic, plugin, LoadTrafficModels(options), ground, PacketConsole.Info);
+            var bridgeTask = bridge?.RunAsync(ct) ?? Task.CompletedTask;
+            var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities, traffic, (IGroundElevation?)bridge ?? ground, liveries);
             var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(xplane.IsConnected, xplane.XPlaneVersion, XPlaneUri(options).ToString()), listener.Endpoint.ToString())
             {
                 Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
                 Recording = Path.GetFullPath(recorder.Path),
                 Traffic = () => traffic.Objects,
             };
-            await using var plugin = StartPluginLink();
             board.Plugin = () => plugin?.Status;
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -199,6 +203,7 @@ namespace XPConnect.Host
             finally
             {
                 await xplaneTask;
+                await bridgeTask;
             }
         }
 
@@ -440,6 +445,20 @@ namespace XPConnect.Host
             PacketConsole.Info($"Traffic: {list.Length} models offered to BeyondATC from {Path.GetFullPath(path)}");
             return [.. list.Where(e => e.Length >= 1).Select(e => (e[0], e.Length > 1 ? e[1] : ""))];
         }
+        /// <summary>mapping/traffic-models.yaml: how BATC's model titles become ICAO types and airlines for the plugin.</summary>
+        private static TrafficModels LoadTrafficModels(Options options)
+        {
+            var dir = options.Get("mapping") ?? FindMappingDirectory();
+            var path = dir is null ? null : Path.Combine(dir, "traffic-models.yaml");
+            if (path is null || !File.Exists(path))
+            {
+                PacketConsole.Info("Traffic: mapping/traffic-models.yaml not found; every aircraft is drawn as the default model");
+                return TrafficModels.Empty;
+            }
+
+            return TrafficModels.Load(path);
+        }
+
         private static MappingSet LoadMappings(Options options)
         {
             var dir = options.Get("mapping") ?? FindMappingDirectory()
