@@ -2,6 +2,7 @@
 #pragma once
 
 #include "GroundFit.h"
+#include "Motion.h"
 #include "Protocol.h"
 
 #include "XPLMScenery.h"
@@ -48,14 +49,20 @@ private:
 
     float groundOffsetFt_ = 0;
     std::string requested_;  // type, airline and livery last asked for, to skip re-matching on a repeated add
-    Pos state_{};
-    float stateTime_ = 0;
+    // Probes the terrain under the aircraft now, or reuses the last probe while it has not moved (parked) or is
+    // airborne (only the reported ground height needs it). Returns false when there is no terrain under it.
+    bool ProbeGround(bool onGround, float now);
+    Pos Drawn(float now) const;
+
+    Pos prev_{}, state_{};  // the last two updates from XPConnect, blended between (Motion.h)
+    float prevTime_ = 0, stateTime_ = 0;
     bool hasState_ = false;
     XPLMProbeRef probe_ = nullptr;
     std::optional<double> groundFt_;
+    // Last terrain probe: where (local x, z), when, what it found and the slope along the heading then.
+    float probeX_ = 0, probeZ_ = 0, probeTime_ = -1000, probeY_ = 0;
+    float probeHeading_ = 0;
+    std::optional<float> slope_;
 };
-
-// Moves a position on along a true heading by `meters` (flat-earth step, fine for under a kilometre).
-void MoveAlong(double& lat, double& lon, double headingDeg, double meters);
 
 }  // namespace xpc

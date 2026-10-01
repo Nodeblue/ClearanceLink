@@ -63,6 +63,32 @@ public sealed class TrafficBridgeTests
     }
 
     [Fact]
+    public void Parked_aircraft_are_sent_only_when_they_change_or_every_few_seconds()
+    {
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var plugin = new FakePlugin { Status = Connected() };
+        var bridge = new TrafficBridge(registry, plugin, Models, null, _ => { }, time);
+        var parked = registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXZE", new InitPosition(-27.39, 153.12, 13, 0, 0, 13, true, 0));
+
+        bridge.Sync();
+        Assert.Single(plugin.Updates);
+
+        time.Advance(TrafficBridge.Interval);
+        bridge.Sync();
+        Assert.Single(plugin.Updates); // nothing changed
+
+        parked.Set("PLANE HEADING DEGREES TRUE", 20, time.GetUtcNow());
+        time.Advance(TrafficBridge.Interval);
+        bridge.Sync();
+        Assert.Equal(2, plugin.Updates.Count); // starts to move
+
+        time.Advance(TrafficBridge.UnchangedInterval);
+        bridge.Sync();
+        Assert.Equal(3, plugin.Updates.Count); // keep-alive
+    }
+
+    [Fact]
     public void Adds_again_once_a_plugin_that_was_away_reports_back()
     {
         var time = new ManualTime();

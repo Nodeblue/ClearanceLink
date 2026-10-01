@@ -3,7 +3,7 @@
 # Linux (compile check): cmake -S plugin -B build/plugin && cmake --build build/plugin
 # Output: build/plugin/XPConnect/64/<win|lin|mac>.xpl plus XPConnect/Resources (XPMP2's support files).
 cmake_minimum_required(VERSION 3.16)
-project(XPConnectPlugin VERSION 0.3.0 LANGUAGES C CXX)
+project(XPConnectPlugin VERSION 0.3.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,7 +38,9 @@ add_library(XPConnectPlugin MODULE
     src/CslFolders.h
     src/CslFolders.cpp
     src/GroundFit.h
-    src/GroundFit.cpp)
+    src/GroundFit.cpp
+    src/Motion.h
+    src/Motion.cpp)
 
 target_include_directories(XPConnectPlugin PRIVATE src "${xpmp2_SOURCE_DIR}/inc")
 target_compile_definitions(XPConnectPlugin PRIVATE
@@ -88,6 +90,6 @@ add_custom_command(TARGET XPConnectPlugin POST_BUILD
 
 # Tests for the X-Plane-independent parts. Run: ctest --test-dir build/plugin -C Release
 enable_testing()
-add_executable(XPConnectPluginTests tests/PluginTests.cpp src/Protocol.cpp src/CslFolders.cpp src/GroundFit.cpp)
+add_executable(XPConnectPluginTests tests/PluginTests.cpp src/Protocol.cpp src/CslFolders.cpp src/GroundFit.cpp src/Motion.cpp)
 target_include_directories(XPConnectPluginTests PRIVATE src)
 add_test(NAME PluginTests COMMAND XPConnectPluginTests)

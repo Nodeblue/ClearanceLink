@@ -37,8 +37,15 @@ than 3° are left level. The X-Plane log gets one line per model:
 `XPConnect: ground fit <csl id>: none (<reason>), drawn level`. XPConnect's `ground_pitch` and `ground_offset_ft`
 then only adjust types that still sit wrong.
 
-Between `pos` lines the plugin moves each aircraft on along its heading at `gsKt` (for at most 1 s), so a
-few updates a second are enough for smooth movement. BATC itself sends about 20 a second.
+BATC writes each moving AI aircraft about 55 times a second (one every 16.7 ms in the 2026-09-30 MSFS recording).
+XPConnect sends the latest state 10 times a second, and a parked aircraft whose state has not changed only every 2 s.
+Plugin 0.3.1+ draws each aircraft one update interval behind and blends between its last two `pos` lines (position,
+height, heading the short way round, pitch, bank, gear, flaps), so turns, climbs and the flare are smooth; a new `pos`
+blends on from where the aircraft is drawn, so nothing jumps. If updates stop, it moves on along the last heading at
+`gsKt` for at most 1 s. Positions more than 1 km apart are drawn at once.
+
+Terrain probes are kept cheap: on the ground an aircraft is probed again only when it has moved 25 cm or turned 1°,
+or every 5 s when parked; in the air every 0.25 s (for the `ground` report).
 
 ## plugin → XPConnect
 

@@ -1,6 +1,7 @@
 // Tests for the parts of the plugin that need no X-Plane: the protocol, the CSL folder search and the ground fit.
 #include "CslFolders.h"
 #include "GroundFit.h"
+#include "Motion.h"
 #include "Protocol.h"
 
 #include <cmath>
@@ -182,6 +183,46 @@ void FindsModelObjFiles() {
     fs::remove_all(root);
 }
 
+xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0) {
+    xpc::Pos p;
+    p.id = 1;
+    p.lat = lat;
+    p.lon = 153;
+    p.altFt = altFt;
+    p.heading = heading;
+    p.pitch = pitch;
+    p.groundSpeedKt = gsKt;
+    return p;
+}
+
+void BlendsBetweenUpdates() {
+    auto a = At(-27.0, 1000, 350, 2), b = At(-26.999, 1100, 10, 6);
+    auto mid = xpc::Blend(a, b, 0.5f);
+    CHECK(std::fabs(mid.lat + 26.9995) < 1e-9);
+    CHECK(std::fabs(mid.altFt - 1050) < 1e-9);
+    CHECK(std::fabs(mid.heading - 0) < 1e-3 || std::fabs(mid.heading - 360) < 1e-3);  // short way round through north
+    CHECK(std::fabs(mid.pitch - 4) < 1e-6);
+    CHECK(std::fabs(xpc::Blend(At(0, 0, 10, 0), At(0, 0, 350, 0), 0.25f).heading - 5) < 1e-3);
+
+    // Drawn one update interval (0.1 s) behind: halfway through it, halfway between the two updates.
+    auto drawn = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.15f);
+    CHECK(std::fabs(drawn.altFt - 1050) < 1e-3);
+    CHECK(std::fabs(xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.1f).altFt - 1000) < 1e-3);
+    CHECK(std::fabs(xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.2f).altFt - 1100) < 1e-3);
+}
+
+void MovesOnWhenUpdatesStop() {
+    auto a = At(0, 0, 0, 0, 100), b = At(0.0001, 0, 0, 0, 100);
+    // 0.5 s after the blend ended, 0.5 s at 100 kt further north; never more than 1 s ahead.
+    auto later = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.7f);
+    CHECK(std::fabs((later.lat - 0.0001) * 111132.92 - 25.72) < 0.05);
+    auto stale = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 60.0f);
+    CHECK(std::fabs((stale.lat - 0.0001) * 111132.92 - 51.44) < 0.05);
+    // A jump of more than a kilometre is drawn at once, not slid across.
+    auto far = At(0.1, 0, 0, 0);
+    CHECK(xpc::DrawnPosition(a, 10.0f, far, 10.1f, 10.11f).lat == 0.1);
+}
+
 }  // namespace
 
 int main() {
@@ -196,6 +237,8 @@ int main() {
     LeavesOddModelsLevel();
     ReadsObjVertices();
     FindsModelObjFiles();
+    BlendsBetweenUpdates();
+    MovesOnWhenUpdatesStop();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }

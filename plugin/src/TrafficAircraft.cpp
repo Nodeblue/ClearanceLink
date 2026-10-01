@@ -16,10 +16,13 @@ namespace xpc {
 namespace {
 
 constexpr double FeetPerMeter = 3.28083989501;
-constexpr double MetersPerKnotSecond = 0.514444;
 constexpr double Pi = 3.14159265358979323846;
-// Keep moving an aircraft along its last heading for at most this long when updates stop.
-constexpr float MaxExtrapolationSeconds = 1.0f;
+// Terrain under an aircraft is probed again when it has moved this far (or turned this much) on the ground, or after
+// this long: parked aircraft every few seconds, airborne ones a few times a second for the ground height report.
+constexpr float ReprobeMeters = 0.25f;
+constexpr float ReprobeTurnDeg = 1.0f;
+constexpr float ReprobeParkedSeconds = 5.0f;
+constexpr float ReprobeAirborneSeconds = 0.25f;
 // Ground slope is measured this far ahead of and behind the aircraft's reference point.
 constexpr double SlopeProbeMeters = 8.0;
 // Steeper "slopes" are terrain mesh edges or buildings, not aprons.
@@ -94,14 +97,6 @@ const Wheels* TrafficAircraft::ModelWheels() {
     return fit_->wheels ? &*fit_->wheels : nullptr;
 }
 
-void MoveAlong(double& lat, double& lon, double headingDeg, double meters) {
-    const double heading = headingDeg * Pi / 180.0;
-    const double metersPerDegLat = 111132.92;
-    const double metersPerDegLon = 111412.84 * std::cos(lat * Pi / 180.0);
-    lat += meters * std::cos(heading) / metersPerDegLat;
-    if (metersPerDegLon > 1) lon += meters * std::sin(heading) / metersPerDegLon;
-}
-
 TrafficAircraft::TrafficAircraft(const Add& add)
     : XPMP2::Aircraft(add.icaoType, add.icaoAirline, add.livery, add.id) {
     probe_ = XPLMCreateProbe(xplm_ProbeY);
@@ -146,61 +141,81 @@ void TrafficAircraft::SetLabel(const Add& add) {
 }
 
 void TrafficAircraft::Apply(const Pos& pos, float now) {
-    state_ = pos;
-    stateTime_ = now;
-    if (!hasState_) {
+    if (hasState_) {
+        prev_ = Drawn(now);  // blend on from where it is drawn now, so a late or early update never jumps
+        prevTime_ = now - std::max(0.02f, now - stateTime_);
+    } else {
+        prev_ = pos;
+        prevTime_ = now - 0.1f;
         hasState_ = true;
         SetVisible(true);
     }
+    state_ = pos;
+    stateTime_ = now;
+}
+
+Pos TrafficAircraft::Drawn(float now) const { return DrawnPosition(prev_, prevTime_, state_, stateTime_, now); }
+
+bool TrafficAircraft::ProbeGround(bool onGround, float now) {
+    const float dx = drawInfo.x - probeX_, dz = drawInfo.z - probeZ_;
+    float turned = std::fabs(std::fmod(drawInfo.heading - probeHeading_ + 540.0f, 360.0f) - 180.0f);
+    const bool moved = dx * dx + dz * dz > ReprobeMeters * ReprobeMeters || turned > ReprobeTurnDeg;
+    const float maxAge = onGround ? ReprobeParkedSeconds : ReprobeAirborneSeconds;
+    if (now - probeTime_ < maxAge && !(onGround && moved)) return groundFt_.has_value();
+
+    probeTime_ = now;
+    probeX_ = drawInfo.x;
+    probeZ_ = drawInfo.z;
+    probeHeading_ = drawInfo.heading;
+    XPLMProbeInfo_t info{};
+    info.structSize = sizeof(info);
+    if (XPLMProbeTerrainXYZ(probe_, drawInfo.x, drawInfo.y, drawInfo.z, &info) != xplm_ProbeHitTerrain) {
+        groundFt_.reset();
+        return false;
+    }
+    double groundLat = 0, groundLon = 0, groundAltM = 0;
+    XPLMLocalToWorld(info.locationX, info.locationY, info.locationZ, &groundLat, &groundLon, &groundAltM);
+    groundFt_ = groundAltM * FeetPerMeter;
+    probeY_ = info.locationY;
+    slope_ = onGround ? GroundSlopeDeg(info.locationY) : std::nullopt;
+    return true;
 }
 
 void TrafficAircraft::UpdatePosition(float, int) {
     if (!hasState_) return;
 
     const float now = XPLMGetElapsedTime();
-    const float age = std::clamp(now - stateTime_, 0.0f, MaxExtrapolationSeconds);
-    double lat = state_.lat;
-    double lon = state_.lon;
-    MoveAlong(lat, lon, state_.heading, state_.groundSpeedKt * MetersPerKnotSecond * age);
+    const Pos p = Drawn(now);
+    SetLocation(p.lat, p.lon, p.altFt);
+    SetHeading(p.heading);
+    SetPitch(p.pitch);
+    SetRoll(p.bank);
 
-    SetLocation(lat, lon, state_.altFt);
-    SetHeading(state_.heading);
-    SetPitch(state_.pitch);
-    SetRoll(state_.bank);
-
-    XPLMProbeInfo_t info{};
-    info.structSize = sizeof(info);
-    if (XPLMProbeTerrainXYZ(probe_, drawInfo.x, drawInfo.y, drawInfo.z, &info) == xplm_ProbeHitTerrain) {
-        double groundLat = 0, groundLon = 0, groundAltM = 0;
-        XPLMLocalToWorld(info.locationX, info.locationY, info.locationZ, &groundLat, &groundLon, &groundAltM);
-        groundFt_ = groundAltM * FeetPerMeter;
-        if (state_.onGround) {
-            // Pitch the model so its nose and main wheels both touch, and raise or lower it for that pitch, from where
-            // its wheels are in its .obj files. XPConnect's per-type pitch and height adjust on top of that.
-            const Wheels* wheels = ModelWheels();
-            const float pitch = state_.pitch + (wheels ? wheels->LevelPitchDeg() : 0.0f);
-            const float raise = wheels ? wheels->RaiseM(pitch) : 0.0f;
-            drawInfo.y = info.locationY + GetVertOfs() + raise + float(groundOffsetFt_ / FeetPerMeter);
-            // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
-            const auto slope = GroundSlopeDeg(info.locationY);
-            SetPitch(pitch + slope.value_or(0.0f));
-        }
+    if (ProbeGround(p.onGround, now) && p.onGround) {
+        // Pitch the model so its nose and main wheels both touch, and raise or lower it for that pitch, from where
+        // its wheels are in its .obj files. XPConnect's per-type pitch and height adjust on top of that.
+        const Wheels* wheels = ModelWheels();
+        const float pitch = p.pitch + (wheels ? wheels->LevelPitchDeg() : 0.0f);
+        const float raise = wheels ? wheels->RaiseM(pitch) : 0.0f;
+        drawInfo.y = probeY_ + GetVertOfs() + raise + float(groundOffsetFt_ / FeetPerMeter);
+        // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
+        SetPitch(pitch + slope_.value_or(0.0f));
     }
-    SetOnGrnd(state_.onGround);
+    SetOnGrnd(p.onGround);
 
-    SetGearRatio(state_.gear);
-    SetFlapRatio(state_.flaps);
-    SetSlatRatio(state_.flaps);
-    SetSpoilerRatio(state_.spoilers);
-    SetSpeedbrakeRatio(state_.spoilers);
-    SetThrustRatio(state_.thrust);
-    SetLightsNav(state_.lights & LightNav);
-    SetLightsBeacon(state_.lights & LightBeacon);
-    SetLightsStrobe(state_.lights & LightStrobe);
-    SetLightsLanding(state_.lights & LightLanding);
-    SetLightsTaxi(state_.lights & LightTaxi);
-    SetTireRotRpm(state_.onGround ? state_.groundSpeedKt * 4.5f : 0.0f);
-    SetEngineRotRpm(state_.thrust > 0.01f || state_.groundSpeedKt > 1 ? 1000.0f + 4000.0f * state_.thrust : 0.0f);
+    SetGearRatio(p.gear);
+    SetFlapRatio(p.flaps);
+    SetSlatRatio(p.flaps);
+    SetSpoilerRatio(p.spoilers);
+    SetSpeedbrakeRatio(p.spoilers);
+    SetThrustRatio(p.thrust);
+    SetLightsNav(p.lights & LightNav);
+    SetLightsBeacon(p.lights & LightBeacon);
+    SetLightsStrobe(p.lights & LightStrobe);
+    SetLightsLanding(p.lights & LightLanding);
+    SetLightsTaxi(p.lights & LightTaxi);
+    SetTireRotRpm(p.onGround ? p.groundSpeedKt * 4.5f : 0.0f);
+    SetEngineRotRpm(p.thrust > 0.01f || p.groundSpeedKt > 1 ? 1000.0f + 4000.0f * p.thrust : 0.0f);
 }
 
 }  // namespace xpc

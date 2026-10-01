@@ -20,8 +20,9 @@ public interface IPluginTraffic
 }
 
 /// <summary>
-/// Sends BATC's AI aircraft (<see cref="TrafficRegistry"/>) to the X-Plane plugin a few times a second, and answers
-/// BATC's ground height questions with the terrain the plugin finds under each aircraft. Pushback tugs and other
+/// Sends BATC's AI aircraft (<see cref="TrafficRegistry"/>) to the X-Plane plugin 10 times a second (parked ones, whose
+/// state has not changed, every 2 s), and answers BATC's ground height questions with the terrain the plugin finds
+/// under each aircraft. Pushback tugs and other
 /// non-aircraft objects are not drawn. Re-sends <c>add</c> now and then so a plugin that restarted (or an X-Plane
 /// started after BATC created its traffic) still gets every aircraft.
 /// </summary>
@@ -35,6 +36,9 @@ public sealed class TrafficBridge(
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(100);
     public static readonly TimeSpan ReAddInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>An aircraft whose state has not changed (parked) is sent again only this often.</summary>
+    public static readonly TimeSpan UnchangedInterval = TimeSpan.FromSeconds(2);
 
     /// <summary>A ground question is about one of our aircraft when it is this close to it.</summary>
     private const double SameAircraftMeters = 30;
@@ -76,8 +80,10 @@ public sealed class TrafficBridge(
                 continue;
             }
 
+            var readded = false;
             if (drawn.LastAdd is not { } added || now - added >= ReAddInterval)
             {
+                readded = true;
                 if (drawn.LastAdd is null)
                 {
                     log($"traffic: drawing {o.TailNumber} '{o.Title}' as {drawn.Model.IcaoType} {drawn.Model.IcaoAirline ?? "-"} (plugin id {drawn.PluginId})");
@@ -88,7 +94,13 @@ public sealed class TrafficBridge(
                 drawn.LastAdd = now;
             }
 
-            plugin.Update(drawn.PluginId, State(o, fallback?.ElevationMeters(o.Latitude, o.Longitude) / FeetToMeters, models.GroundPitch(drawn.Model.IcaoType)));
+            var state = State(o, fallback?.ElevationMeters(o.Latitude, o.Longitude) / FeetToMeters, models.GroundPitch(drawn.Model.IcaoType));
+            if (readded || state != drawn.LastState || now - drawn.LastSent >= UnchangedInterval)
+            {
+                plugin.Update(drawn.PluginId, state);
+                drawn.LastState = state;
+                drawn.LastSent = now;
+            }
         }
     }
 
@@ -217,5 +229,9 @@ public sealed class TrafficBridge(
         public TrafficModel Model { get; } = model;
 
         public DateTimeOffset? LastAdd { get; set; }
+
+        public TrafficState? LastState { get; set; }
+
+        public DateTimeOffset LastSent { get; set; }
     }
 }
