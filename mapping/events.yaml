@@ -1,0 +1,35 @@
+# MSFS client event -> X-Plane 12, read by XPConnect.Server (MappingSet).
+# Events come from BATC's MapClientEventToSimEvent calls. Only events sent to the user aircraft are applied;
+# BATC's events to its AI aircraft (lights, throttle, gear) are ignored.
+#
+#   dataref + from_units/to_units   write the event's data value, converted.
+#   command                         run an X-Plane command instead.
+# Anything not listed is logged as UNMAPPED once and ignored.
+
+- name: COM_RADIO_SET_HZ
+  dataref: sim/cockpit2/radios/actuators/com1_frequency_hz_833
+  from_units: hz
+  to_units: khz
+- name: COM_STBY_RADIO_SET_HZ
+  dataref: sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833
+  from_units: hz
+  to_units: khz
+- name: COM2_RADIO_SET_HZ
+  dataref: sim/cockpit2/radios/actuators/com2_frequency_hz_833
+  from_units: hz
+  to_units: khz
+- name: COM2_STBY_RADIO_SET_HZ
+  dataref: sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833
+  from_units: hz
+  to_units: khz
+- name: COM1_RADIO_SWAP
+  command: sim/radios/com1_standy_flip
+  notes: X-Plane's command really is spelled "standy".
+- name: COM2_RADIO_SWAP
+  command: sim/radios/com2_standy_flip
+- name: XPNDR_SET
+  dataref: sim/cockpit2/radios/actuators/transponder_code
+  from_units: bco16
+  to_units: number
+- name: XPNDR_IDENT_ON
+  command: sim/transponder/transponder_ident
