@@ -39,7 +39,7 @@ public sealed class SimConnectSession(
 
     public string ClientName { get; private set; } = "";
 
-    public SessionStats Stats { get; } = new();
+    public SessionStats Stats { get; } = new((time ?? TimeProvider.System).GetUtcNow());
 
     public async Task HandleAsync(Packet packet)
     {
@@ -48,7 +48,7 @@ public sealed class SimConnectSession(
             return;
         }
 
-        Stats.Count(packet.Name);
+        Stats.Count(packet.Name, _time.GetUtcNow());
         var sendId = packet.SendId ?? 0;
         var f = PacketDecoder.Decode(packet);
         switch (packet.FunctionId)
@@ -377,7 +377,9 @@ public sealed class SimConnectSession(
                 : facilities.Find(request) is { } found ? (found, facilities.Description) : null).ConfigureAwait(false);
             if (answer is { } reply)
             {
-                log($"#{connectionId} RequestFacilityData {icao} define {defineId}: {reply.Item1.Count} packets from {reply.Item2} in {_time.GetElapsedTime(started).TotalMilliseconds:0} ms");
+                var ms = _time.GetElapsedTime(started).TotalMilliseconds;
+                log($"#{connectionId} RequestFacilityData {icao} define {defineId}: {reply.Item1.Count} packets from {reply.Item2} in {ms:0} ms");
+                Stats.Airport(new AirportServed(icao, reply.Item2, reply.Item1.Count, ms, _time.GetUtcNow()));
                 foreach (var packet in reply.Item1)
                 {
                     await send(packet).ConfigureAwait(false);
@@ -390,6 +392,7 @@ public sealed class SimConnectSession(
 
         // MSFS answers an airport it does not have with exception 1, index 3 (recorded for YSAM); BATC carries on.
         log($"#{connectionId} RequestFacilityData {icao} define {defineId}: no data, sent exception");
+        Stats.Airport(new AirportServed(icao, null, 0, 0, _time.GetUtcNow()));
         await SendExceptionAsync(SimConnectException.Error, sendId, 3).ConfigureAwait(false);
     }
 
@@ -435,9 +438,18 @@ public sealed class SimConnectSession(
     }
 }
 
-/// <summary>Counters for the dashboard and logs. Thread-safe.</summary>
-public sealed class SessionStats
+/// <summary>One airport request answered, or not (<see cref="Source"/> null), for the status page.</summary>
+public sealed record AirportServed(string Icao, string? Source, int Packets, double Milliseconds, DateTimeOffset At);
+
+/// <summary>Counters for the status page and logs. Thread-safe.</summary>
+public sealed class SessionStats(DateTimeOffset connectedAt)
 {
+    /// <summary>Most recent airport requests kept for the status page.</summary>
+    public const int AirportHistory = 20;
+
+    private readonly ConcurrentQueue<AirportServed> _airports = new();
+    private long _received;
+    private long _lastPacketTicks = connectedAt.UtcTicks;
     private readonly ConcurrentDictionary<string, long> _calls = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, long> _events = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _unmapped = new(StringComparer.Ordinal);
@@ -457,7 +469,29 @@ public sealed class SessionStats
 
     public long DataPacketsSent => Interlocked.Read(ref _dataSent);
 
-    internal void Count(string call) => _calls.AddOrUpdate(call, 1, (_, n) => n + 1);
+    public DateTimeOffset ConnectedAt => connectedAt;
+
+    public long PacketsReceived => Interlocked.Read(ref _received);
+
+    public DateTimeOffset LastPacketAt => new(Interlocked.Read(ref _lastPacketTicks), TimeSpan.Zero);
+
+    /// <summary>Oldest first.</summary>
+    public IReadOnlyList<AirportServed> Airports => [.. _airports];
+
+    internal void Count(string call, DateTimeOffset at)
+    {
+        _calls.AddOrUpdate(call, 1, (_, n) => n + 1);
+        Interlocked.Increment(ref _received);
+        Interlocked.Exchange(ref _lastPacketTicks, at.UtcTicks);
+    }
+
+    internal void Airport(AirportServed served)
+    {
+        _airports.Enqueue(served);
+        while (_airports.Count > AirportHistory && _airports.TryDequeue(out _))
+        {
+        }
+    }
 
     internal void Event(string name) => _events.AddOrUpdate(name, 1, (_, n) => n + 1);
 
