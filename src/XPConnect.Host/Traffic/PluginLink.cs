@@ -41,7 +41,7 @@ public sealed record PluginStatus(string Version, int Aircraft, int Models, IRea
 /// plugin reports back (its status, terrain height under each aircraft, errors). Thread-safe. Protocol:
 /// docs/protocol/plugin.md.
 /// </summary>
-public sealed class PluginLink : IAsyncDisposable
+public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
 {
     public const int PluginPort = 49710;
     public const int XPConnectPort = 49711;
@@ -96,7 +96,7 @@ public sealed class PluginLink : IAsyncDisposable
     public void Add(uint id, string icaoType, string? icaoAirline, string? livery, string label) =>
         Send($"add {id} {Word(icaoType)} {Word(icaoAirline)} {Word(livery)} {OneLine(label)}".TrimEnd());
 
-    public void Update(uint id, TrafficState s) => Send(FormatPos(id, s));
+    public void Update(uint id, TrafficState state) => Send(FormatPos(id, state));
 
     public void Remove(uint id)
     {

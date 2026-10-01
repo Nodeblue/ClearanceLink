@@ -16,6 +16,8 @@ constexpr double Pi = 3.14159265358979323846;
 // Keep moving an aircraft along its last heading for at most this long when updates stop.
 constexpr float MaxExtrapolationSeconds = 1.0f;
 
+std::string Requested(const Add& add) { return add.icaoType + ' ' + add.icaoAirline + ' ' + add.livery; }
+
 }  // namespace
 
 void MoveAlong(double& lat, double& lon, double headingDeg, double meters) {
@@ -29,6 +31,7 @@ void MoveAlong(double& lat, double& lon, double headingDeg, double meters) {
 TrafficAircraft::TrafficAircraft(const Add& add)
     : XPMP2::Aircraft(add.icaoType, add.icaoAirline, add.livery, add.id) {
     probe_ = XPLMCreateProbe(xplm_ProbeY);
+    requested_ = Requested(add);
     SetLabel(add);
     SetVisible(false);  // until the first position arrives
 }
@@ -38,7 +41,11 @@ TrafficAircraft::~TrafficAircraft() {
 }
 
 void TrafficAircraft::ChangeTo(const Add& add) {
-    ChangeModel(add.icaoType, add.icaoAirline, add.livery);
+    // XPConnect re-sends add every few seconds so a restarted plugin gets everything; only a new model re-matches.
+    if (Requested(add) != requested_) {
+        ChangeModel(add.icaoType, add.icaoAirline, add.livery);
+        requested_ = Requested(add);
+    }
     SetLabel(add);
 }
 
