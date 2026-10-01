@@ -137,6 +137,13 @@ public sealed class TrafficBridge(
 
     private static double Gear(TrafficObject o, double? groundFeet)
     {
+        // Wheels are always down on the ground: BATC's gear writes and events for parked AI did not say so (live test
+        // 2026-10-01, YBBN: aircraft at the gates drawn with the gear up).
+        if (o.OnGround)
+        {
+            return 1;
+        }
+
         if (o.Has("GEAR CENTER POSITION"))
         {
             return Ratio(o.Get("GEAR CENTER POSITION"));
@@ -146,7 +153,7 @@ public sealed class TrafficBridge(
         {
             "GEAR_UP" => 0,
             "GEAR_DOWN" => 1,
-            _ => o.OnGround || (groundFeet is { } g && o.AltitudeFeet - g < 2000) ? 1 : 0,
+            _ => groundFeet is { } g && o.AltitudeFeet - g < 2000 ? 1 : 0,
         };
     }
 
