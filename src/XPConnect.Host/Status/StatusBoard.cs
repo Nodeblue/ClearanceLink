@@ -34,6 +34,9 @@ public sealed class StatusBoard(
 
     public string? Recording { get; set; }
 
+    /// <summary>The X-Plane traffic plugin's last report; null when not connected or not started.</summary>
+    public Func<Traffic.PluginStatus?>? Plugin { get; set; }
+
     public StatusSnapshot Snapshot()
     {
         var now = _time.GetUtcNow();
@@ -66,7 +69,8 @@ public sealed class StatusBoard(
             clients,
             airports,
             Stub,
-            Recording);
+            Recording,
+            Plugin?.Invoke() is { } plugin ? new PluginSummary(plugin.Version, plugin.Models, plugin.Aircraft, plugin.CslFolders) : null);
     }
 
     public string ToJson() => JsonSerializer.Serialize(Snapshot(), Json);
@@ -124,4 +128,7 @@ public sealed record StatusSnapshot(
     IReadOnlyList<ClientStatus> Clients,
     IReadOnlyList<AirportStatus> Airports,
     string? Stub,
-    string? Recording);
+    string? Recording,
+    PluginSummary? Plugin = null);
+
+public sealed record PluginSummary(string Version, int Models, int Aircraft, IReadOnlyList<string> CslFolders);

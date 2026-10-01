@@ -66,6 +66,7 @@
       <div class="state"><span id="xp-dot" class="dot"></span><span id="xp-state">–</span></div>
       <div class="row"><span class="k">Version</span><span class="v" id="xp-version">–</span></div>
       <div class="row"><span class="k">Web API</span><span class="v"><code id="xp-address">–</code></span></div>
+      <div class="row"><span class="k">Traffic plugin</span><span class="v" id="xp-plugin">–</span></div>
     </section>
 
     <section class="card">
@@ -108,6 +109,11 @@
     $("xp-state").textContent = s.xPlane.connected ? "Connected" : "Not connected";
     $("xp-version").textContent = s.xPlane.version || "–";
     $("xp-address").textContent = s.xPlane.address;
+    $("xp-plugin").textContent = !s.plugin
+      ? "Not running"
+      : s.plugin.models === 0
+        ? "Running, but no CSL aircraft models found"
+        : `${s.plugin.aircraft} aircraft, ${s.plugin.models} models`;
     $("listen").textContent = s.listen;
     $("stub").textContent = s.stub || "–";
     $("recording").textContent = s.recording || "–";

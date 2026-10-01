@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using XPConnect.Airports;
 using XPConnect.Host;
 using XPConnect.Host.Status;
+using XPConnect.Host.Traffic;
 using XPConnect.Host.Transport;
 using XPConnect.Protocol;
 using XPConnect.Recorder;
@@ -20,6 +21,8 @@ namespace XPConnect.Host
             Usage:
               xpconnect
                   (no arguments, e.g. double-clicked) Switch BeyondATC to XPConnect if needed, then serve.
+              xpconnect plugin install|remove|status [--xplane-root <dir>]
+                  Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
@@ -83,6 +86,7 @@ namespace XPConnect.Host
                     "facility-dump" => DumpFacility(options),
                     "airport" => BuildAirport(options),
                     "batc" => Batc(options),
+                    "plugin" => Plugin(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -176,6 +180,8 @@ namespace XPConnect.Host
                 Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
                 Recording = Path.GetFullPath(recorder.Path),
             };
+            await using var plugin = StartPluginLink();
+            board.Plugin = () => plugin?.Status;
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
             {
@@ -258,6 +264,8 @@ namespace XPConnect.Host
                 Console.WriteLine();
             }
 
+            OfferPluginInstall();
+
             Console.WriteLine("Start X-Plane 12 and load your aircraft, then start BeyondATC. Leave this window open while you fly;");
             Console.WriteLine("close it (or press Ctrl+C) when you are done. The status page opens in your browser.");
             Console.WriteLine();
@@ -273,6 +281,92 @@ namespace XPConnect.Host
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException)
             {
                 PacketConsole.Info($"status: could not open a browser ({ex.Message}); open {url} yourself");
+            }
+        }
+
+        /// <summary>The link to the X-Plane traffic plugin; null when its port is taken (another XPConnect running).</summary>
+        private static PluginLink? StartPluginLink()
+        {
+            try
+            {
+                var link = new PluginLink(Version, PacketConsole.Info);
+                link.Start();
+                return link;
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                PacketConsole.Info($"plugin: cannot listen on 127.0.0.1:{PluginLink.XPConnectPort} ({ex.Message}); traffic will not be drawn");
+                return null;
+            }
+        }
+
+        /// <summary>Double-click start: install or update the traffic plugin when this package carries one.</summary>
+        private static void OfferPluginInstall()
+        {
+            if (XPlaneInstall.Find() is not { } xplane)
+            {
+                return;
+            }
+
+            var plugin = new PluginInstall(xplane.Root);
+            var state = plugin.Check();
+            if (state is PluginInstall.State.NotBundled or PluginInstall.State.Installed)
+            {
+                return;
+            }
+
+            Console.WriteLine(state == PluginInstall.State.NotInstalled
+                ? $"Install the XPConnect plugin into X-Plane ({xplane.Root}) so BeyondATC's traffic appears? [Y/n]"
+                : "A newer XPConnect plugin is included. Update the one in X-Plane? [Y/n]");
+            var answer = Console.IsInputRedirected ? "y" : Console.ReadLine();
+            if (answer is not null && answer.Trim().Length > 0 && !answer.Trim().StartsWith('y') && !answer.Trim().StartsWith('Y'))
+            {
+                Console.WriteLine();
+                return;
+            }
+
+            try
+            {
+                plugin.Install().ToList().ForEach(l => Console.WriteLine("  " + l));
+                Console.WriteLine("  Traffic needs CSL aircraft models (for example Bluebell); see README.txt.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"  Could not install the plugin ({ex.Message}). Close X-Plane, then start XPConnect again.");
+            }
+
+            Console.WriteLine();
+        }
+
+        private static int Plugin(Options options)
+        {
+            var action = options.Positional.FirstOrDefault() ?? "status";
+            if (XPlaneInstall.Find(options.Get("xplane-root")) is not { } xplane)
+            {
+                return Fail("X-Plane folder not found; pass --xplane-root <dir>");
+            }
+
+            var plugin = new PluginInstall(xplane.Root);
+            try
+            {
+                switch (action)
+                {
+                    case "install":
+                        plugin.Install().ToList().ForEach(Console.WriteLine);
+                        return plugin.Check() == PluginInstall.State.Installed ? 0 : 1;
+                    case "remove":
+                        plugin.Remove().ToList().ForEach(Console.WriteLine);
+                        return 0;
+                    case "status":
+                        Console.WriteLine($"{plugin.Check()}: {plugin.Target} (bundled: {plugin.Bundled})");
+                        return 0;
+                    default:
+                        return Fail($"Unknown plugin action '{action}' (install, remove, status)");
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return Fail($"{ex.Message} Close X-Plane first.");
             }
         }
 

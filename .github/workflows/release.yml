@@ -1,0 +1,37 @@
+name: Release
+
+# Builds the Windows zip (XPConnect.exe, stub, X-Plane plugin, docs). Run it by hand from the Actions tab, or push
+# a tag like v0.4.0 to also attach the zip to a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet test --nologo
+      - name: Build the zip
+        shell: pwsh
+        run: ./scripts/publish.ps1
+      - name: Check the plugin is in it
+        shell: pwsh
+        run: if (-not (Test-Path 'publish/XPConnect/X-Plane plugin/XPConnect/64/win.xpl')) { throw 'plugin missing from the package' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XPConnect-win-x64
+          path: publish/*.zip
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" (Get-ChildItem publish/*.zip).FullName --title "XPConnect ${{ github.ref_name }}" --generate-notes
