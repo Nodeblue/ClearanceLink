@@ -1,11 +1,15 @@
-// Tests for the parts of the plugin that need no X-Plane: the protocol and the CSL folder search.
+// Tests for the parts of the plugin that need no X-Plane: the protocol, the CSL folder search and the ground fit.
 #include "CslFolders.h"
+#include "GroundFit.h"
 #include "Protocol.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <set>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -105,6 +109,79 @@ void FindsCslFolders() {
 #endif
 }
 
+// A 36 m airliner in OBJ8 coordinates (nose at -z): fuselage, engines under the wings, nose and main wheels.
+std::vector<xpc::Vertex> Airliner(float noseWheelY) {
+    std::vector<xpc::Vertex> v;
+    for (float z = -18; z <= 18; z += 1) v.push_back({0, 1.5f + (z > 10 ? z - 10 : 0) * 0.2f, z});
+    for (float x : {-5.0f, 5.0f}) v.push_back({x, -1.4f, -3});    // engines: low, but off the centre line
+    for (float x : {-0.2f, 0.2f}) v.push_back({x, noseWheelY, -14});
+    for (float x : {-3.0f, 3.0f}) v.push_back({x, -2.0f, 1});
+    return v;
+}
+
+void FitsNoseAndMainWheels() {
+    auto wheels = xpc::FindWheels(Airliner(-1.9f));
+    CHECK(wheels.has_value());
+    CHECK(wheels->noseZ == -14 && wheels->mainZ == 1);
+    const float pitch = wheels->LevelPitchDeg();
+    CHECK(pitch < -0.37f && pitch > -0.39f);  // nose wheel 0.1 m high over 15 m: nose down a little
+    // Pitched and raised, both wheels sit where the mains were.
+    const double a = pitch * 3.14159265358979 / 180;
+    const float raise = wheels->RaiseM(pitch);
+    const double nose = -1.9 * std::cos(a) + 14 * std::sin(a) + raise;
+    const double main = -2.0 * std::cos(a) - 1 * std::sin(a) + raise;
+    CHECK(std::fabs(nose + 2.0) < 1e-4 && std::fabs(main + 2.0) < 1e-4);
+    // Rotating for take-off lifts the nose; the model rises so the main wheels stay on the ground.
+    CHECK(wheels->RaiseM(8) > 0.1f);
+    CHECK(std::fabs(xpc::Wheels{-14, -2, 1, -2}.RaiseM(0)) < 1e-6f);
+}
+
+void LeavesOddModelsLevel() {
+    std::string why;
+    CHECK(!xpc::FindWheels(Airliner(-1.0f), &why) && why.find("3 degrees") != std::string::npos);
+    CHECK(!xpc::FindWheels({{0, 0, 0}}, &why) && why == "too few vertices");
+}
+
+void ReadsObjVertices() {
+    std::istringstream obj("I\r\n800\r\nOBJ\r\nTEXTURE a.png\r\nVT 1.5 -2.25 3 0 1 0 0.5 0.5\r\nVLINE 9 -9 9 1 1 1\r\n"
+                           "VT\t0 1 -4 0 1 0 0 0\r\nIDX10 0 1 2 3 4 5 6 7 8 9\r\nVTX 1 2 3\r\n");
+    std::vector<xpc::Vertex> v;
+    xpc::ReadObjVertices(obj, v);
+    CHECK(v.size() == 2);
+    CHECK(v[0].x == 1.5f && v[0].y == -2.25f && v[0].z == 3);
+    CHECK(v[1].z == -4);
+}
+
+void FindsModelObjFiles() {
+    namespace fs = std::filesystem;
+    const auto root = fs::temp_directory_path() / "xpconnect-plugin-tests";
+    fs::remove_all(root);
+    fs::create_directories(root / "Bluebell" / "BB_E190" / "E190");
+    fs::create_directories(root / "Bluebell" / "BB_Shared");
+    std::ofstream(root / "Bluebell" / "BB_Shared" / "xsb_aircraft.txt") << "EXPORT_NAME BB_Shared\n";
+    std::ofstream(root / "Bluebell" / "BB_E190" / "xsb_aircraft.txt")
+        << "EXPORT_NAME BB_E190\r\n"
+        << "OBJ8_AIRCRAFT BB_E190_UTY\r\n"                      // line 2
+        << "OBJ8 SOLID YES BB_E190/E190/E190.obj UTY.png\r\n"
+        << "OBJ8 GLASS YES BB_Shared:glass.obj\r\n"
+        << "OBJ8 SOLID YES Missing/x.obj\r\n"
+        << "ICAO E190\r\n"
+        << "OBJ8_AIRCRAFT BB_E190_BAW\r\n"                      // line 7
+        << "OBJ8 SOLID YES BB_E190/E190/E190.obj BAW.png\r\n";
+
+    const auto packages = xpc::FindCslPackages({(root / "Bluebell").u8string()});
+    CHECK(packages.size() == 2);
+    const auto e190 = (root / "Bluebell" / "BB_E190").u8string();
+    CHECK(packages.at("BB_E190") == e190);
+    auto files = xpc::ModelObjFiles(e190, 2, packages);
+    CHECK(files.size() == 2);
+    CHECK(fs::u8path(files[0]) == fs::u8path(e190) / "E190" / "E190.obj");
+    CHECK(fs::u8path(files[1]) == root / "Bluebell" / "BB_Shared" / "glass.obj");
+    CHECK(xpc::ModelObjFiles(e190, 7, packages).size() == 1);
+    CHECK(xpc::ModelObjFiles(e190, 3, packages).empty());  // not an OBJ8_AIRCRAFT line
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -115,6 +192,10 @@ int main() {
     SplitsDatagrams();
     FormatsReplies();
     FindsCslFolders();
+    FitsNoseAndMainWheels();
+    LeavesOddModelsLevel();
+    ReadsObjVertices();
+    FindsModelObjFiles();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }

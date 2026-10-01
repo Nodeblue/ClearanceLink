@@ -26,6 +26,17 @@ newer than the other.
 On the ground the plugin also pitches each aircraft to the slope of the terrain under it (probed 8 m ahead and
 behind, at most 4°), added to the `pitch` XPConnect sends (plugin 0.2.0+).
 
+Plugin 0.3.0+ also fits each CSL model to the ground from its own 3D files, so no per-type tuning is needed. The
+first time a model is drawn, it reads the model's `.obj` files (found from its `OBJ8` lines in `xsb_aircraft.txt`,
+`plugin/src/GroundFit.cpp`), in the background, and takes the lowest point of the front quarter near the centre line
+as the nose wheel and the lowest point of the middle half as the main wheels (OBJ8: nose towards -z). On the ground it
+adds the pitch that puts both on level ground, and raises or lowers the model so its lower wheel stays where XPMP2's
+vertical offset puts it (this also keeps the main wheels down while BATC rotates for take-off). Models needing more
+than 3° are left level. The X-Plane log gets one line per model:
+`XPConnect: ground fit <csl id>: nose wheel 0.05 m above mains, pitch -0.19 deg, raise 0.00 m` or
+`XPConnect: ground fit <csl id>: none (<reason>), drawn level`. XPConnect's `ground_pitch` and `ground_offset_ft`
+then only adjust types that still sit wrong.
+
 Between `pos` lines the plugin moves each aircraft on along its heading at `gsKt` (for at most 1 s), so a
 few updates a second are enough for smooth movement. BATC itself sends about 20 a second.
 

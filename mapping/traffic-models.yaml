@@ -131,27 +131,16 @@ asobo:
   SR22: SR22
   TBM930: TBM9
 
-# Pitch (degrees, nose up positive) for parked and slow-taxiing aircraft, by ICAO type. Some CSL models sit with the
-# nose wheel off the ground when drawn level; a little nose-down puts it back. Tune per type from screenshots.
-# Live test 2026-10-01: Bluebell E-Jets at YBBN had the nose wheel slightly up.
-# Second pass (plugin 0.2.0, same day): E-Jets at -1.5 with -1 ft sank a little; 737s had a small nose-wheel gap.
+# Adjustments for parked and slow-taxiing aircraft, by ICAO type, on top of the plugin's own fit. Plugin 0.3.0 and later
+# read each CSL model's .obj files, find its nose and main wheels, and pitch and raise it so both touch the ground
+# (docs/protocol/plugin.md), so these are only for models that still sit wrong. Older plugins draw models level.
+# Pitch: degrees, nose up positive.
 ground_pitch:
   default: 0
-  E170: -1.0
-  E175: -1.0
-  E190: -1.0
-  E195: -1.0
-  B736: -0.75
-  B737: -0.75
-  B738: -0.75
-  B739: -0.75
-  B38M: -0.75
-  B39M: -0.75
 
-# Feet to raise (+) or lower (-) parked and taxiing aircraft, by ICAO type (needs XPConnect plugin 0.2.0 or later;
-# older plugins ignore it). Live test 2026-10-01: Bluebell models at Orbx YBBN sat 20 to 50 cm high.
+# Feet to raise (+) or lower (-), by ICAO type (plugin 0.2.0 or later).
 ground_offset_ft:
-  default: -0.5
+  default: 0
 
 # Used when nothing above gives a type (XPMP2 then draws its closest model).
 default_type: A320

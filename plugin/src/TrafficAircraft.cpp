@@ -2,10 +2,15 @@
 
 #include "XPLMGraphics.h"
 #include "XPLMProcessing.h"
+#include "XPLMUtilities.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <future>
 
 namespace xpc {
 namespace {
@@ -22,7 +27,72 @@ constexpr double MaxGroundSlopeDeg = 4.0;
 
 std::string Requested(const Add& add) { return add.icaoType + ' ' + add.icaoAirline + ' ' + add.livery; }
 
+struct FitResult {
+    std::optional<Wheels> wheels;
+    std::string why;
+};
+
+std::map<std::string, std::string> g_packages;
+
+FitResult ReadWheels(const std::vector<std::string>& files) {
+    if (files.empty()) return {std::nullopt, "no .obj file found"};
+    std::vector<Vertex> vertices;
+    for (const auto& file : files) {
+        std::ifstream obj(std::filesystem::u8path(file));
+        ReadObjVertices(obj, vertices);
+    }
+    FitResult result;
+    result.wheels = FindWheels(vertices, &result.why);
+    return result;
+}
+
 }  // namespace
+
+// One model's wheel positions: read once in the background, shared by every aircraft drawn with that model.
+struct ModelFit {
+    std::string name;
+    std::future<FitResult> reading;
+    std::optional<Wheels> wheels;
+    bool done = false;
+};
+
+namespace {
+std::map<std::string, std::shared_ptr<ModelFit>> g_fits;
+}
+
+void TrafficAircraft::SetCslPackages(std::map<std::string, std::string> packages) { g_packages = std::move(packages); }
+
+void TrafficAircraft::ForgetModelFits() { g_fits.clear(); }
+
+const Wheels* TrafficAircraft::ModelWheels() {
+    if (GetModel() != fitModel_ || !fit_) {
+        fitModel_ = GetModel();
+        const auto info = GetModelInfo();
+        const auto key = info.xsbAircraftPath + '#' + std::to_string(info.xsbAircraftLn);
+        auto& fit = g_fits[key];
+        if (!fit) {
+            fit = std::make_shared<ModelFit>();
+            fit->name = info.cslId;
+            fit->reading = std::async(std::launch::async, ReadWheels, ModelObjFiles(info.xsbAircraftPath, info.xsbAircraftLn, g_packages));
+        }
+        fit_ = fit;
+    }
+    if (!fit_->done && fit_->reading.valid() && fit_->reading.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        const auto result = fit_->reading.get();
+        fit_->wheels = result.wheels;
+        fit_->done = true;
+        char text[256];
+        if (result.wheels) {
+            const auto& w = *result.wheels;
+            std::snprintf(text, sizeof(text), "XPConnect: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, raise %.2f m\n",
+                          fit_->name.c_str(), w.noseY - w.mainY, w.LevelPitchDeg(), w.RaiseM(w.LevelPitchDeg()));
+        } else {
+            std::snprintf(text, sizeof(text), "XPConnect: ground fit %s: none (%s), drawn level\n", fit_->name.c_str(), result.why.c_str());
+        }
+        XPLMDebugString(text);
+    }
+    return fit_->wheels ? &*fit_->wheels : nullptr;
+}
 
 void MoveAlong(double& lat, double& lon, double headingDeg, double meters) {
     const double heading = headingDeg * Pi / 180.0;
@@ -105,9 +175,15 @@ void TrafficAircraft::UpdatePosition(float, int) {
         XPLMLocalToWorld(info.locationX, info.locationY, info.locationZ, &groundLat, &groundLon, &groundAltM);
         groundFt_ = groundAltM * FeetPerMeter;
         if (state_.onGround) {
-            drawInfo.y = info.locationY + GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
+            // Pitch the model so its nose and main wheels both touch, and raise or lower it for that pitch, from where
+            // its wheels are in its .obj files. XPConnect's per-type pitch and height adjust on top of that.
+            const Wheels* wheels = ModelWheels();
+            const float pitch = state_.pitch + (wheels ? wheels->LevelPitchDeg() : 0.0f);
+            const float raise = wheels ? wheels->RaiseM(pitch) : 0.0f;
+            drawInfo.y = info.locationY + GetVertOfs() + raise + float(groundOffsetFt_ / FeetPerMeter);
             // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
-            if (auto slope = GroundSlopeDeg(info.locationY)) SetPitch(state_.pitch + *slope);
+            const auto slope = GroundSlopeDeg(info.locationY);
+            SetPitch(pitch + slope.value_or(0.0f));
         }
     }
     SetOnGrnd(state_.onGround);
