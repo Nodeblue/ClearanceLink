@@ -3,6 +3,10 @@
   <ItemGroup>
     <ProjectReference Include="..\XPConnect.Protocol\XPConnect.Protocol.csproj" />
     <ProjectReference Include="..\XPConnect.Recorder\XPConnect.Recorder.csproj" />
+    <ProjectReference Include="..\XPConnect.Server\XPConnect.Server.csproj" />
+    <ProjectReference Include="..\XPConnect.XPlane\XPConnect.XPlane.csproj" />
+    <!-- Builds FlightSimulator2024(.exe) next to XPConnect for the serve command to start. -->
+    <ProjectReference Include="..\XPConnect.SimStub\XPConnect.SimStub.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
