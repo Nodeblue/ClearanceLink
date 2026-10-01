@@ -134,17 +134,24 @@ asobo:
 # Pitch (degrees, nose up positive) for parked and slow-taxiing aircraft, by ICAO type. Some CSL models sit with the
 # nose wheel off the ground when drawn level; a little nose-down puts it back. Tune per type from screenshots.
 # Live test 2026-10-01: Bluebell E-Jets at YBBN had the nose wheel slightly up.
+# Second pass (plugin 0.2.0, same day): E-Jets at -1.5 with -1 ft sank a little; 737s had a small nose-wheel gap.
 ground_pitch:
   default: 0
-  E170: -1.5
-  E175: -1.5
-  E190: -1.5
-  E195: -1.5
+  E170: -1.0
+  E175: -1.0
+  E190: -1.0
+  E195: -1.0
+  B736: -0.75
+  B737: -0.75
+  B738: -0.75
+  B739: -0.75
+  B38M: -0.75
+  B39M: -0.75
 
 # Feet to raise (+) or lower (-) parked and taxiing aircraft, by ICAO type (needs XPConnect plugin 0.2.0 or later;
 # older plugins ignore it). Live test 2026-10-01: Bluebell models at Orbx YBBN sat 20 to 50 cm high.
 ground_offset_ft:
-  default: -1.0
+  default: -0.5
 
 # Used when nothing above gives a type (XPMP2 then draws its closest model).
 default_type: A320

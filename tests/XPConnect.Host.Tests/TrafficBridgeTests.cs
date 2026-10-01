@@ -47,7 +47,8 @@ public sealed class TrafficBridgeTests
         var id = Assert.IsType<uint>(bridge.PluginId(qantas.ObjectId));
         Assert.InRange(id, 1u, 0xFFFFFFu);
         Assert.Equal([$"add {id} B738 QFA VHXZE"], plugin.Adds);
-        Assert.Equal([(id, -1.0)], plugin.Offsets); // ground_offset_ft default, sent with each add
+        Assert.Equal([(id, Models.GroundOffsetFeet("B738"))], plugin.Offsets); // sent with each add
+        Assert.NotEqual(0, Models.GroundOffsetFeet("B738"));
         Assert.Single(plugin.Updates);
 
         time.Advance(TimeSpan.FromSeconds(1));
@@ -178,13 +179,15 @@ public sealed class TrafficBridgeTests
     [Fact]
     public void Ground_pitch_per_type_comes_from_the_mapping()
     {
-        Assert.Equal(-1.5, Models.GroundPitch("E190"));
-        Assert.Equal(0, Models.GroundPitch("B738"));
+        // Values are tuned in the mapping from screenshots; only their shape is fixed here.
+        Assert.True(Models.GroundPitch("E190") < 0);
+        Assert.Equal(0, Models.GroundPitch("A388"));
+        Assert.Equal(-2, TrafficModels.Parse("ground_pitch: {default: 0, E190: -2}").GroundPitch("E190"));
 
         var time = new ManualTime();
         var registry = new TrafficRegistry(time);
         var parked = registry.Create(2, TrafficKind.Aircraft, "FSLTL_FSLTL_E190_Alliance", "", "VHUZI", new InitPosition(-27.39, 153.12, 20, -1.5, 0, 13, true, 0));
-        Assert.Equal(-1.5, TrafficBridge.State(parked, groundPitch: Models.GroundPitch("E190")).Pitch);
+        Assert.Equal(Models.GroundPitch("E190"), TrafficBridge.State(parked, groundPitch: Models.GroundPitch("E190")).Pitch);
     }
 
     private static PluginStatus Connected() => new("0.1.0", 0, 100, [], DateTimeOffset.UnixEpoch);
