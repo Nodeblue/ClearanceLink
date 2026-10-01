@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using XPConnect.Airports;
 using XPConnect.Host;
+using XPConnect.Host.Status;
 using XPConnect.Host.Transport;
 using XPConnect.Protocol;
 using XPConnect.Recorder;
@@ -22,12 +23,13 @@ namespace XPConnect.Host
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
-                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
+                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--status-port <port> | --no-status]
+                    [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
                   SimConnect.cfg redirect points at), --xplane http://127.0.0.1:8086, --mapping ./mapping.
                   Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
                   --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
-                  process BATC checks for, unless --no-stub.
+                  process BATC checks for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status.
               xpconnect xplane-check [--xplane <url>] [--mapping <dir>] [--seconds <n>]
                   Connect to X-Plane, read every mapped dataref and print what BATC would be sent. Checks the mapping.
               xpconnect record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
@@ -160,13 +162,26 @@ namespace XPConnect.Host
             using var xplane = new XPlaneWebApiClient(XPlaneUri(options), PacketConsole.Info);
             var facilities = ServeFacilities(options);
             using var stub = new StubLauncher();
+            var stubLine = "not started (--no-stub)";
             if (!options.Has("no-stub"))
             {
-                PacketConsole.Info(stub.Start(options.Get("stub")));
+                stubLine = stub.Start(options.Get("stub"));
+                PacketConsole.Info(stubLine);
             }
 
             var xplaneTask = xplane.RunAsync(ct);
             var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities);
+            var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(xplane.IsConnected, xplane.XPlaneVersion, XPlaneUri(options).ToString()), listener.Endpoint.ToString())
+            {
+                Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
+                Recording = Path.GetFullPath(recorder.Path),
+            };
+            await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
+            if (!options.Has("no-status"))
+            {
+                status.Start(ct);
+            }
+
             try
             {
                 await server.RunAsync(ct);
@@ -442,7 +457,7 @@ namespace XPConnect.Host
                 }
 
                 var key = arg[2..];
-                options._named[key] = key is "quiet" or "no-stub" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
+                options._named[key] = key is "quiet" or "no-stub" or "no-status" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
             }
 
             return options;
