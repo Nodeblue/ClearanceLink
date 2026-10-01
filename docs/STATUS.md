@@ -6,6 +6,7 @@ _Update this file in every PR that changes behaviour._
 
 ## Works
 - Everyday use (0.3.0): `scripts/publish.ps1` builds a self-contained Windows zip (`XPConnect.exe`, the `FlightSimulator2024.exe` stub, `mapping/`, `README.txt`, two .cmd switches). Double-clicking `XPConnect.exe` offers to point BATC at it and then serves; `xpconnect batc on|off|status` adds or removes the two `SimConnect.cfg` redirects (BATC folder from its uninstall entry or `C:\BeyondATC`; an existing cfg is backed up and restored). Outside a source checkout, recordings go to `%LOCALAPPDATA%\XPConnect\recordings`. Package smoke-tested on Ben's PC 2026-10-01.
+- Status page: `serve` shows http://localhost:5577/ (X-Plane connection, both BATC connections, airports sent and where from, a one-line "what to start next"); double-click start opens it in the browser. `--status-port`, `--no-status`. Not yet seen on Ben's PC.
 - SimConnect packet framing, function and message names, and decoding of the common ATC-client calls (`src/XPConnect.Protocol`).
 - `XPConnect record`: pass-through proxy that records a real client/sim session to JSONL and writes a call inventory.
 - `XPConnect fake`: answers the Open handshake as MSFS 2020 or 2024 and serves the user aircraft's SimVars from a fixed snapshot (SF50 parked at YBBN, live clock, COM set events applied). `--facilities <recording.jsonl>` replays the airport data MSFS sent in a pass-through recording. Everything else is recorded and left unanswered.
