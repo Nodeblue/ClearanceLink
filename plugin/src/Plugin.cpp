@@ -76,6 +76,7 @@ void LoadCsl() {
             Log("CSL loaded " + folder);
         }
     }
+    xpc::TrafficAircraft::SetCslPackages(xpc::FindCslPackages(g_cslFolders));
     Log(std::to_string(XPMPGetNumberOfInstalledModels()) + " CSL models from " + std::to_string(g_cslFolders.size()) + " folders");
 }
 
@@ -220,6 +221,7 @@ PLUGIN_API int XPluginEnable() {
 PLUGIN_API void XPluginDisable() {
     XPLMUnregisterFlightLoopCallback(FlightLoop, nullptr);
     RemoveAll();
+    xpc::TrafficAircraft::ForgetModelFits();
     if (g_tcas) XPMPMultiplayerDisable();
     g_tcas = false;
     XPMPMultiplayerCleanup();
