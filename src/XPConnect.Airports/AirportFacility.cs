@@ -86,7 +86,7 @@ public static class AirportFacility
         foreach (var frequency in airport.Frequencies)
         {
             root.Add(new FacilityObject("FREQUENCY")
-                .Set("TYPE", MsfsCodes.Frequency(frequency.Kind))
+                .Set("TYPE", MsfsCodes.Frequency(frequency))
                 .Set("FREQUENCY", frequency.Khz * 1000)
                 .Set("NAME", MsfsCodes.FrequencyName(frequency, airport)));
         }

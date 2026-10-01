@@ -72,6 +72,18 @@ public static partial class MsfsCodes
     };
 
     /// <summary>
+    /// FREQUENCY TYPE for one X-Plane frequency row. X-Plane files automated weather (AWIS/AWOS/ASOS) under its
+    /// ATIS row; MSFS sends it as type 12 (YTWB "1050 127050 AWIS" is MSFS type 12, recording 2026-09-30).
+    /// </summary>
+    public static int Frequency(Frequency frequency) =>
+        frequency.Kind == FrequencyKind.Atis && IsAutomatedWeather(frequency.Name) ? AutomatedWeather : Frequency(frequency.Kind);
+
+    public const int AutomatedWeather = 12;
+
+    private static bool IsAutomatedWeather(string name) =>
+        name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.ToUpperInvariant() is "AWIS" or "AWOS" or "ASOS" or "AWS");
+
+    /// <summary>
     /// FREQUENCY NAME the way MSFS fills it, which BATC uses as the controller's callsign: the ICAO for ATIS, the
     /// sector for ground ("North", "Domestic"), and the city in capitals for the rest ("BRISBANE" for delivery, tower,
     /// approach and departure at YBBN). X-Plane's names are service labels ("ACD", "SMC North", "TWR EAST"), which
