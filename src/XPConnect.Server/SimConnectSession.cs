@@ -429,6 +429,11 @@ public sealed class SimConnectSession(
             ? InitPosition.Read(Convert.FromHexString(hex))
             : null;
         var created = traffic!.Create(connectionId, kind, S(f, "containerTitle"), S(f, "livery"), S(f, "tailNumber"), position);
+        if (position is { } start && GroundFeet(created) is { } groundAtStart && start.AltitudeFeet - groundAtStart < 50)
+        {
+            created.Set("SIM ON GROUND", 1, _time.GetUtcNow()); // parked: BATC does not always set the init position's on-ground flag
+        }
+
         Stats.Count("AI objects created", _time.GetUtcNow());
         await send(PacketBuilder.Server(RecvId.AssignedObjectId, _protocol).U32(U(f, "requestId")).U32(created.ObjectId).Build()).ConfigureAwait(false);
     }
@@ -517,7 +522,7 @@ public sealed class SimConnectSession(
         // altitude (define 4). SIM ON GROUND follows from whichever it wrote.
         if (datum.Name.Equals("PLANE ALT ABOVE GROUND", StringComparison.OrdinalIgnoreCase))
         {
-            target.Set("SIM ON GROUND", value < 10 ? 1 : 0, now);
+            target.Set("SIM ON GROUND", value < 50 ? 1 : 0, now); // BATC writes the CG height: 10-15 ft for a taxiing A320 (live test 2026-10-01)
             if (GroundFeet(target) is { } groundFeet)
             {
                 target.Set("PLANE ALTITUDE", groundFeet + value, now);
