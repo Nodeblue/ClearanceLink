@@ -22,6 +22,7 @@ public sealed partial class TrafficModels
     private readonly List<(string Start, string Type)> _asobo;
     private readonly string _defaultType;
     private readonly Dictionary<string, double> _groundPitch;
+    private readonly Dictionary<string, double> _groundOffset;
 
     private TrafficModels(File file)
     {
@@ -32,6 +33,7 @@ public sealed partial class TrafficModels
         _asobo = [.. (file.Asobo ?? []).Select(a => (a.Key, a.Value)).OrderByDescending(a => a.Key.Length)];
         _defaultType = string.IsNullOrWhiteSpace(file.DefaultType) ? "A320" : file.DefaultType;
         _groundPitch = new(file.GroundPitch ?? [], StringComparer.OrdinalIgnoreCase);
+        _groundOffset = new(file.GroundOffsetFt ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
     public static TrafficModels Parse(string yaml)
@@ -49,6 +51,9 @@ public sealed partial class TrafficModels
 
     /// <summary>Pitch (degrees, nose up positive) to draw a parked or slow-taxiing aircraft of this type with.</summary>
     public double GroundPitch(string icaoType) => _groundPitch.GetValueOrDefault(icaoType, _groundPitch.GetValueOrDefault("default"));
+
+    /// <summary>Feet to raise (+) or lower (-) a model of this type when it is drawn on the ground.</summary>
+    public double GroundOffsetFeet(string icaoType) => _groundOffset.GetValueOrDefault(icaoType, _groundOffset.GetValueOrDefault("default"));
 
     public TrafficModel Match(string title)
     {
@@ -131,5 +136,7 @@ public sealed partial class TrafficModels
         public string? DefaultType { get; set; }
 
         public Dictionary<string, double>? GroundPitch { get; set; }
+
+        public Dictionary<string, double>? GroundOffsetFt { get; set; }
     }
 }

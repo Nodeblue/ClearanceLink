@@ -73,6 +73,15 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
         if (w.size() != 1 || !Id(w[0], del.id)) return fail("bad del: " + line);
         return del;
     }
+    if (type == "offset") {
+        auto w = Words(rest, 3, nullptr);
+        Offset offset;
+        double feet = 0;
+        if (w.size() != 2 || !Id(w[0], offset.id) || !Number(w[1], feet) || std::fabs(feet) > 50)
+            return fail("bad offset: " + line);
+        offset.groundFt = static_cast<float>(feet);
+        return offset;
+    }
     if (type == "add") {
         std::string label;
         auto w = Words(rest, 4, &label);

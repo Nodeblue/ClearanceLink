@@ -105,7 +105,7 @@ void TrafficAircraft::UpdatePosition(float, int) {
         XPLMLocalToWorld(info.locationX, info.locationY, info.locationZ, &groundLat, &groundLon, &groundAltM);
         groundFt_ = groundAltM * FeetPerMeter;
         if (state_.onGround) {
-            drawInfo.y = info.locationY + GetVertOfs();
+            drawInfo.y = info.locationY + GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
             // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
             if (auto slope = GroundSlopeDeg(info.locationY)) SetPitch(state_.pitch + *slope);
         }

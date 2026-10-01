@@ -141,5 +141,10 @@ ground_pitch:
   E190: -1.5
   E195: -1.5
 
+# Feet to raise (+) or lower (-) parked and taxiing aircraft, by ICAO type (needs XPConnect plugin 0.2.0 or later;
+# older plugins ignore it). Live test 2026-10-01: Bluebell models at Orbx YBBN sat 20 to 50 cm high.
+ground_offset_ft:
+  default: -1.0
+
 # Used when nothing above gives a type (XPMP2 then draws its closest model).
 default_type: A320

@@ -12,6 +12,8 @@ public interface IPluginTraffic
 
     void Update(uint id, TrafficState state);
 
+    void SetGroundOffset(uint id, double feet);
+
     void Remove(uint id);
 
     bool TryGetGroundFeet(uint id, out double feet);
@@ -82,6 +84,7 @@ public sealed class TrafficBridge(
                 }
 
                 plugin.Add(drawn.PluginId, drawn.Model.IcaoType, drawn.Model.IcaoAirline, null, o.TailNumber);
+                plugin.SetGroundOffset(drawn.PluginId, models.GroundOffsetFeet(drawn.Model.IcaoType));
                 drawn.LastAdd = now;
             }
 

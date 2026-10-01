@@ -19,6 +19,7 @@ public:
 
     void Apply(const Pos& pos, float now);
     void ChangeTo(const Add& add);
+    void SetGroundOffsetFt(float feet) { groundOffsetFt_ = feet; }
 
     // Terrain elevation (MSL feet) under the aircraft at the last frame, once known.
     std::optional<double> GroundElevationFt() const { return groundFt_; }
@@ -30,6 +31,7 @@ private:
     // Pitch of the ground along the aircraft's heading (degrees, nose up positive), from two terrain probes.
     std::optional<float> GroundSlopeDeg(float centreY);
 
+    float groundOffsetFt_ = 0;
     std::string requested_;  // type, airline and livery last asked for, to skip re-matching on a repeated add
     Pos state_{};
     float stateTime_ = 0;
