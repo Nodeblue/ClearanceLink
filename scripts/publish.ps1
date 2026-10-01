@@ -17,6 +17,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 Remove-Item "$out/*.runtimeconfig.json", "$out/*.deps.json" -ErrorAction SilentlyContinue
 Copy-Item mapping "$out/mapping" -Recurse
 Copy-Item packaging/* $out -Recurse
+Copy-Item LICENSE "$out/LICENSE.txt"
 
 $version = (& "$out/XPConnect.exe" --version).Split(' ')[-1]
 $zip = "publish/XPConnect-$version-win-x64.zip"
