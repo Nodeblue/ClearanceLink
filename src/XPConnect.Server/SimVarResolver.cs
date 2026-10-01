@@ -117,6 +117,9 @@ public static class Derivations
         // altimeter reading (feet) and its baro setting (inHg), re-referenced to the sea-level pressure (inHg)
         "altimeter_at_qnh" => AltimeterAtQnhFeet(v[0], v[1] * 33.8638866667, v[2] * 33.8638866667),
 
+        // altimeter reading (feet) and its baro setting (inHg), as it would read set to standard: pressure altitude
+        "altimeter_at_std" => AltimeterAtQnhFeet(v[0], v[1] * 33.8638866667, 1013.25),
+
         // table lookup on the (rounded) first input; unknown values fall back to 0
         "map" => map.Map.GetValueOrDefault((int)Math.Round(v[0])),
 
