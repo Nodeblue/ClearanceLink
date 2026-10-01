@@ -8,15 +8,23 @@ BeyondATC  <-- SimConnect -->  XPConnect  <-- Web API / files -->  X-Plane 12
 
 XPConnect pretends to be MSFS on the SimConnect pipe. It turns each request into X-Plane datarefs, commands and navdata.
 
-**Status:** Phase 0 (feasibility spike). See [docs/STATUS.md](docs/STATUS.md) and the [plan](docs/research/2026-09-30-initial-plan.md).
+**Status:** BeyondATC flies with X-Plane 12 end to end: clearance, taxi routes from X-Plane's taxiways, SIDs and STARs, handoffs, approaches, COM tuning (YBBN, YTWB and YSSY tested). Not yet: AI traffic, in-sim push-to-talk and quick buttons. See [docs/STATUS.md](docs/STATUS.md).
 
-## Quick start (Windows)
+## Using it (Windows)
+
+Download `XPConnect-<version>-win-x64.zip`, unzip it anywhere and read `README.txt`. In short:
+start X-Plane 12, double-click `XPConnect.exe` (the first time it offers to point BeyondATC at it), then start
+BeyondATC. `Use BeyondATC with MSFS.cmd` switches BeyondATC back to MSFS. No .NET install is needed.
+
+## Building from source
 
 ```powershell
 winget install Microsoft.DotNet.SDK.10
 ./scripts/test.ps1                     # build + all tests
-./scripts/run.ps1 fake                 # pretend to be MSFS 2024 on the default pipe (MSFS must be closed)
-./scripts/run.ps1 summarize recordings/local/<file>.jsonl
+./scripts/run.ps1 serve                # run from source (X-Plane 12 running, BeyondATC pointed at XPConnect)
+./scripts/run.ps1 batc status          # is BeyondATC pointed at XPConnect or MSFS? (batc on / batc off)
+./scripts/publish.ps1                  # publish/XPConnect-<version>-win-x64.zip
 ```
 
-To record a real BeyondATC session against MSFS, see [docs/runbooks/phase0.md](docs/runbooks/phase0.md).
+Developer runbooks: [Phase 0 recording against MSFS](docs/runbooks/phase0.md), [X-Plane](docs/runbooks/phase1-xplane.md).
+Instructions for coding agents: [AGENTS.md](AGENTS.md).
