@@ -194,6 +194,18 @@ public sealed class AirportFacilityTests
         Assert.Equal("BRISBANE", MsfsCodes.FrequencyName(new Frequency(FrequencyKind.Clearance, 118600, "ACD"), airport));
     }
     [Fact]
+    public void Automated_weather_is_type_12_as_msfs_sends_it()
+    {
+        // MSFS YTWB: 127.05 type 12 "YTWB", CTAF 127.65 type 4. X-Plane has "1050 127050 AWIS".
+        var airport = Fixtures.Airport("YTWB");
+        var types = airport.Frequencies.ToDictionary(f => f.Khz, MsfsCodes.Frequency);
+
+        Assert.Equal(12, types[127050]);
+        Assert.Equal(4, types[127650]);
+        Assert.Equal("YTWB", MsfsCodes.FrequencyName(airport.Frequencies.Single(f => f.Khz == 127050), airport));
+        Assert.Equal(1, MsfsCodes.Frequency(new Frequency(FrequencyKind.Atis, 125500, "ATIS")));
+    }
+    [Fact]
     public void Surrounding_airport_definition_encodes_without_taxi_data()
     {
         var root = AirportFacility.Build(Fixtures.Airport("YBBN"));
