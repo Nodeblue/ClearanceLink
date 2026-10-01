@@ -138,6 +138,18 @@ public sealed class TrafficBridgeTests
         Assert.Equal(0, TrafficBridge.State(cruise, groundFeet: 13).Gear);
     }
 
+    [Fact]
+    public void Gear_is_down_on_the_ground_whatever_batc_wrote()
+    {
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var parked = registry.Create(2, TrafficKind.Aircraft, "FSLTL_FSLTL_E190_Alliance", "", "VHUZI", new InitPosition(-27.39, 153.12, 20, 0, 0, 13, true, 0));
+        parked.Set("GEAR CENTER POSITION", 0, time.GetUtcNow());
+        parked.SetEvent("GEAR_UP", 1);
+
+        Assert.Equal(1, TrafficBridge.State(parked).Gear);
+    }
+
     private static PluginStatus Connected() => new("0.1.0", 0, 100, [], DateTimeOffset.UnixEpoch);
 
     private static string RepoFile(params string[] parts)
