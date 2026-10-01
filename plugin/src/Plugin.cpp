@@ -5,6 +5,7 @@
 #include "TrafficAircraft.h"
 #include "Udp.h"
 
+#include "XPLMMenus.h"
 #include "XPLMPlugin.h"
 #include "XPLMProcessing.h"
 #include "XPLMUtilities.h"
@@ -159,6 +160,28 @@ float FlightLoop(float, float, int, void*) {
 
 int Preferences(const char*, const char*, int defaultValue) { return defaultValue; }
 
+// Plugins > XPConnect > Show tail labels. Off by default; the choice is kept in settings.txt next to the plugin.
+XPLMMenuID g_menu = nullptr;
+int g_labelsItem = -1;
+
+bool LabelsSetting() {
+    std::ifstream file(PluginFolder() / "settings.txt");
+    std::string line;
+    while (std::getline(file, line))
+        if (line.rfind("labels=", 0) == 0) return line.substr(7) == "1";
+    return false;
+}
+
+void ApplyLabels(bool on, bool save) {
+    XPMPEnableAircraftLabels(on);
+    if (g_menu) XPLMCheckMenuItem(g_menu, g_labelsItem, on ? xplm_Menu_Checked : xplm_Menu_Unchecked);
+    if (save) std::ofstream(PluginFolder() / "settings.txt") << "labels=" << (on ? 1 : 0) << "\n";
+}
+
+void MenuHandler(void*, void* item) {
+    if (item == &g_labelsItem) ApplyLabels(!XPMPDrawingAircraftLabels(), true);
+}
+
 }  // namespace
 
 PLUGIN_API int XPluginStart(char* name, char* signature, char* description) {
@@ -177,6 +200,12 @@ PLUGIN_API int XPluginEnable() {
         return 0;
     }
     LoadCsl();
+    if (!g_menu) {
+        const int root = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "XPConnect", nullptr, 0);
+        g_menu = XPLMCreateMenu("XPConnect", XPLMFindPluginsMenu(), root, MenuHandler, nullptr);
+        g_labelsItem = XPLMAppendMenuItem(g_menu, "Show tail labels", &g_labelsItem, 0);
+    }
+    ApplyLabels(LabelsSetting(), false);
 
     std::string socketError;
     if (!g_socket.Open(xpc::PluginPort, socketError)) {
