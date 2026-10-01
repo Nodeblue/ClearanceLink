@@ -525,7 +525,7 @@ public sealed class SimConnectSession(
         }
         else if (datum.Name.Equals("PLANE ALTITUDE", StringComparison.OrdinalIgnoreCase) && GroundFeet(target) is { } groundBelow)
         {
-            target.Set("SIM ON GROUND", value - groundBelow < 10 ? 1 : 0, now);
+            target.Set("SIM ON GROUND", value - groundBelow < 50 ? 1 : 0, now); // parked aircraft sit 10-20 ft up (gear)
         }
     }
 
