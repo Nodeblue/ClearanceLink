@@ -28,3 +28,10 @@ winget install Microsoft.DotNet.SDK.10
 
 Developer runbooks: [Phase 0 recording against MSFS](docs/runbooks/phase0.md), [X-Plane](docs/runbooks/phase1-xplane.md).
 Instructions for coding agents: [AGENTS.md](AGENTS.md).
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). XPConnect is an independent project, not made or supported by BeyondATC, Microsoft
+or Laminar Research. Two kinds of test data are not covered by the MIT licence:
+[X-Plane Scenery Gateway excerpts](tests/XPConnect.Airports.Tests/fixtures/README.md) (GPL) and
+[MSFS recordings](recordings/samples/README.md). Neither is part of the release.

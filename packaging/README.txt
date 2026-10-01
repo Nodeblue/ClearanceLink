@@ -7,6 +7,7 @@ transponder) and from X-Plane's own airport and procedure data (gates, taxiways,
 approaches).
 
 This is an independent project, not made or supported by BeyondATC or Laminar Research.
+XPConnect is free software under the MIT licence (LICENSE.txt).
 
 
 What you need
