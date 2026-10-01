@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using XPConnect.Protocol;
+using XPConnect.Protocol.Facilities;
 
 namespace XPConnect.Server;
 
@@ -28,6 +29,8 @@ public sealed class SimConnectSession(
     private readonly Dictionary<uint, List<Datum>> _definitions = [];
     private readonly Dictionary<uint, DataRequest> _requests = [];
     private readonly Dictionary<uint, string> _clientEvents = [];
+    private readonly Dictionary<uint, FacilityDefinition> _facilityDefinitions = [];
+    private FacilityEncoder? _facilityEncoder;
     private readonly HashSet<string> _loggedOnce = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
     private uint _protocol = 6;
@@ -131,6 +134,20 @@ public sealed class SimConnectSession(
                     force: true).ConfigureAwait(false);
                 break;
 
+            case 0x45: // AddToFacilityDefinition
+                lock (_gate)
+                {
+                    var defineId = U(f, "defineId");
+                    if (!_facilityDefinitions.TryGetValue(defineId, out var definition))
+                    {
+                        _facilityDefinitions[defineId] = definition = new FacilityDefinition();
+                    }
+
+                    definition.Add(S(f, "fieldName"));
+                }
+
+                break;
+
             case 0x46: // RequestFacilityData
             case 0x4A: // RequestFacilityData_EX1
                 await RequestFacilityAsync(S(f, "icao"), U(f, "defineId"), U(f, "requestId"), sendId).ConfigureAwait(false);
@@ -148,9 +165,9 @@ public sealed class SimConnectSession(
                 break;
 
             // Accepted without a reply: notification groups, input mapping, system-event subscriptions,
-            // facility definitions, AI release/remove, client data setup.
+            // AI release/remove, client data setup.
             case 0x06 or 0x07 or 0x08 or 0x09 or 0x0A or 0x0B or 0x11 or 0x12 or 0x13 or 0x14 or 0x15 or 0x17 or 0x18
-                or 0x2B or 0x2C or 0x37 or 0x38 or 0x39 or 0x3A or 0x45 or 0x4D or 0x55 or 0x56 or 0x5C or 0x5D:
+                or 0x2B or 0x2C or 0x37 or 0x38 or 0x39 or 0x3A or 0x4D or 0x55 or 0x56 or 0x5C or 0x5D:
                 break;
 
             default:
@@ -338,16 +355,37 @@ public sealed class SimConnectSession(
 
     private async Task RequestFacilityAsync(string icao, uint defineId, uint requestId, uint sendId)
     {
-        if (facilities?.Find(icao, defineId, requestId) is { } replies)
+        FacilityRequest request;
+        lock (_gate)
         {
-            log($"#{connectionId} RequestFacilityData {icao} define {defineId}: {replies.Count} packets from {facilities.Description}");
-            foreach (var reply in replies)
+            _facilityEncoder ??= new FacilityEncoder(_protocol);
+            var definition = _facilityDefinitions.GetValueOrDefault(defineId);
+            if (definition is { UnknownFields.Count: > 0 })
             {
-                await send(reply).ConfigureAwait(false);
+                LogOnce($"facilitydef:{defineId}", $"#{connectionId} facility define {defineId}: unknown fields sent as zeros: {string.Join(", ", definition.UnknownFields)}");
             }
 
-            await send(PacketBuilder.Server(RecvId.FacilityDataEnd, _protocol).U32(requestId).Build()).ConfigureAwait(false);
-            return;
+            request = new FacilityRequest(icao, defineId, requestId, definition is { IsComplete: true } ? definition.Root : null, _facilityEncoder);
+        }
+
+        if (facilities is not null)
+        {
+            // Building an airport from X-Plane's files can take a moment the first time; keep it off the caller.
+            var started = _time.GetTimestamp();
+            var answer = await Task.Run(() => facilities is FacilitySourceChain chain
+                ? chain.Answer(request)
+                : facilities.Find(request) is { } found ? (found, facilities.Description) : null).ConfigureAwait(false);
+            if (answer is { } reply)
+            {
+                log($"#{connectionId} RequestFacilityData {icao} define {defineId}: {reply.Item1.Count} packets from {reply.Item2} in {_time.GetElapsedTime(started).TotalMilliseconds:0} ms");
+                foreach (var packet in reply.Item1)
+                {
+                    await send(packet).ConfigureAwait(false);
+                }
+
+                await send(PacketBuilder.Server(RecvId.FacilityDataEnd, _protocol).U32(requestId).Build()).ConfigureAwait(false);
+                return;
+            }
         }
 
         // MSFS answers an airport it does not have with exception 1, index 3 (recorded for YSAM); BATC carries on.

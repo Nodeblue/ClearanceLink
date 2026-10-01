@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using XPConnect.Protocol;
+using XPConnect.Protocol.Facilities;
 using XPConnect.Protocol.Tests;
 using XPConnect.Server;
 
@@ -134,6 +135,42 @@ public sealed class SessionTests
     }
 
     [Fact]
+    public async Task Facility_source_gets_the_clients_definition_and_ids_carry_on_across_requests()
+    {
+        var source = new TreeSource();
+        var session = NewSession(facilities: source);
+        await session.HandleAsync(TestPackets.Open());
+        foreach (var name in new[] { "OPEN AIRPORT", "ICAO", "N_RUNWAYS", "OPEN RUNWAY", "PRIMARY_NUMBER", "CLOSE RUNWAY", "CLOSE AIRPORT" })
+        {
+            await session.HandleAsync(TestPackets.AddToFacilityDefinition(444, name));
+        }
+
+        await session.HandleAsync(TestPackets.RequestFacilityData(444, 1, "YTST"));
+        await session.HandleAsync(TestPackets.RequestFacilityData(444, 2, "YTST"));
+
+        var data = _sent.Where(p => (RecvId)p.TypeField == RecvId.FacilityData).ToList();
+        Assert.Equal(6, data.Count);
+        Assert.Equal([0u, 1u, 2u, 3u, 4u, 5u], data.Select(p => U32(p.Payload, 4)));
+        Assert.Equal(2, _sent.Count(p => (RecvId)p.TypeField == RecvId.FacilityDataEnd));
+        var definition = FacilityDefinition.FromNames(["OPEN AIRPORT", "ICAO", "N_RUNWAYS", "OPEN RUNWAY", "PRIMARY_NUMBER", "CLOSE RUNWAY", "CLOSE AIRPORT"]);
+        var decoded = FacilityDecoder.Decode(definition.Root!, data.Take(3));
+        Assert.Equal("YTST", decoded["ICAO"]);
+        Assert.Equal([19, 29], decoded.ChildrenOf("RUNWAY").Select(r => (int)r["PRIMARY_NUMBER"]!));
+    }
+
+    [Fact]
+    public async Task Facility_request_for_an_undefined_definition_reaches_the_source_without_one()
+    {
+        var source = new TreeSource();
+        var session = NewSession(facilities: source);
+        await session.HandleAsync(TestPackets.Open());
+        await session.HandleAsync(TestPackets.RequestFacilityData(333, 1, "YTST", sendId: 9));
+
+        Assert.Null(Assert.Single(source.Requests).Definition);
+        Assert.Equal(RecvId.Exception, (RecvId)_sent[^1].TypeField);
+    }
+
+    [Fact]
     public async Task Changed_flag_suppresses_identical_periodic_data()
     {
         var clock = new ManualClock();
@@ -166,9 +203,31 @@ public sealed class SessionTests
     // 15 FLOAT64 + 3 FLOAT32 + 17 INT32, per the recorded definition (packed with no padding).
     private const int ExpectedDefine17Size = (15 * 8) + (3 * 4) + (17 * 4);
 
-    private SimConnectSession NewSession(TimeProvider? time = null) =>
+    private SimConnectSession NewSession(TimeProvider? time = null, IFacilitySource? facilities = null) =>
         new(1, ServerIdentity.Msfs2024, new SimVarResolver(Fixtures.Mappings(), _xp, time), _xp,
-            p => { _sent.Add(p); return Task.CompletedTask; }, _log.Add, time: time);
+            p => { _sent.Add(p); return Task.CompletedTask; }, _log.Add, facilities, time);
+
+    /// <summary>Answers any airport with a two-runway tree, encoded with the session's definition and encoder.</summary>
+    private sealed class TreeSource : IFacilitySource
+    {
+        public List<FacilityRequest> Requests { get; } = [];
+
+        public string Description => "test tree";
+
+        public IReadOnlyList<Packet>? Find(FacilityRequest request)
+        {
+            Requests.Add(request);
+            if (request.Definition is null)
+            {
+                return null;
+            }
+
+            var airport = new FacilityObject("AIRPORT").Set("ICAO", request.Icao).Set("N_RUNWAYS", 2)
+                .Add(new FacilityObject("RUNWAY").Set("PRIMARY_NUMBER", 19))
+                .Add(new FacilityObject("RUNWAY").Set("PRIMARY_NUMBER", 29));
+            return request.Encoder.Encode(request.Definition, airport, request.RequestId);
+        }
+    }
 
     private static uint U32(ReadOnlySpan<byte> span, int offset) => BinaryPrimitives.ReadUInt32LittleEndian(span[offset..]);
 

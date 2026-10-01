@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/XPConnect.Airports/XPConnect.Airports.csproj" />
     <Project Path="src/XPConnect.Host/XPConnect.Host.csproj" />
     <Project Path="src/XPConnect.Protocol/XPConnect.Protocol.csproj" />
     <Project Path="src/XPConnect.Recorder/XPConnect.Recorder.csproj" />
@@ -8,6 +9,7 @@
     <Project Path="src/XPConnect.SimStub/XPConnect.SimStub.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/XPConnect.Airports.Tests/XPConnect.Airports.Tests.csproj" />
     <Project Path="tests/XPConnect.Host.Tests/XPConnect.Host.Tests.csproj" />
     <Project Path="tests/XPConnect.Protocol.Tests/XPConnect.Protocol.Tests.csproj" />
     <Project Path="tests/XPConnect.Server.Tests/XPConnect.Server.Tests.csproj" />
