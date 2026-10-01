@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using XPConnect.Airports;
 using XPConnect.Host;
 using XPConnect.Host.Transport;
 using XPConnect.Protocol;
@@ -16,11 +17,13 @@ namespace XPConnect.Host
             XPConnect - BeyondATC to X-Plane 12 bridge
 
             Usage:
-              xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--facilities <recording.jsonl>]
-                    [--stub <path> | --no-stub] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
+              xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
+                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
                   SimConnect.cfg redirect points at), --xplane http://127.0.0.1:8086, --mapping ./mapping.
-                  Starts the FlightSimulator2024 stub process BATC checks for, unless --no-stub.
+                  Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
+                  --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
+                  process BATC checks for, unless --no-stub.
               xpconnect xplane-check [--xplane <url>] [--mapping <dir>] [--seconds <n>]
                   Connect to X-Plane, read every mapped dataref and print what BATC would be sent. Checks the mapping.
               xpconnect record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
@@ -29,6 +32,10 @@ namespace XPConnect.Host
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Pretend to be MSFS: answer the handshake and user-aircraft data requests, record every request.
                   --facilities replays the airport data MSFS sent in a pass-through recording.
+              xpconnect facility-dump <file.jsonl> <ICAO> [--out <file.json>]
+                  Decode the airport data answered for ICAO in a recording into readable JSON.
+              xpconnect airport <ICAO> [--xplane-root <dir>] [--out <file.json>]
+                  Build the airport answer XPConnect would send from X-Plane's files and write it as JSON.
               xpconnect summarize <file.jsonl> [--out <file.md>]
                   Write the call inventory (SimVars, events, facilities...) for a recording.
 
@@ -55,6 +62,8 @@ namespace XPConnect.Host
                     "serve" => await RunServerAsync("serve", options),
                     "xplane-check" => await XPlaneCheckAsync(options),
                     "summarize" => Summarize(options),
+                    "facility-dump" => DumpFacility(options),
+                    "airport" => BuildAirport(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -132,7 +141,7 @@ namespace XPConnect.Host
         {
             var mappings = LoadMappings(options);
             using var xplane = new XPlaneWebApiClient(XPlaneUri(options), PacketConsole.Info);
-            var facilities = LoadFacilities(options);
+            var facilities = ServeFacilities(options);
             using var stub = new StubLauncher();
             if (!options.Has("no-stub"))
             {
@@ -230,6 +239,76 @@ namespace XPConnect.Host
             var facilities = FacilityReplay.FromRecording(source);
             PacketConsole.Info($"Facility replay: {facilities.Count} airport requests loaded from {source}");
             return facilities;
+        }
+
+        /// <summary>Recorded answers first (when --facilities is given), then airports built from X-Plane's files.</summary>
+        private static FacilitySourceChain? ServeFacilities(Options options)
+        {
+            var sources = new List<IFacilitySource>();
+            if (LoadFacilities(options) is { } replay)
+            {
+                sources.Add(replay);
+            }
+
+            if (XPlaneInstall.Find(options.Get("xplane-root")) is { } install)
+            {
+                var airports = new XPlaneAirports(install, PacketConsole.Info);
+                airports.Start();
+                sources.Add(new XPlaneFacilitySource(airports));
+                PacketConsole.Info($"Airports: from X-Plane at {install.Root}");
+            }
+            else
+            {
+                PacketConsole.Info("Airports: X-Plane folder not found (pass --xplane-root); airports BATC asks for will be unknown");
+            }
+
+            return sources.Count == 0 ? null : new FacilitySourceChain([.. sources]);
+        }
+
+        private static int BuildAirport(Options options)
+        {
+            var icao = options.Positional.FirstOrDefault() ?? throw new ArgumentException("airport needs an ICAO code");
+            var install = XPlaneInstall.Find(options.Get("xplane-root"))
+                ?? throw new ArgumentException("X-Plane folder not found; pass --xplane-root <dir>");
+            var airport = new XPlaneAirports(install, Console.Error.WriteLine).Find(icao);
+            if (airport is null)
+            {
+                Console.Error.WriteLine($"{icao}: no scenery pack in {install.Root} defines it");
+                return 2;
+            }
+
+            var text = FacilityDump.Serialize(FacilityDump.ToJson(airport));
+            if (options.Get("out") is { } output)
+            {
+                File.WriteAllText(output, text);
+                Console.Error.WriteLine($"Wrote {Path.GetFullPath(output)}");
+            }
+            else
+            {
+                Console.WriteLine(text);
+            }
+
+            return 0;
+        }
+
+        private static int DumpFacility(Options options)
+        {
+            if (options.Positional.Count < 2)
+            {
+                throw new ArgumentException("facility-dump needs <file.jsonl> <ICAO>");
+            }
+
+            var text = FacilityDump.Serialize(FacilityDump.FromRecording(options.Positional[0], options.Positional[1]));
+            if (options.Get("out") is { } output)
+            {
+                File.WriteAllText(output, text);
+            }
+            else
+            {
+                Console.WriteLine(text);
+            }
+
+            return 0;
         }
 
         private static int Summarize(Options options)

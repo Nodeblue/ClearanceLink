@@ -87,11 +87,27 @@ public sealed class MappingTests
     [InlineData(10114.84, 30.33, 30.33, 10114.84)]   // QNH set: exactly the cockpit reading
     [InlineData(10114.84, 30.33, 30.3026, 10090.6)]  // X-Plane 12.4.3 in the climb out of YBBN, 2026-09-30
     [InlineData(-207.93, 29.92, 30.3026, 143.0)]     // baro left at standard on the ground
+    [InlineData(14001, 30.33, 29.9213, 13661.4)]     // FL136 call over YBBN, QNH 1027 still set, 2026-10-01
     public void Altimeter_is_re_referenced_to_the_qnh(double indicated, double settingInHg, double qnhInHg, double expected) =>
         Assert.InRange(
             Derivations.AltimeterAtQnhFeet(indicated, settingInHg * 33.8638866667, qnhInHg * 33.8638866667),
             expected - 3,
             expected + 3);
+
+    [Fact]
+    public void Pressure_altitude_is_the_altimeter_on_standard()
+    {
+        var xp = Fixtures.ParkedAtYbbn();
+        xp["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 14001.0;
+        xp["sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot"] = 30.33;
+        var resolver = new SimVarResolver(Fixtures.Mappings(), xp);
+        resolver.Prepare("PRESSURE ALTITUDE");
+
+        var (value, _) = resolver.Resolve("PRESSURE ALTITUDE", "feet");
+
+        Assert.InRange(value.Number, 13658, 13665);
+    }
+
     [Fact]
     public void Parked_airspeed_is_never_negative()
     {
