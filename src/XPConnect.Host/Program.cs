@@ -17,6 +17,10 @@ namespace XPConnect.Host
             XPConnect - BeyondATC to X-Plane 12 bridge
 
             Usage:
+              xpconnect
+                  (no arguments, e.g. double-clicked) Switch BeyondATC to XPConnect if needed, then serve.
+              xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
+                  Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
                     [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
@@ -46,10 +50,22 @@ namespace XPConnect.Host
 
         public static async Task<int> RunAsync(string[] args)
         {
-            if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+            if (args.Length == 0)
+            {
+                // Double-clicked: set BATC up if needed, then serve with the defaults.
+                return await StartAsync();
+            }
+
+            if (args[0] is "-h" or "--help" or "help")
             {
                 Console.WriteLine(Usage);
-                return args.Length == 0 ? 1 : 0;
+                return 0;
+            }
+
+            if (args[0] is "--version" or "version")
+            {
+                Console.WriteLine($"XPConnect {Version}");
+                return 0;
             }
 
             try
@@ -64,6 +80,7 @@ namespace XPConnect.Host
                     "summarize" => Summarize(options),
                     "facility-dump" => DumpFacility(options),
                     "airport" => BuildAirport(options),
+                    "batc" => Batc(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -82,7 +99,7 @@ namespace XPConnect.Host
             PacketConsole.Verbose = !options.Has("quiet");
             var listen = Endpoint.Parse(options.Get("listen") ?? (mode == "serve" ? "tcp:5112" : "pipe"));
             var outPath = options.Get("out")
-                ?? Path.Combine("recordings", "local", $"{DateTime.Now:yyyyMMdd-HHmmss}-{mode}.jsonl");
+                ?? Path.Combine(RecordingsFolder(), $"{DateTime.Now:yyyyMMdd-HHmmss}-{mode}.jsonl");
 
             using var cts = new CancellationTokenSource();
 
@@ -197,6 +214,81 @@ namespace XPConnect.Host
             await cts.CancelAsync();
             await run;
             return missing.Count == 0 ? 0 : 3;
+        }
+
+        private static string Version =>
+            typeof(Cli).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "dev";
+
+        private static async Task<int> StartAsync()
+        {
+            Console.WriteLine($"XPConnect {Version} - BeyondATC for X-Plane 12");
+            Console.WriteLine();
+            if (BatcRedirect.FindInstallFolder() is not { } folder)
+            {
+                Console.WriteLine("BeyondATC was not found (looked for BeyondATC.exe in its install folder and in C:\\BeyondATC).");
+                Console.WriteLine("If it is installed somewhere else, run once:  XPConnect batc on --batc \"<BeyondATC folder>\"");
+                Console.WriteLine();
+            }
+            else if (!new BatcRedirect(folder).IsOn)
+            {
+                Console.WriteLine($"BeyondATC ({folder}) is set up for MSFS. Switch it to X-Plane through XPConnect? [Y/n]");
+                var answer = Console.IsInputRedirected ? "y" : Console.ReadLine();
+                if (answer is null || answer.Trim().Length == 0 || answer.Trim().StartsWith('y') || answer.Trim().StartsWith('Y'))
+                {
+                    new BatcRedirect(folder).SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    Console.WriteLine("  To fly MSFS with BeyondATC again, run 'Use BeyondATC with MSFS' (XPConnect batc off).");
+                }
+
+                Console.WriteLine();
+            }
+
+            Console.WriteLine("Start X-Plane 12 and load your aircraft, then start BeyondATC. Leave this window open while you fly;");
+            Console.WriteLine("close it (or press Ctrl+C) when you are done.");
+            Console.WriteLine();
+            return await RunServerAsync("serve", Options.Parse(["--quiet"]));
+        }
+
+        /// <summary>recordings/local in a source checkout; otherwise %LOCALAPPDATA%\XPConnect\recordings.</summary>
+        private static string RecordingsFolder() =>
+            Directory.Exists("recordings")
+                ? Path.Combine("recordings", "local")
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XPConnect", "recordings");
+        private static int Batc(Options options)
+        {
+            var action = options.Positional.FirstOrDefault() ?? "status";
+            var folder = BatcRedirect.FindInstallFolder(options.Get("batc"));
+            if (folder is null)
+            {
+                return Fail(options.Get("batc") is { } given
+                    ? $"BeyondATC.exe not found in {given}"
+                    : "BeyondATC not found; pass --batc \"<BeyondATC folder>\"");
+            }
+
+            var port = int.Parse(options.Get("port") ?? BatcRedirect.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
+            var redirect = new BatcRedirect(folder, port);
+            switch (action)
+            {
+                case "on":
+                    redirect.SwitchOn().ToList().ForEach(Console.WriteLine);
+                    Console.WriteLine("BeyondATC now connects to XPConnect (X-Plane). Run XPConnect before starting BeyondATC.");
+                    return 0;
+                case "off":
+                    redirect.SwitchOff().ToList().ForEach(Console.WriteLine);
+                    Console.WriteLine("BeyondATC now connects to MSFS again.");
+                    return 0;
+                case "status":
+                    Console.WriteLine($"BeyondATC: {folder}");
+                    foreach (var file in redirect.Files)
+                    {
+                        Console.WriteLine($"  {redirect.StateOf(file),-9} {file}");
+                    }
+
+                    Console.WriteLine(redirect.IsOn ? "Set up for X-Plane (XPConnect)." : "Set up for MSFS (or partly set up; run 'batc on' or 'batc off').");
+                    return 0;
+                default:
+                    return Fail($"Unknown batc action '{action}'. Use on, off or status.");
+            }
         }
 
         private static MappingSet LoadMappings(Options options)
