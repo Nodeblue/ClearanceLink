@@ -1,0 +1,12 @@
+# MSFS SimVar -> X-Plane mapping. Filled from the Phase 0 call inventory.
+# status: implemented | emulated | stubbed | unsupported
+#
+# - simvar: PLANE ALTITUDE
+#   units: feet
+#   xplane:
+#     dataref: sim/flightmodel/position/elevation
+#     units: meters
+#   convert: meters_to_feet
+#   status: implemented
+#   notes: ""
+[]

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet test --nologo
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke test against node-simconnect
+        shell: bash
+        run: |
+          cd tools/node-client && npm ci && cd ../..
+          dotnet run --project src/XPConnect.Host --no-build -- fake --listen tcp:5000 --quiet --out smoke.jsonl &
+          for i in $(seq 1 30); do node tools/node-client/smoke.js 127.0.0.1 5000 SunRise && break; sleep 1; done
+          node tools/node-client/smoke.js 127.0.0.1 5000 KittyHawk
