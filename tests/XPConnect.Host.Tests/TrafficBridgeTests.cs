@@ -174,6 +174,18 @@ public sealed class TrafficBridgeTests
         Assert.Equal(1, TrafficBridge.State(arriving, groundFeet: 13).Gear);
     }
 
+    [Fact]
+    public void Ground_pitch_per_type_comes_from_the_mapping()
+    {
+        Assert.Equal(-1.5, Models.GroundPitch("E190"));
+        Assert.Equal(0, Models.GroundPitch("B738"));
+
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var parked = registry.Create(2, TrafficKind.Aircraft, "FSLTL_FSLTL_E190_Alliance", "", "VHUZI", new InitPosition(-27.39, 153.12, 20, -1.5, 0, 13, true, 0));
+        Assert.Equal(-1.5, TrafficBridge.State(parked, groundPitch: Models.GroundPitch("E190")).Pitch);
+    }
+
     private static PluginStatus Connected() => new("0.1.0", 0, 100, [], DateTimeOffset.UnixEpoch);
 
     private static string RepoFile(params string[] parts)

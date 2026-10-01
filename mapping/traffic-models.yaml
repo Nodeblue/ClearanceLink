@@ -131,5 +131,15 @@ asobo:
   SR22: SR22
   TBM930: TBM9
 
+# Pitch (degrees, nose up positive) for parked and slow-taxiing aircraft, by ICAO type. Some CSL models sit with the
+# nose wheel off the ground when drawn level; a little nose-down puts it back. Tune per type from screenshots.
+# Live test 2026-10-01: Bluebell E-Jets at YBBN had the nose wheel slightly up.
+ground_pitch:
+  default: 0
+  E170: -1.5
+  E175: -1.5
+  E190: -1.5
+  E195: -1.5
+
 # Used when nothing above gives a type (XPMP2 then draws its closest model).
 default_type: A320
