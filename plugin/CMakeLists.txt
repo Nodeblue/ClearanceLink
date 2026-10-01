@@ -3,7 +3,7 @@
 # Linux (compile check): cmake -S plugin -B build/plugin && cmake --build build/plugin
 # Output: build/plugin/XPConnect/64/<win|lin|mac>.xpl plus XPConnect/Resources (XPMP2's support files).
 cmake_minimum_required(VERSION 3.16)
-project(XPConnectPlugin VERSION 0.1.0 LANGUAGES C CXX)
+project(XPConnectPlugin VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -98,6 +98,8 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
 
     public void Update(uint id, TrafficState state) => Send(FormatPos(id, state));
 
+    public void SetGroundOffset(uint id, double feet) => Send(string.Create(CultureInfo.InvariantCulture, $"offset {id} {feet:0.00}"));
+
     public void Remove(uint id)
     {
         _groundFeet.TryRemove(id, out _);

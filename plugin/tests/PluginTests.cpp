@@ -35,6 +35,14 @@ void ParsesPos() {
     CHECK(pos.lights == (xpc::LightNav | xpc::LightBeacon | xpc::LightTaxi));
 }
 
+void ParsesOffset() {
+    auto offset = std::get<xpc::Offset>(*xpc::Parse("offset 9 -1.5"));
+    CHECK(offset.id == 9);
+    CHECK(offset.groundFt == -1.5f);
+    std::string error;
+    CHECK(!xpc::Parse("offset 9 900", &error) && error.find("bad offset") != std::string::npos);
+}
+
 void ParsesAddWithLabelAndUnknowns() {
     auto add = std::get<xpc::Add>(*xpc::Parse("add 3 B738 QFA - VH-XZE Qantas 1"));
     CHECK(add.id == 3);
@@ -101,6 +109,7 @@ void FindsCslFolders() {
 
 int main() {
     ParsesPos();
+    ParsesOffset();
     ParsesAddWithLabelAndUnknowns();
     RejectsBadLines();
     SplitsDatagrams();

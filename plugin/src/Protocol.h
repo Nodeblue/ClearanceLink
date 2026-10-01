@@ -36,9 +36,12 @@ struct Pos {
 
 struct Del { uint32_t id = 0; };
 
+// Raise (+) or lower (-) aircraft `id` by this many feet when it is drawn on the ground (per-model fine tuning).
+struct Offset { uint32_t id = 0; float groundFt = 0; };
+
 struct Clear {};
 
-using Message = std::variant<Hello, Add, Pos, Del, Clear>;
+using Message = std::variant<Hello, Add, Pos, Del, Clear, Offset>;
 
 // Parses one line. Returns nothing for blank, malformed or unknown lines; `error` then says why (empty for blank).
 std::optional<Message> Parse(const std::string& line, std::string* error = nullptr);

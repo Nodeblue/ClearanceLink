@@ -47,6 +47,7 @@ public sealed class TrafficBridgeTests
         var id = Assert.IsType<uint>(bridge.PluginId(qantas.ObjectId));
         Assert.InRange(id, 1u, 0xFFFFFFu);
         Assert.Equal([$"add {id} B738 QFA VHXZE"], plugin.Adds);
+        Assert.Equal([(id, -1.0)], plugin.Offsets); // ground_offset_ft default, sent with each add
         Assert.Single(plugin.Updates);
 
         time.Advance(TimeSpan.FromSeconds(1));
@@ -212,6 +213,8 @@ public sealed class TrafficBridgeTests
 
         public List<uint> Removes { get; } = [];
 
+        public List<(uint Id, double Feet)> Offsets { get; } = [];
+
         public Dictionary<uint, double> Ground { get; } = [];
 
         public void Add(uint id, string icaoType, string? icaoAirline, string? livery, string label) =>
@@ -220,6 +223,8 @@ public sealed class TrafficBridgeTests
         public void Update(uint id, TrafficState state) => Updates.Add((id, state));
 
         public void Remove(uint id) => Removes.Add(id);
+
+        public void SetGroundOffset(uint id, double feet) => Offsets.Add((id, feet));
 
         public bool TryGetGroundFeet(uint id, out double feet) => Ground.TryGetValue(id, out feet);
     }

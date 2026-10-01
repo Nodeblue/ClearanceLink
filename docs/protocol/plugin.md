@@ -19,8 +19,12 @@ newer than the other.
 | `hello <version>` | Sent every second. If the plugin hears nothing for 10 s it removes all its aircraft (XPConnect closed). |
 | `add <id> <icaoType> <icaoAirline> <livery> <label...>` | Create aircraft `id` (1..16777215). `icaoAirline` and `livery` are `-` when unknown. `label` (rest of the line) is shown next to the aircraft, for example the registration. Re-sending `add` for an existing id changes its model. |
 | `pos <id> <lat> <lon> <altFt> <hdgTrue> <pitch> <bank> <gsKt> <onGround> <gear> <flaps> <spoilers> <thrust> <lights>` | Latest state. `altFt` is MSL; when `onGround` is `1` the plugin puts the wheels on X-Plane's terrain and ignores `altFt`. `gear`, `flaps`, `spoilers`, `thrust` are 0..1. `lights` is a bit mask: 1 nav, 2 beacon, 4 strobe, 8 landing, 16 taxi. |
+| `offset <id> <feet>` | Raise (+) or lower (-) aircraft `id` by this much when it is on the ground, to fine-tune a CSL model's height (from `ground_offset_ft` in `mapping/traffic-models.yaml`; sent after each `add`). Plugin 0.2.0+; older plugins ignore it. |
 | `del <id>` | Remove aircraft `id`. |
 | `clear` | Remove all aircraft. |
+
+On the ground the plugin also pitches each aircraft to the slope of the terrain under it (probed 8 m ahead and
+behind, at most 4°), added to the `pitch` XPConnect sends (plugin 0.2.0+).
 
 Between `pos` lines the plugin moves each aircraft on along its heading at `gsKt` (for at most 1 s), so a
 few updates a second are enough for smooth movement. BATC itself sends about 20 a second.

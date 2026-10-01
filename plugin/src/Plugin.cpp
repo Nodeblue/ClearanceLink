@@ -106,6 +106,9 @@ void Handle(const xpc::Message& message, float now) {
     } else if (auto pos = std::get_if<xpc::Pos>(&message)) {
         auto found = g_aircraft.find(pos->id);
         if (found != g_aircraft.end()) found->second->Apply(*pos, now);
+    } else if (auto offset = std::get_if<xpc::Offset>(&message)) {
+        auto found = g_aircraft.find(offset->id);
+        if (found != g_aircraft.end()) found->second->SetGroundOffsetFt(offset->groundFt);
     } else if (auto del = std::get_if<xpc::Del>(&message)) {
         g_aircraft.erase(del->id);
     } else if (std::holds_alternative<xpc::Clear>(message)) {
