@@ -47,3 +47,8 @@ The plugin loads every CSL package it finds in these folders (all that exist, in
 4. The CSL folders of LiveTraffic, xPilot and X-IvAp (`Resources/plugins/<plugin>/Resources/CSL`).
 
 No CSL models are shipped with XPConnect; their licences allow free download but not redistribution.
+
+## Settings in X-Plane
+
+Plugins > XPConnect > Show tail labels turns the labels (BATC's registrations) on or off. They are off by default;
+the choice is kept in `Resources/plugins/XPConnect/settings.txt` (`labels=1`), which `xpconnect plugin install` keeps.
