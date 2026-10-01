@@ -34,6 +34,9 @@ public sealed class StatusBoard(
 
     public string? Recording { get; set; }
 
+    /// <summary>BATC's AI objects, when traffic is on.</summary>
+    public Func<IReadOnlyList<TrafficObject>>? Traffic { get; set; }
+
     public StatusSnapshot Snapshot()
     {
         var now = _time.GetUtcNow();
@@ -66,7 +69,19 @@ public sealed class StatusBoard(
             clients,
             airports,
             Stub,
-            Recording);
+            Recording,
+            Traffic?.Invoke().Select(o => new TrafficStatus(
+                o.ObjectId,
+                o.TailNumber,
+                o.Title,
+                o.Kind == TrafficKind.Aircraft ? "aircraft" : "object",
+                Math.Round(o.Latitude, 5),
+                Math.Round(o.Longitude, 5),
+                Math.Round(o.AltitudeFeet),
+                Math.Round(o.HeadingTrue),
+                Math.Round(o.GroundSpeedKnots),
+                o.OnGround,
+                Math.Round((now - o.LastUpdate).TotalSeconds, 1))).ToList());
     }
 
     public string ToJson() => JsonSerializer.Serialize(Snapshot(), Json);
@@ -124,4 +139,7 @@ public sealed record StatusSnapshot(
     IReadOnlyList<ClientStatus> Clients,
     IReadOnlyList<AirportStatus> Airports,
     string? Stub,
-    string? Recording);
+    string? Recording,
+    IReadOnlyList<TrafficStatus>? Traffic = null);
+
+public sealed record TrafficStatus(uint Id, string Tail, string Model, string Kind, double Latitude, double Longitude, double AltitudeFeet, double Heading, double GroundSpeedKnots, bool OnGround, double SecondsSinceUpdate);
