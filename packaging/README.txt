@@ -22,6 +22,8 @@ Every flight
 1. Start X-Plane 12 and load your aircraft.
 2. Double-click XPConnect.exe and leave its window open.
    The first time, it asks to switch BeyondATC to X-Plane: answer Y.
+   Your browser opens XPConnect's status page (http://localhost:5577/). It shows whether X-Plane and
+   BeyondATC are connected and which airports have been sent, and says what to start next.
 3. Start BeyondATC and start your flight as usual (your SimBrief plan is loaded by BeyondATC itself).
 4. When you have finished, close BeyondATC, then close the XPConnect window.
 

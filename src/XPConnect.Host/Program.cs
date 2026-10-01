@@ -23,13 +23,13 @@ namespace XPConnect.Host
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
-                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--status-port <port> | --no-status]
+                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--status-port <port> | --no-status] [--open-status]
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
                   SimConnect.cfg redirect points at), --xplane http://127.0.0.1:8086, --mapping ./mapping.
                   Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
                   --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
-                  process BATC checks for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status.
+                  process BATC checks for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status; --open-status opens it in the browser.
               xpconnect xplane-check [--xplane <url>] [--mapping <dir>] [--seconds <n>]
                   Connect to X-Plane, read every mapped dataref and print what BATC would be sent. Checks the mapping.
               xpconnect record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
@@ -177,9 +177,9 @@ namespace XPConnect.Host
                 Recording = Path.GetFullPath(recorder.Path),
             };
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
-            if (!options.Has("no-status"))
+            if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
             {
-                status.Start(ct);
+                OpenInBrowser(status.Url);
             }
 
             try
@@ -259,9 +259,21 @@ namespace XPConnect.Host
             }
 
             Console.WriteLine("Start X-Plane 12 and load your aircraft, then start BeyondATC. Leave this window open while you fly;");
-            Console.WriteLine("close it (or press Ctrl+C) when you are done.");
+            Console.WriteLine("close it (or press Ctrl+C) when you are done. The status page opens in your browser.");
             Console.WriteLine();
-            return await RunServerAsync("serve", Options.Parse(["--quiet"]));
+            return await RunServerAsync("serve", Options.Parse(["--quiet", "--open-status"]));
+        }
+
+        private static void OpenInBrowser(string url)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException)
+            {
+                PacketConsole.Info($"status: could not open a browser ({ex.Message}); open {url} yourself");
+            }
         }
 
         /// <summary>recordings/local in a source checkout; otherwise %LOCALAPPDATA%\XPConnect\recordings.</summary>
@@ -457,7 +469,7 @@ namespace XPConnect.Host
                 }
 
                 var key = arg[2..];
-                options._named[key] = key is "quiet" or "no-stub" or "no-status" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
+                options._named[key] = key is "quiet" or "no-stub" or "no-status" or "open-status" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
             }
 
             return options;
