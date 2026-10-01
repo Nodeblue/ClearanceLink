@@ -27,6 +27,8 @@ public:
 
 private:
     void SetLabel(const Add& add);
+    // Pitch of the ground along the aircraft's heading (degrees, nose up positive), from two terrain probes.
+    std::optional<float> GroundSlopeDeg(float centreY);
 
     std::string requested_;  // type, airline and livery last asked for, to skip re-matching on a repeated add
     Pos state_{};
