@@ -24,6 +24,7 @@ _Update this file in every PR that changes behaviour._
 ## Not yet verified
 - `serve` in flight (only ground work to taxi is verified). Wind (`verify: true`) not compared with the cockpit; design speeds and wingspan are fixed values.
 - AI traffic stays off: `serve` does not answer EnumerateSimObjectsAndLiveries, and in the stand-in test BATC created no AI aircraft without it.
+- X-Plane traffic plugin (ADR-0004, `plugin/`, protocol `docs/protocol/plugin.md`): built on XPMP2, draws aircraft sent by XPConnect with CSL models, puts ground traffic on X-Plane's terrain and reports terrain height back. Compiles and its protocol tests pass on Linux; Windows build runs in GitHub Actions. XPConnect side: `PluginLink` (UDP), `xpconnect plugin install|remove|status`, double-click start offers to install it, status page shows it. Not yet fed by BATC's traffic (SimConnect AI handling in progress) and not yet loaded in X-Plane.
 - BATC's `simconnect_ws.exe` connecting to our named pipe on Windows (message-mode pipe, security).
 - BATC's behaviour in flight without MSFS (reconnects, any checks later in a flight). Ground work up to taxi is verified with the stand-in.
 - What triggers the EXTERNAL_SYSTEM_SET/TOGGLE events BATC receives (probably key bindings inside MSFS).

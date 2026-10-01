@@ -106,6 +106,11 @@ public sealed class StatusTests : IDisposable
 
         Assert.Equal("waiting", json.RootElement.GetProperty("overall").GetProperty("level").GetString());
         Assert.True(json.RootElement.GetProperty("xPlane").GetProperty("connected").GetBoolean());
+        Assert.False(json.RootElement.TryGetProperty("plugin", out _));
+
+        board.Plugin = () => new XPConnect.Host.Traffic.PluginStatus("0.1.0", 3, 900, ["D:\\Bluebell"], DateTimeOffset.UtcNow);
+        using var withPlugin = JsonDocument.Parse(board.ToJson());
+        Assert.Equal(900, withPlugin.RootElement.GetProperty("plugin").GetProperty("models").GetInt32());
     }
 
     private static SimConnectSession OpenSession(int id, string name)
