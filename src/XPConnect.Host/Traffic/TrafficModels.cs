@@ -21,6 +21,7 @@ public sealed partial class TrafficModels
     private readonly List<(string[] Words, string Code)> _airlines;
     private readonly List<(string Start, string Type)> _asobo;
     private readonly string _defaultType;
+    private readonly Dictionary<string, double> _groundPitch;
 
     private TrafficModels(File file)
     {
@@ -30,6 +31,7 @@ public sealed partial class TrafficModels
         _airlines = [.. (file.Airlines ?? []).Select(a => (Words(a.Key), a.Value)).OrderByDescending(a => a.Item1.Length)];
         _asobo = [.. (file.Asobo ?? []).Select(a => (a.Key, a.Value)).OrderByDescending(a => a.Key.Length)];
         _defaultType = string.IsNullOrWhiteSpace(file.DefaultType) ? "A320" : file.DefaultType;
+        _groundPitch = new(file.GroundPitch ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
     public static TrafficModels Parse(string yaml)
@@ -44,6 +46,9 @@ public sealed partial class TrafficModels
     public static TrafficModels Load(string path) => Parse(System.IO.File.ReadAllText(path));
 
     public static TrafficModels Empty { get; } = Parse("{}");
+
+    /// <summary>Pitch (degrees, nose up positive) to draw a parked or slow-taxiing aircraft of this type with.</summary>
+    public double GroundPitch(string icaoType) => _groundPitch.GetValueOrDefault(icaoType, _groundPitch.GetValueOrDefault("default"));
 
     public TrafficModel Match(string title)
     {
@@ -124,5 +129,7 @@ public sealed partial class TrafficModels
         public Dictionary<string, string>? Asobo { get; set; }
 
         public string? DefaultType { get; set; }
+
+        public Dictionary<string, double>? GroundPitch { get; set; }
     }
 }

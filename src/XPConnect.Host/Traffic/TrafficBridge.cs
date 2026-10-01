@@ -85,7 +85,7 @@ public sealed class TrafficBridge(
                 drawn.LastAdd = now;
             }
 
-            plugin.Update(drawn.PluginId, State(o, fallback?.ElevationMeters(o.Latitude, o.Longitude) / FeetToMeters));
+            plugin.Update(drawn.PluginId, State(o, fallback?.ElevationMeters(o.Latitude, o.Longitude) / FeetToMeters, models.GroundPitch(drawn.Model.IcaoType)));
         }
     }
 
@@ -116,7 +116,7 @@ public sealed class TrafficBridge(
         PluginGroundFeet(latitude, longitude) is { } feet ? feet * FeetToMeters : fallback?.ElevationMeters(latitude, longitude);
 
     /// <summary>What the plugin draws for one AI object. MSFS's pitch and bank are positive nose down and left wing down.</summary>
-    public static TrafficState State(TrafficObject o, double? groundFeet = null)
+    public static TrafficState State(TrafficObject o, double? groundFeet = null, double groundPitch = 0)
     {
         var lights = TrafficLights.None;
         lights |= Light(o, "LIGHT NAV", "NAV_LIGHTS_SET") ? TrafficLights.Nav : 0;
@@ -130,7 +130,7 @@ public sealed class TrafficBridge(
             o.Longitude,
             o.AltitudeFeet,
             o.HeadingTrue,
-            o.OnGround && o.GroundSpeedKnots < RotateKnots ? 0 : -o.PitchDegrees,
+            o.OnGround && o.GroundSpeedKnots < RotateKnots ? groundPitch : -o.PitchDegrees,
             -o.BankDegrees,
             o.GroundSpeedKnots,
             o.OnGround,
