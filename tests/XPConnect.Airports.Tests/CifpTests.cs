@@ -21,6 +21,8 @@ public sealed class CifpTests
         Line("STAR", "020", "1", "TESTB2", "ECHO", "FOXTR", "YB", "P", "C", "E   ", "TF"),
         Line("STAR", "010", "3", "TESTB2", "RW01L", "FOXTR", "YB", "P", "C", "E   ", "IF"),
         Line("STAR", "020", "3", "TESTB2", "RW01L", "GOLFA", "YB", "P", "C", "E   ", "TF", altDesc: "-", alt1: "05000"),
+        Line("STAR", "010", "5", "TESTC3", "RW19R", "FOXTR", "YB", "P", "C", "E   ", "IF"),
+        Line("STAR", "020", "5", "TESTC3", "RW19R", "GOLFA", "YB", "P", "C", "E   ", "TF"),
         Line("APPCH", "010", "A", "I01L", "HOTEL", "HOTEL", "YB", "P", "C", "E  A", "IF", altDesc: "+", alt1: "05000", speed: "210"),
         Line("APPCH", "020", "A", "I01L", "HOTEL", "INDIA", "YB", "P", "C", "E   ", "TF"),
         Line("APPCH", "030", "I", "I01L", "", "INDIA", "YB", "P", "C", "E  B", "IF", altDesc: "+", alt1: "04000"),
@@ -152,12 +154,23 @@ public sealed class CifpTests
     [Fact]
     public void Arrival_has_enroute_and_runway_transitions()
     {
-        var arrival = Assert.Single(Build().Arrivals);
+        var arrival = Build().Arrivals.Single(a => (string)a["NAME"]! == "TESTB2");
 
         Assert.Equal("ECHO", Assert.Single(arrival.ChildrenOf("ENROUTE_TRANSITION"))["NAME"]);
         var runway = Assert.Single(arrival.ChildrenOf("RUNWAY_TRANSITION"));
         Assert.Equal(1, runway["RUNWAY_NUMBER"]);
         Assert.Equal(3, runway.ChildrenOf("APPROACH_LEG")[1]["APPROACH_ALT_DESC"]);
+    }
+
+    [Fact]
+    public void Common_route_tied_to_a_runway_becomes_a_runway_transition()
+    {
+        var arrival = Build().Arrivals.Single(a => (string)a["NAME"]! == "TESTC3");
+
+        Assert.Empty(arrival.ChildrenOf("APPROACH_LEG"));
+        var transition = Assert.Single(arrival.ChildrenOf("RUNWAY_TRANSITION"));
+        Assert.Equal((19, 2), ((int)transition["RUNWAY_NUMBER"]!, (int)transition["RUNWAY_DESIGNATOR"]!));
+        Assert.Equal(2, transition["N_APPROACH_LEGS"]);
     }
 
     [Fact]

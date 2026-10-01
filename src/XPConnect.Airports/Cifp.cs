@@ -170,7 +170,10 @@ public sealed class Cifp
         var procedure = new FacilityObject(name).Set("NAME", ident);
         foreach (var group in legs.GroupBy(l => (l.RouteType, l.Transition)))
         {
-            if (runway.Contains(group.Key.RouteType))
+            // Some common routes are tied to one runway ("RW19R" on an RNAV common route, ISPON2 at YBBN); MSFS presents
+            // those as runway transitions.
+            var namesRunway = group.Key.Transition.StartsWith("RW", StringComparison.Ordinal) && !enroute.Contains(group.Key.RouteType);
+            if (runway.Contains(group.Key.RouteType) || (namesRunway && group.Key.RouteType != "0"))
             {
                 foreach (var end in RunwayEnds(group.Key.Transition, context.Cifp))
                 {
