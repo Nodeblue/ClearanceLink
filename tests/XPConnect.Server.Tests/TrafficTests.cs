@@ -109,6 +109,24 @@ public sealed class TrafficTests
         }
     }
 
+    [Theory]
+    [InlineData(12.0, true)]   // taxiing A320: BATC writes the CG height, 10-15 ft (live test 2026-10-01)
+    [InlineData(45.0, true)]
+    [InlineData(300.0, false)]
+    public async Task Ground_mode_height_writes_mark_the_aircraft_on_the_ground(double heightFeet, bool onGround)
+    {
+        var traffic = new TrafficRegistry();
+        var session = new SimConnectSession(
+            2, ServerIdentity.Msfs2024, new SimVarResolver(Fixtures.Mappings(), Fixtures.ParkedAtYbbn()), Fixtures.ParkedAtYbbn(),
+            p => Task.CompletedTask, _ => { }, traffic: traffic, ground: new FixedGround(YbbnElevationMeters));
+        await session.HandleAsync(PacketBuilder.Client(0x0C, 6, 1).U32(5).Str("PLANE ALT ABOVE GROUND", 256).Str("feet", 256).U32(4).F32(0).U32(uint.MaxValue).Build());
+        await session.HandleAsync(PacketBuilder.Client(0x29, 6, 2).Str("FSLTL_A320_IAE_JST", 256).Str("VHVFJ", 12).Bytes(new byte[InitPosition.Size]).U32(1).Build());
+        var id = traffic.Objects.Single().ObjectId;
+
+        await session.HandleAsync(PacketBuilder.Client(0x10, 6, 3).U32(5).U32(id).U32(0).U32(1).U32(8).F64(heightFeet).Build());
+
+        Assert.Equal(onGround, traffic.Objects.Single().OnGround);
+    }
     [Fact]
     public void Init_position_reads_the_recorded_struct()
     {
