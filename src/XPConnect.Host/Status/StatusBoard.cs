@@ -34,6 +34,9 @@ public sealed class StatusBoard(
 
     public string? Recording { get; set; }
 
+    /// <summary>True while the real MSFS runs (it holds the default connection).</summary>
+    public Func<bool>? MsfsRunning { get; set; }
+
     public StatusSnapshot Snapshot()
     {
         var now = _time.GetUtcNow();
@@ -57,7 +60,7 @@ public sealed class StatusBoard(
             .ToList();
         var xp = xplane();
         return new StatusSnapshot(
-            Overall(xp, live),
+            Overall(xp, live, MsfsRunning?.Invoke() ?? false),
             Version,
             _started,
             now,
@@ -75,10 +78,15 @@ public sealed class StatusBoard(
         typeof(StatusBoard).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev";
 
     /// <summary>The headline: what works, or the first thing the user has to start.</summary>
-    public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions)
+    public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions, bool msfsRunning = false)
     {
         var names = sessions.Select(s => s.ClientName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var batc = names.Contains(HelperClient) || names.Contains(AppClient);
+        if (msfsRunning && !batc)
+        {
+            return new(StatusLevel.Problem, "Microsoft Flight Simulator is running. Close it so BeyondATC can connect to X-Plane.");
+        }
+
         return (xplane.Connected, batc) switch
         {
             (false, false) => new(StatusLevel.Waiting, "Waiting for X-Plane. Start X-Plane 12 and load a flight."),
@@ -95,7 +103,7 @@ public sealed class StatusBoard(
         HelperClient => "BeyondATC helper: airport data",
         AppClient => "BeyondATC: aircraft and radios",
         "" => "Connecting",
-        _ => clientName,
+        _ => $"Other MSFS add-on ({clientName}), not used",
     };
 }
 
