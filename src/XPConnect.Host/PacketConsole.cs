@@ -27,12 +27,16 @@ public static class PacketConsole
         }
     }
 
+    /// <summary>A status line: printed, and copied to the session log file when one is open.</summary>
     public static void Info(string message)
     {
+        var now = DateTimeOffset.Now;
         lock (Gate)
         {
-            Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} ** {message}");
+            Console.WriteLine($"{now:HH:mm:ss.fff} ** {message}");
         }
+
+        Support.SessionLog.Write($"{now:yyyy-MM-dd HH:mm:ss.fff} ** {message}");
     }
 
     private static string Format(JsonElement value) =>
