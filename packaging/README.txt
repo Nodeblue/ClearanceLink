@@ -63,15 +63,19 @@ If something goes wrong
 - "Flight Simulator is not running!" in BeyondATC: XPConnect is not running. Start it first.
 - BeyondATC says it cannot connect: check XPConnect's window says "listening on tcp:127.0.0.1:5112" and,
   once X-Plane is up, "xplane CONNECTED".
-- XPConnect cannot find BeyondATC: run in a command prompt
-      XPConnect.exe batc on --batc "D:\Path\To\BeyondATC"
-- Each session is logged to %LOCALAPPDATA%\XPConnect\recordings. Please include the newest .jsonl and .md
-  files, and BeyondATC's Player.log (%USERPROFILE%\AppData\LocalLow\Skirmish Mode Games, Inc\BeyondATC), when
-  reporting a problem.
+- XPConnect cannot find BeyondATC or X-Plane: run in a command prompt (it is remembered)
+      XPConnect.exe settings batc-folder "D:\Path\To\BeyondATC"
+      XPConnect.exe settings xplane-folder "D:\Path\To\X-Plane 12"
+- To report a problem, double-click "Create support file.cmd". It makes one zip of XPConnect's recent session
+  logs, the newest recording, BeyondATC's Player.log and the end of X-Plane's Log.txt, with your Windows user
+  name blanked out, and shows it in Explorer. Send that zip with a few words on what went wrong.
+  Logs are kept in %LOCALAPPDATA%\XPConnect for 7 days. To stop writing them: XPConnect.exe settings session-log off
 
 Commands (for a command prompt):
   XPConnect.exe                 set up if needed, then run (same as double-clicking)
   XPConnect.exe batc status     show whether BeyondATC points at XPConnect or MSFS
   XPConnect.exe batc on | off   switch BeyondATC to X-Plane / MSFS
+  XPConnect.exe settings        show or change the folders and log settings XPConnect uses
+  XPConnect.exe support         make the support zip
   XPConnect.exe xplane-check    check XPConnect can read everything it needs from a running X-Plane
   XPConnect.exe --help          all commands
