@@ -257,10 +257,12 @@ public sealed class PanelWindow : Window
             grid.Children.Add(_lskRight[i]);
         }
 
-        var divider = new Border { BorderBrush = Brush("#1A2228"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(16, 2, 16, 0) };
+        // The divider sits at the top of the scratchpad row and the text below it, whatever the screen's scaling.
+        var divider = new Border { BorderBrush = Brush("#1A2228"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(16, 0) };
         Place(grid, divider, 13);
+        divider.VerticalAlignment = VerticalAlignment.Top;
         Place(grid, _scratch, 13);
-        _scratch.Margin = new Thickness(16, 4, 16, 0);
+        _scratch.Margin = new Thickness(16, 6, 16, 0);
 
         var keys = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 14) };
         foreach (var page in Enum.GetValues<PanelPage>())
