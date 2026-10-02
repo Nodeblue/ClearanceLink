@@ -6,7 +6,13 @@ namespace XPConnect.Host;
 /// <summary>Prints one readable line per recorded packet.</summary>
 public static class PacketConsole
 {
+    public const int RecentLines = 1000;
+
     private static readonly Lock Gate = new();
+    private static readonly Queue<string> Recent = new();
+
+    /// <summary>Raised for every status line (the panel's live log listens).</summary>
+    public static event Action<string>? Line;
 
     public static bool Verbose { get; set; } = true;
 
@@ -31,12 +37,28 @@ public static class PacketConsole
     public static void Info(string message)
     {
         var now = DateTimeOffset.Now;
+        var line = $"{now:HH:mm:ss.fff} ** {message}";
         lock (Gate)
         {
-            Console.WriteLine($"{now:HH:mm:ss.fff} ** {message}");
+            Console.WriteLine(line);
+            Recent.Enqueue(line);
+            if (Recent.Count > RecentLines)
+            {
+                Recent.Dequeue();
+            }
         }
 
         Support.SessionLog.Write($"{now:yyyy-MM-dd HH:mm:ss.fff} ** {message}");
+        Line?.Invoke(line);
+    }
+
+    /// <summary>The last <see cref="RecentLines"/> status lines, oldest first.</summary>
+    public static IReadOnlyList<string> RecentStatusLines()
+    {
+        lock (Gate)
+        {
+            return [.. Recent];
+        }
     }
 
     private static string Format(JsonElement value) =>

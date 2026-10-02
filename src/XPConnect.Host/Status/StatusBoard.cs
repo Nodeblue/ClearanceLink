@@ -59,8 +59,9 @@ public sealed class StatusBoard(
             .Select(a => new AirportStatus(a.Icao, a.Source, a.Packets, Math.Round(a.Milliseconds), a.At))
             .ToList();
         var xp = xplane();
+        var msfs = MsfsRunning?.Invoke() ?? false;
         return new StatusSnapshot(
-            Overall(xp, live, MsfsRunning?.Invoke() ?? false),
+            Overall(xp, live, msfs),
             Version,
             _started,
             now,
@@ -69,7 +70,8 @@ public sealed class StatusBoard(
             clients,
             airports,
             Stub,
-            Recording);
+            Recording,
+            msfs);
     }
 
     public string ToJson() => JsonSerializer.Serialize(Snapshot(), Json);
@@ -132,4 +134,5 @@ public sealed record StatusSnapshot(
     IReadOnlyList<ClientStatus> Clients,
     IReadOnlyList<AirportStatus> Airports,
     string? Stub,
-    string? Recording);
+    string? Recording,
+    bool MsfsRunning = false);

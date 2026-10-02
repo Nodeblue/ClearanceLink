@@ -11,13 +11,26 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe: double-clicking opens only the window; commands attach to the prompt's console (Panel/ConsoleAttach). -->
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>XPConnect</AssemblyName>
     <RootNamespace>XPConnect.Host</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Panel\Fonts\*.ttf" />
+    <None Include="Panel\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="B612-OFL.txt" />
+  </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Status\status.html" LogicalName="XPConnect.Host.Status.status.html" />
