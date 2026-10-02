@@ -7,7 +7,7 @@ Set-Location (Join-Path $PSScriptRoot '..')
 $out = 'publish/XPConnect'
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 
-$common = @('-c', 'Release', '-r', 'win-x64', '--self-contained', '-p:PublishSingleFile=true', '-p:EnableCompressionInSingleFile=true', '-p:DebugType=none', '-o', $out)
+$common = @('-c', 'Release', '-r', 'win-x64', '--self-contained', '-p:PublishSingleFile=true', '-p:EnableCompressionInSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=none', '-o', $out)
 dotnet publish src/XPConnect.Host @common
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # The stub does nothing, so trim it hard; it only has to exist as FlightSimulator2024.exe.
@@ -19,7 +19,7 @@ Copy-Item mapping "$out/mapping" -Recurse
 Copy-Item packaging/* $out -Recurse
 Copy-Item LICENSE "$out/LICENSE.txt"
 
-$version = (& "$out/XPConnect.exe" --version).Split(' ')[-1]
+$version = (Get-Item "$out/XPConnect.exe").VersionInfo.ProductVersion.Split('+')[0]
 $zip = "publish/XPConnect-$version-win-x64.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path "$out/*" -DestinationPath $zip
