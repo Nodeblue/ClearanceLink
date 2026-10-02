@@ -36,7 +36,7 @@ public sealed class XPlaneSimServer(
 
     public async Task RunAsync(CancellationToken ct)
     {
-        PacketConsole.Info($"XPConnect ({identity.ApplicationName}) listening on {listener.Endpoint}, answering from X-Plane");
+        PacketConsole.Info($"XPConnect ({identity.ApplicationName}) listening on {listener.Description}, answering from X-Plane");
         while (!ct.IsCancellationRequested)
         {
             var client = await listener.AcceptAsync(ct).ConfigureAwait(false);

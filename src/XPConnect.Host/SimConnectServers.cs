@@ -14,7 +14,7 @@ public sealed class RecordingProxy(IListener listener, Endpoint upstream, JsonlR
 
     public async Task RunAsync(CancellationToken ct)
     {
-        PacketConsole.Info($"Recording proxy listening on {listener.Endpoint}, forwarding to {upstream}");
+        PacketConsole.Info($"Recording proxy listening on {listener.Description}, forwarding to {upstream}");
         while (!ct.IsCancellationRequested)
         {
             var client = await listener.AcceptAsync(ct).ConfigureAwait(false);
@@ -77,7 +77,7 @@ public sealed class FakeSimServer(IListener listener, ServerIdentity identity, J
 
     public async Task RunAsync(CancellationToken ct)
     {
-        PacketConsole.Info($"Fake simulator ({identity.ApplicationName}) listening on {listener.Endpoint}");
+        PacketConsole.Info($"Fake simulator ({identity.ApplicationName}) listening on {listener.Description}");
         while (!ct.IsCancellationRequested)
         {
             var client = await listener.AcceptAsync(ct).ConfigureAwait(false);

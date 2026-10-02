@@ -6,6 +6,7 @@ _Update this file in every PR that changes behaviour._
 
 ## Works
 - Everyday use (0.3.0): `scripts/publish.ps1` builds a self-contained Windows zip (`XPConnect.exe`, the `FlightSimulator2024.exe` stub, `mapping/`, `README.txt`, two .cmd switches). Double-clicking `XPConnect.exe` offers to point BATC at it and then serves; `xpconnect batc on|off|status` adds or removes the two `SimConnect.cfg` redirects (BATC folder from its uninstall entry or `C:\BeyondATC`; an existing cfg is backed up and restored). Outside a source checkout, recordings go to `%LOCALAPPDATA%\XPConnect\recordings`. Package smoke-tested on Ben's PC 2026-10-01.
+- Automatic connection (ADR-0004): with `connection automatic` (the default), `serve` without `--listen` answers on MSFS's default pipe while the real MSFS is closed, plus `tcp:5112` for cfg-file set-ups. If MSFS starts, XPConnect closes its pipe clients and stops the stand-in, and resumes when MSFS closes. The status page says to close MSFS while it runs, and lists other MSFS add-ons as not used. `connection always-on` writes the cfg files and listens on TCP only. Pipe tested with BATC on Ben's PC on 2026-10-02 (both connections, gate, COM1); the MSFS step-aside is untested.
 - Settings and support (not yet tried on Ben's PC): `xpconnect settings` saves the BeyondATC and X-Plane folders (used whenever `--batc` / `--xplane-root` are not given; a saved folder that no longer holds BATC or X-Plane falls back to automatic), session log on/off and days to keep, in `%LOCALAPPDATA%\XPConnect\settings.json`. `record`, `fake` and `serve` copy status lines (not packets) to `%LOCALAPPDATA%\XPConnect\logs\<time>-<mode>.log` and delete logs, LocalAppData recordings and support zips older than 7 days. `xpconnect support` (and "Create support file.cmd") zips the newest 5 logs, the newest recording (up to 300 MB), settings, BATC's Player.log and SimConnect.cfg files and the last 5 MB of X-Plane's Log.txt, with the profile path and Windows user name blanked out.
 - Status page: `serve` shows http://localhost:5577/ (X-Plane connection, both BATC connections, airports sent and where from, a one-line "what to start next"); double-click start opens it in the browser. `--status-port`, `--no-status`. Not yet seen on Ben's PC.
 - SimConnect packet framing, function and message names, and decoding of the common ATC-client calls (`src/XPConnect.Protocol`).
@@ -25,7 +26,7 @@ _Update this file in every PR that changes behaviour._
 ## Not yet verified
 - `serve` in flight (only ground work to taxi is verified). Wind (`verify: true`) not compared with the cockpit; design speeds and wingspan are fixed values.
 - AI traffic stays off: `serve` does not answer EnumerateSimObjectsAndLiveries, and in the stand-in test BATC created no AI aircraft without it.
-- BATC's `simconnect_ws.exe` connecting to our named pipe on Windows (message-mode pipe, security).
+- MSFS starting while XPConnect is running (step-aside), and whether other add-ons connected over the pipe (SayIntentions, NG Academy readers) misbehave when they get no answers.
 - BATC's behaviour in flight without MSFS (reconnects, any checks later in a flight). Ground work up to taxi is verified with the stand-in.
 - What triggers the EXTERNAL_SYSTEM_SET/TOGGLE events BATC receives (probably key bindings inside MSFS).
 

@@ -14,6 +14,7 @@ public sealed class AppSettings
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.KebabCaseLower) },
     };
 
     /// <summary>BeyondATC's folder when the user chose it; null to find it automatically.</summary>
@@ -21,6 +22,9 @@ public sealed class AppSettings
 
     /// <summary>X-Plane's folder when the user chose it; null to find it automatically.</summary>
     public string? XPlaneFolder { get; set; }
+
+    /// <summary>How BeyondATC reaches XPConnect: the default MSFS connection (nothing changed in BeyondATC) or its config files.</summary>
+    public ConnectionMode Connection { get; set; } = ConnectionMode.Automatic;
 
     /// <summary>Write each session's log to a file (on by default) so it can go in a support file.</summary>
     public bool SessionLog { get; set; } = true;
@@ -55,4 +59,13 @@ public sealed class AppSettings
         File.WriteAllText(temp, JsonSerializer.Serialize(this, Json));
         File.Move(temp, file, overwrite: true);
     }
+}
+
+public enum ConnectionMode
+{
+    /// <summary>XPConnect answers on MSFS's default connection while MSFS is closed; BeyondATC's folder is untouched.</summary>
+    Automatic,
+
+    /// <summary>BeyondATC's SimConnect.cfg files point at XPConnect, so it reaches X-Plane even while MSFS is open.</summary>
+    AlwaysOn,
 }

@@ -9,6 +9,9 @@ public interface IListener : IAsyncDisposable
 {
     Endpoint Endpoint { get; }
 
+    /// <summary>Where clients can connect, for logs and the status page.</summary>
+    string Description => Endpoint.ToString();
+
     Task<Stream> AcceptAsync(CancellationToken ct);
 }
 
