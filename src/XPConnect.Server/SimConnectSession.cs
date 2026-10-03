@@ -17,7 +17,10 @@ public sealed class SimConnectSession(
     Func<Packet, Task> send,
     Action<string> log,
     IFacilitySource? facilities = null,
-    TimeProvider? time = null)
+    TimeProvider? time = null,
+    TrafficRegistry? traffic = null,
+    IGroundElevation? ground = null,
+    IReadOnlyList<(string Title, string Livery)>? liveries = null)
 {
     /// <summary>Object id MSFS 2024 reports for the user aircraft in SimObjectData (recorded 2026-09-30).</summary>
     public const uint UserObjectId = 524288;
@@ -153,15 +156,33 @@ public sealed class SimConnectSession(
                 await RequestFacilityAsync(S(f, "icao"), U(f, "defineId"), U(f, "requestId"), sendId).ConfigureAwait(false);
                 break;
 
-            // Not answered, as in the stand-in test of 2026-09-30 where BATC ran fine without them: BATC waits for the
-            // livery list before creating AI traffic, so leaving it unanswered keeps traffic off (AI needs the plugin).
+            // Without a traffic registry these stay unanswered, as in the stand-in test of 2026-09-30 where BATC ran
+            // fine without them: BATC waits for the livery list before creating AI traffic, so traffic stays off.
+            case 0x5B when liveries is not null: // EnumerateSimObjectsAndLiveries
+                await SendLiveriesAsync(U(f, "requestId")).ConfigureAwait(false);
+                break;
+            case 0x27 or 0x28 or 0x29 or 0x2A or 0x57 or 0x58 or 0x59 or 0x5A when traffic is not null: // AI object creation
+                await CreateObjectAsync(packet, f).ConfigureAwait(false);
+                break;
             case 0x5B: // EnumerateSimObjectsAndLiveries
             case 0x27 or 0x28 or 0x29 or 0x2A or 0x57 or 0x58 or 0x59 or 0x5A: // AI object creation
                 LogOnce($"ai:{packet.Name}", $"#{connectionId} {packet.Name} not answered: AI traffic is not supported yet");
                 break;
 
-            case 0x10: // SetDataOnSimObject (AI traffic positions, L-vars): accepted, not applied yet
-                LogOnce($"setdata:{f["defineId"]}", $"#{connectionId} SetDataOnSimObject define {f["defineId"]} ignored");
+            case 0x2C when traffic is not null: // AIRemoveObject
+                traffic.Remove(U(f, "objectId"));
+                break;
+
+            case 0x10: // SetDataOnSimObject: AI traffic state is kept; user-aircraft writes (GSX L-vars) are not applied
+                if (traffic?.Find(U(f, "objectId")) is { } target)
+                {
+                    ApplySetData(target, packet);
+                }
+                else
+                {
+                    LogOnce($"setdata:{f["defineId"]}", $"#{connectionId} SetDataOnSimObject define {f["defineId"]} ignored");
+                }
+
                 break;
 
             // Accepted without a reply: notification groups, input mapping, system-event subscriptions,
@@ -213,7 +234,14 @@ public sealed class SimConnectSession(
 
         if (request.ObjectId is not (0 or UserObjectId))
         {
-            LogOnce($"object:{request.ObjectId}", $"#{connectionId} data requested for object {request.ObjectId}; only the user aircraft exists, not answered");
+            if (traffic?.Find(request.ObjectId) is { } ai)
+            {
+                // BATC polls its AI aircraft with ONCE requests (defines 18, 19, 20) to keep them on the ground.
+                await SendTrafficDataAsync(request, ai).ConfigureAwait(false);
+                return;
+            }
+
+            LogOnce($"object:{request.ObjectId}", $"#{connectionId} data requested for object {request.ObjectId}, which does not exist; not answered");
             return;
         }
 
@@ -307,9 +335,24 @@ public sealed class SimConnectSession(
 
     private async Task ApplyEventAsync(uint objectId, uint eventId, uint data)
     {
-        // BATC also sends events (lights, throttle, gear) to its AI aircraft; only the user aircraft maps to X-Plane.
+        // BATC also sends events (lights, throttle, gear) to its AI aircraft: kept with the object for the traffic
+        // plugin; only the user aircraft's events map to X-Plane.
         if (objectId is not (0 or UserObjectId))
         {
+            if (traffic?.Find(objectId) is { } ai)
+            {
+                string? aiEvent;
+                lock (_gate)
+                {
+                    aiEvent = _clientEvents.GetValueOrDefault(eventId);
+                }
+
+                if (aiEvent is not null)
+                {
+                    ai.SetEvent(aiEvent, data);
+                }
+            }
+
             return;
         }
 
@@ -351,6 +394,214 @@ public sealed class SimConnectSession(
         {
             log($"#{connectionId} {name} failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// EnumerateSimObjectsAndLiveries answer: SIMCONNECT_RECV_ENUMERATE_SIMOBJECT_AND_LIVERY_LIST, a list template
+    /// (requestId, arraySize, entryNumber, outOf) then 512-byte entries (title[256], livery[256]). MSFS sent 79 entries
+    /// per packet, 70 packets for 5,497 entries (recording 20260930-174605).
+    /// </summary>
+    private async Task SendLiveriesAsync(uint requestId)
+    {
+        const int PerPacket = 79;
+        var list = liveries!;
+        var packets = Math.Max(1, (list.Count + PerPacket - 1) / PerPacket);
+        log($"#{connectionId} EnumerateSimObjectsAndLiveries: sending {list.Count} models in {packets} packets");
+        for (var p = 0; p < packets; p++)
+        {
+            var chunk = list.Skip(p * PerPacket).Take(PerPacket).ToList();
+            var builder = PacketBuilder.Server(RecvId.EnumerateSimObjectAndLiveryList, _protocol)
+                .U32(requestId).U32((uint)chunk.Count).U32((uint)p).U32((uint)packets);
+            foreach (var (title, livery) in chunk)
+            {
+                builder.Str(title, PacketDecoder.NameLength).Str(livery, PacketDecoder.NameLength);
+            }
+
+            await send(builder.Build()).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Any AICreate* call: register the object and answer AssignedObjectId, as MSFS does within ~15 ms.</summary>
+    private async Task CreateObjectAsync(Packet packet, Dictionary<string, object?> f)
+    {
+        var kind = packet.FunctionId is 0x2A or 0x5A ? TrafficKind.SimulatedObject : TrafficKind.Aircraft;
+        var position = f.GetValueOrDefault("initPositionHex") is string hex && hex.Length >= InitPosition.Size * 2
+            ? InitPosition.Read(Convert.FromHexString(hex))
+            : null;
+        var created = traffic!.Create(connectionId, kind, S(f, "containerTitle"), S(f, "livery"), S(f, "tailNumber"), position);
+        if (position is { } start && GroundFeet(created) is { } groundAtStart && start.AltitudeFeet - groundAtStart < 50)
+        {
+            created.Set("SIM ON GROUND", 1, _time.GetUtcNow()); // parked: BATC does not always set the init position's on-ground flag
+        }
+
+        Stats.Count("AI objects created", _time.GetUtcNow());
+        await send(PacketBuilder.Server(RecvId.AssignedObjectId, _protocol).U32(U(f, "requestId")).U32(created.ObjectId).Build()).ConfigureAwait(false);
+    }
+
+    /// <summary>Unpacks a SetDataOnSimObject block for an AI object using the client's definition.</summary>
+    private void ApplySetData(TrafficObject target, Packet packet)
+    {
+        var r = new PayloadReader(packet.Payload);
+        var defineId = r.U32();
+        r.U32(); // objectId
+        var flags = r.U32();
+        r.U32(); // arrayCount
+        r.U32(); // unitSize
+        List<Datum>? datums;
+        lock (_gate)
+        {
+            datums = _definitions.GetValueOrDefault(defineId)?.ToList();
+        }
+
+        if (datums is null || (flags & 1) != 0)
+        {
+            LogOnce($"ai-setdata:{defineId}:{flags}", $"#{connectionId} SetDataOnSimObject define {defineId} (flags {flags}) for AI not understood; ignored");
+            return;
+        }
+
+        var now = _time.GetUtcNow();
+        foreach (var datum in datums)
+        {
+            if (DataEncoder.SizeOf(datum.Type) is not { } size)
+            {
+                return; // STRINGV: cannot know the length
+            }
+
+            var bytes = r.Bytes(size);
+            if (bytes.Length < size)
+            {
+                return;
+            }
+
+            switch (datum.Type)
+            {
+                case SimConnectDataType.InitPosition when InitPosition.Read(bytes) is { } p:
+                    target.Set("PLANE LATITUDE", p.Latitude, now);
+                    target.Set("PLANE LONGITUDE", p.Longitude, now);
+                    target.Set("PLANE ALTITUDE", p.AltitudeFeet, now);
+                    target.Set("PLANE PITCH DEGREES", p.Pitch, now);
+                    target.Set("PLANE BANK DEGREES", p.Bank, now);
+                    target.Set("PLANE HEADING DEGREES TRUE", p.Heading, now);
+                    target.Set("SIM ON GROUND", p.OnGround ? 1 : 0, now);
+                    break;
+                case SimConnectDataType.Int32:
+                    SetAi(target, datum, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes), now);
+                    break;
+                case SimConnectDataType.Int64:
+                    SetAi(target, datum, System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(bytes), now);
+                    break;
+                case SimConnectDataType.Float32:
+                    SetAi(target, datum, System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(bytes), now);
+                    break;
+                case SimConnectDataType.Float64:
+                    SetAi(target, datum, System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(bytes), now);
+                    break;
+            }
+        }
+
+    }
+
+    private void SetAi(TrafficObject target, Datum datum, double value, DateTimeOffset now)
+    {
+        var canonical = TrafficObject.CanonicalUnits(datum.Name);
+        if (canonical.Length > 0 && Units.IsKnown(datum.Units) && Units.IsKnown(canonical))
+        {
+            value = Units.Convert(value, datum.Units, canonical);
+        }
+
+        target.Set(datum.Name, value, now);
+
+        // MSFS answered GROUND VELOCITY for BATC's frozen AI with about the airspeed BATC wrote (254 kt for 249 kt at
+        // FL224, recording 20260930-174605), not the speed its position writes imply, so mirror that.
+        if (datum.Name.Equals("AIRSPEED INDICATED", StringComparison.OrdinalIgnoreCase))
+        {
+            target.Set("GROUND VELOCITY", value, now);
+        }
+
+        // On the ground BATC writes height above ground instead of altitude (define 5, define 14); in the air it writes
+        // altitude (define 4). SIM ON GROUND follows from whichever it wrote.
+        if (datum.Name.Equals("PLANE ALT ABOVE GROUND", StringComparison.OrdinalIgnoreCase))
+        {
+            target.Set("SIM ON GROUND", value < 50 ? 1 : 0, now); // BATC writes the CG height: 10-15 ft for a taxiing A320 (live test 2026-10-01)
+            if (GroundFeet(target) is { } groundFeet)
+            {
+                target.Set("PLANE ALTITUDE", groundFeet + value, now);
+            }
+        }
+        else if (datum.Name.Equals("PLANE ALTITUDE", StringComparison.OrdinalIgnoreCase) && GroundFeet(target) is { } groundBelow)
+        {
+            target.Set("SIM ON GROUND", value - groundBelow < 50 ? 1 : 0, now); // parked aircraft sit 10-20 ft up (gear)
+        }
+    }
+
+    private double? GroundFeet(TrafficObject target)
+    {
+        if (target.Latitude == 0 && target.Longitude == 0)
+        {
+            return null;
+        }
+
+        if (ground?.ElevationMeters(target.Latitude, target.Longitude) is { } meters)
+        {
+            return meters / 0.3048;
+        }
+
+        // Fall back to the ground under the user's aircraft (same airport, most of the time).
+        var (value, status) = resolver.Resolve("GROUND ALTITUDE", "feet");
+        return status == ResolveStatus.Ok ? value.Number : null;
+    }
+
+    private async Task SendTrafficDataAsync(DataRequest request, TrafficObject ai)
+    {
+        List<Datum>? datums;
+        lock (_gate)
+        {
+            datums = _definitions.GetValueOrDefault(request.DefineId)?.ToList();
+        }
+
+        if (datums is null)
+        {
+            LogOnce($"nodef:{request.DefineId}", $"#{connectionId} request {request.RequestId} for unknown define {request.DefineId}");
+            return;
+        }
+
+        var groundFeet = GroundFeet(ai) ?? 0;
+        using var data = new MemoryStream();
+        foreach (var datum in datums)
+        {
+            var name = datum.Name.ToUpperInvariant();
+            var feet = name switch
+            {
+                "GROUND ALTITUDE" => groundFeet,
+                "PLANE ALT ABOVE GROUND" or "PLANE ALT ABOVE GROUND MINUS CG" => Math.Max(0, ai.AltitudeFeet - groundFeet),
+                _ => (double?)null,
+            };
+            var value = feet ?? ai.Get(datum.Name);
+            var canonical = feet is not null ? "feet" : TrafficObject.CanonicalUnits(datum.Name);
+            if (canonical.Length > 0 && Units.IsKnown(datum.Units) && Units.IsKnown(canonical))
+            {
+                value = Units.Convert(value, canonical, datum.Units);
+            }
+
+            if (request.Flags.HasFlag(DataRequestFlags.Tagged))
+            {
+                data.Write(BitConverter.GetBytes(datum.DatumId));
+            }
+
+            DataEncoder.Write(data, datum.Type, DataEncoder.IsText(datum.Type) ? SimValue.Of(name == "TITLE" ? ai.Title : ai.TailNumber) : SimValue.Of(value));
+        }
+
+        Stats.DataSent();
+        await send(PacketBuilder.Server(RecvId.SimObjectData, _protocol)
+            .U32(request.RequestId)
+            .U32(ai.ObjectId)
+            .U32(request.DefineId)
+            .U32((uint)request.Flags)
+            .U32(1)
+            .U32(1)
+            .U32((uint)datums.Count)
+            .Bytes(data.ToArray())
+            .Build()).ConfigureAwait(false);
     }
 
     private async Task RequestFacilityAsync(string icao, uint defineId, uint requestId, uint sendId)
