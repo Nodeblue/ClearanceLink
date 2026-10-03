@@ -322,6 +322,11 @@ void DrawsBatcPlacingAnAircraftAtOnce() {
         now += 2.0f;
         track.Update(gate, now);
     }
+    // Two taxi updates read in the same frame after a stutter: moved on at the taxi speed, not 2 m per 0.02 s.
+    xpc::Track stutter;
+    stutter.Update(At(0, 0, 0, 0, 15), 10.0f);
+    stutter.Update(At(0.000018, 0, 0, 0, 15), 10.0f);  // 2 m
+    CHECK(stutter.Drawn(12.0f).lat < 0.000018 * 11.5);  // at most 1 s ahead at 2 m per 0.1 s
     // Taxiing at 15 kt, updates every 0.1 s: blended, not jumped.
     xpc::Track taxi;
     taxi.Update(At(0, 0, 0, 0, 15), 10.0f);

@@ -76,12 +76,14 @@ void Track::Update(const Pos& pos, float now) {
         latPerSecond_ = lonPerSecond_ = 0;
     } else {
         from_ = Drawn(now);  // blend on from where it is drawn now, so a late or early update never jumps
-        fromTime_ = now - std::max(MinInterval, since);
+        // Two updates read in one frame (after an X-Plane stutter) are still about XPConnect's 0.1 s apart.
+        const float interval = std::max(since, MinSpeedInterval);
+        fromTime_ = now - interval;
         // Not at gsKt: BATC's speed for a stopped aircraft is not always 0, which slid parked aircraft forward and
         // back again with each update (VH-XZA at YBBN, 2026-10-03).
-        const bool moving = since > 0 && since <= MaxMovingInterval && meters > MinMoveMeters;
-        latPerSecond_ = moving ? (pos.lat - to_.lat) / since : 0;
-        lonPerSecond_ = moving ? (pos.lon - to_.lon) / since : 0;
+        const bool moving = since <= MaxMovingInterval && meters > MinMoveMeters;
+        latPerSecond_ = moving ? (pos.lat - to_.lat) / interval : 0;
+        lonPerSecond_ = moving ? (pos.lon - to_.lon) / interval : 0;
     }
     to_ = pos;
     toTime_ = now;
