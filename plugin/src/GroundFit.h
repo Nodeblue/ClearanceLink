@@ -28,12 +28,26 @@ struct Wheels {
     float GroundHeightM(float pitchDeg) const;
 };
 
-// Finds the wheels among a model's vertices. Empty when the model does not look like a tricycle-gear aircraft or
-// would need more than a few degrees of pitch (tail-draggers, helicopters, odd models): those are drawn as before.
-std::optional<Wheels> FindWheels(const std::vector<Vertex>& vertices, std::string* why = nullptr);
+// A model's drawn points with its gear down: `all` of them, and `gear`, those its gear animation moves.
+struct PosedModel {
+    std::vector<Vertex> all;
+    std::vector<Vertex> gear;
+};
 
-// Adds the VT vertices of an OBJ8 file.
-void ReadObjVertices(std::istream& obj, std::vector<Vertex>& vertices);
+// Finds the wheels among a model's points. With gear points, the nose wheel is the lowest gear point in the front
+// third and the main wheels the lowest gear point behind it; without, the lowest points of the front quarter near the
+// centre line and of the middle half. Empty when the model does not look like a tricycle-gear aircraft or would need
+// more than a few degrees of pitch (tail-draggers, helicopters, odd models): those are drawn as before.
+std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why = nullptr);
+
+// Adds the points of an OBJ8 file's triangles as drawn with the gear down: every ANIM_ transform applied with gear
+// and gear door datarefs at 1 and all others (tyre deflection, steering, flaps...) at 0, and parts that ANIM_hide /
+// ANIM_show then hide left out. Bluebell and most CSL models keep their gear retracted in the file and lower it by
+// animation (B738 and E190 at YBBN, 2026-10-03), so the raw VT points are not where the wheels are drawn.
+void ReadPosedObj(std::istream& obj, PosedModel& model);
+
+// Value a posed model uses for a dataref.
+float PoseValue(const std::string& dataref);
 
 // CSL package names (EXPORT_NAME) to their folders, searching each folder like XPMP2 does.
 std::map<std::string, std::string> FindCslPackages(const std::vector<std::string>& folders);

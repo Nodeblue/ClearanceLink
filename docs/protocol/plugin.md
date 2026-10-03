@@ -33,7 +33,11 @@ nose wheel and the lowest point of the middle half as the main wheels (OBJ8: nos
 both touched. Live at YBBN (2026-10-03) that did not work with Bluebell: a 737-800 read its nose wheel 0.36 m above its
 mains and was drawn 2.9° nose down with the main wheels in the air, and most models (E190, A319, A320, A333, A388,
 SF34, B733) needed more than 3° and were left level. The wheels are posed by animation, which the reader does not
-apply. Since 0.3.2 the result is only logged, one line per model:
+apply. Since 0.3.3 the reader poses the model with its gear down first (`ReadPosedObj`: every `ANIM_` transform applied
+with gear and gear-door datarefs at 1 and others at 0, `ANIM_hide`/`ANIM_show` respected, only points of drawn
+triangles) and takes the wheels from the points the `gear_ratio` animations move. `xpconnect-groundfit <CSL folder>...`
+(in the plugin build's `tools` folder) prints that fit for every model of a CSL library as CSV, to check it before the
+plugin uses it. Since 0.3.2 the result is only logged, one line per model:
 `XPConnect: ground fit <csl id>: nose wheel 0.36 m above mains, pitch -2.93 deg, wheels 2.10 m below the model origin
 (CSL offset 2.30 m)` or `XPConnect: ground fit <csl id>: none (<reason>), drawn level`. Models are drawn at XPMP2's
 vertical offset, with XPConnect's per-type `ground_pitch` and `ground_offset_ft`.

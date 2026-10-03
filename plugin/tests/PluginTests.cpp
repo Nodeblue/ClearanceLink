@@ -121,7 +121,7 @@ std::vector<xpc::Vertex> Airliner(float noseWheelY) {
 }
 
 void FitsNoseAndMainWheels() {
-    auto wheels = xpc::FindWheels(Airliner(-1.9f));
+    auto wheels = xpc::FindWheels(xpc::PosedModel{Airliner(-1.9f), {}});
     CHECK(wheels.has_value());
     CHECK(wheels->noseZ == -14 && wheels->mainZ == 1);
     const float pitch = wheels->LevelPitchDeg();
@@ -140,18 +140,91 @@ void FitsNoseAndMainWheels() {
 
 void LeavesOddModelsLevel() {
     std::string why;
-    CHECK(!xpc::FindWheels(Airliner(-1.0f), &why) && why.find("3 degrees") != std::string::npos);
-    CHECK(!xpc::FindWheels({{0, 0, 0}}, &why) && why == "too few vertices");
+    CHECK(!xpc::FindWheels(xpc::PosedModel{Airliner(-1.0f), {}}, &why) && why.find("3 degrees") != std::string::npos);
+    CHECK(!xpc::FindWheels(xpc::PosedModel{{{0, 0, 0}}, {}}, &why) && why == "too few vertices");
 }
 
-void ReadsObjVertices() {
+// A cut-down Bluebell B738 (gear lines as in B738_QFA.obj, read on Ben's PC 2026-10-03): a fuselage, then the nose
+// gear stored retracted and swung down 110 degrees about -x by gear_ratio, a door that only moves with the door ratio,
+// a main leg rotated 3 to -81 degrees about z with its tyre in a nested tyre-rotation block, and a part shown only on
+// touch-down.
+const char* const PosedB738 =
+    "I\n800\nOBJ\n\nTEXTURE B738.dds\nPOINT_COUNTS 8 0 0 8\n"
+    "VT 0 1 -18 0 1 0 0 0\n"         // 0 nose of the fuselage
+    "VT 0 1 18 0 1 0 0 0\n"          // 1 tail
+    "VT 0 -0.716 -16.173 0 1 0 0 0\n" // 2 nose wheel axle, retracted (0.47 m above and 1.19 m ahead of the hinge)
+    "VT 0.4 -1.2 -15.76 0 1 0 0 0\n"  // 3 nose gear door
+    "VT -0.70 -1.08 0.13 0 1 0 0 0\n" // 4 main wheel, retracted
+    "VT 0 -9 0 0 1 0 0 0\n"          // 5 touch-down smoke, hidden
+    "VT 0 0 0 0 1 0 0 0\n"
+    "VT 0 0 0 0 1 0 0 0\n"
+    "IDX10 0 1 2 3 4 5 6 7 6 7\n"
+    "TRIS 0 2\n"
+    "ANIM_begin\n"
+    "ANIM_trans 0.001322 -1.186396 -14.984040 0.001322 -1.186396 -14.984040 0 0 none\n"
+    "ANIM_rotate -1 0 0 0 110 0 1 libxplanemp/controls/gear_ratio\n"
+    "ANIM_trans -0.001322 1.186396 14.984040 -0.001322 1.186396 14.984040 0 0 none\n"
+    "ANIM_begin\n"
+    "ANIM_trans 0 0 0 0 -0.086201 0.236050 0 1 libxplanemp/gear/nose_gear_deflection_mtr\n"
+    "TRIS 2 1\n"
+    "ANIM_end\n"
+    "ANIM_end\n"
+    "ANIM_begin\n"
+    "ANIM_trans 0.438059 -1.217359 -15.759441 0.438059 -1.217359 -15.759441 0 0 none\n"
+    "ANIM_rotate_begin 0.013180 -0.113369 0.993466 cjs/world_traffic/gear_door_ratio2\n"
+    "ANIM_rotate_key 0 0\nANIM_rotate_key 0.2 73\nANIM_rotate_key 1 73\nANIM_rotate_end\n"
+    "ANIM_trans -0.438059 1.217359 15.759441 -0.438059 1.217359 15.759441 0 0 none\n"
+    "TRIS 3 1\n"
+    "ANIM_end\n"
+    "ANIM_begin\n"
+    "ANIM_trans -2.791830 -0.614505 0.069210 -2.791830 -0.614505 0.069210 0 0 none\n"
+    "ANIM_rotate 0 0 1 3 -81 0 1 libxplanemp/controls/gear_ratio\n"
+    "ANIM_trans 2.791830 0.614505 -0.069210 2.791830 0.614505 -0.069210 0 0 none\n"
+    "ANIM_begin\n"
+    "ANIM_trans -0.698894 -1.076541 0.134115 -0.698894 -1.076541 0.134115 0 0 none\n"
+    "ANIM_rotate -0.156543 -0.987671 0 0 1 0 1 libxplanemp/gear/tire_rotation_angle_deg\n"
+    "ANIM_trans 0.698894 1.076541 -0.134115 0.698894 1.076541 -0.134115 0 0 none\n"
+    "TRIS 4 1\n"
+    "ANIM_end\n"
+    "ANIM_end\n"
+    "ANIM_begin\n"
+    "ANIM_hide 0 0.5 libxplanemp/misc/touch_down\n"
+    "ANIM_show 0.5 1 libxplanemp/misc/touch_down\n"
+    "TRIS 5 1\n"
+    "ANIM_end\n";
+
+void PosesGearDown() {
+    std::istringstream obj(PosedB738);
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.all.size() == 5);   // the touch-down part is hidden
+    CHECK(model.gear.size() == 2);  // nose and main wheel, not the door
+    // Nose wheel: 0.47 up and 1.19 ahead of the hinge, swung down 110 degrees: 1.28 m below and 0.04 m ahead of it.
+    const auto& nose = model.gear[0];
+    CHECK(std::fabs(nose.y - (-1.186f - 1.279f)) < 0.01f);
+    CHECK(std::fabs(nose.z - (-14.984f - 0.035f)) < 0.01f);
+    // Main wheel: 2.09 m inboard of its hinge, swung down to 81 degrees: about 2.14 m below it.
+    const auto& main = model.gear[1];
+    CHECK(std::fabs(main.y - (-0.6145f - 2.137f)) < 0.01f);
+    CHECK(main.x > -2.95f && main.x < -2.9f);
+    // The door turned 73 degrees about its own hinge, so it is no longer where the file has it.
+    CHECK(std::fabs(model.all[3].x - 0.4f) > 0.01f || std::fabs(model.all[3].y + 1.2f) > 0.01f);
+
+    std::string why;
+    auto wheels = xpc::FindWheels(model, &why);
+    CHECK(wheels.has_value());
+    CHECK(wheels && std::fabs(wheels->noseY - nose.y) < 1e-6f && std::fabs(wheels->mainY - main.y) < 1e-6f);
+}
+
+void ReadsOnlyTrianglePoints() {
     std::istringstream obj("I\r\n800\r\nOBJ\r\nTEXTURE a.png\r\nVT 1.5 -2.25 3 0 1 0 0.5 0.5\r\nVLINE 9 -9 9 1 1 1\r\n"
-                           "VT\t0 1 -4 0 1 0 0 0\r\nIDX10 0 1 2 3 4 5 6 7 8 9\r\nVTX 1 2 3\r\n");
-    std::vector<xpc::Vertex> v;
-    xpc::ReadObjVertices(obj, v);
-    CHECK(v.size() == 2);
-    CHECK(v[0].x == 1.5f && v[0].y == -2.25f && v[0].z == 3);
-    CHECK(v[1].z == -4);
+                           "VT\t0 1 -4 0 1 0 0 0\r\nVT 0 -50 0 0 1 0 0 0\r\nIDX 1\r\nIDX 0\r\nTRIS 0 2\r\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.all.size() == 2);  // the unused VT at -50 is not drawn
+    CHECK(model.all[0].z == -4);
+    CHECK(model.all[1].x == 1.5f && model.all[1].y == -2.25f && model.all[1].z == 3);
+    CHECK(model.gear.empty());
 }
 
 void FindsModelObjFiles() {
@@ -239,7 +312,8 @@ int main() {
     FindsCslFolders();
     FitsNoseAndMainWheels();
     LeavesOddModelsLevel();
-    ReadsObjVertices();
+    PosesGearDown();
+    ReadsOnlyTrianglePoints();
     FindsModelObjFiles();
     BlendsBetweenUpdates();
     MovesOnWhenUpdatesStop();
