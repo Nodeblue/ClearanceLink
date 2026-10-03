@@ -22,6 +22,8 @@ constexpr float GearNoseShare = 0.35f;
 constexpr float MaxFitPitchDeg = 3.0f;
 // A rotation keyed to tyre deflection that turns less than this over its range is a link or strut part, not the bogie.
 constexpr double MinBogieRangeDeg = 5.0;
+// A bogie tilts at least this far unloaded (747 34 deg, 777 17, 787 24, A380 28); fighters' gear legs only lean a little.
+constexpr double MinBogieTiltDeg = 2.0;
 
 // A 3x4 affine transform (rotation and translation), applied as OBJ8 animations are: each ANIM_ command multiplies
 // onto the current transform, so the last command is applied to a point first.
@@ -387,8 +389,8 @@ std::optional<BogieLevelResult> FindBogieLevel(const Obj& obj, const BogieRotati
     constexpr double LevelDeg = 0.01;
     const auto unloaded = tiltAt(rotation.lo);
     if (!unloaded) return std::nullopt;
-    // Already level unloaded: a part that is not a tilting bogie (or one modelled level), so not this rotation.
-    if (std::fabs(*unloaded) < LevelDeg) return std::nullopt;
+    // Level or nearly so unloaded: a part that is not a tilting bogie (or one modelled level), so not this rotation.
+    if (std::fabs(*unloaded) < MinBogieTiltDeg) return std::nullopt;
     constexpr int Samples = 20;
     double prevValue = rotation.lo, prevTilt = *unloaded;
     for (int i = 1; i <= Samples; ++i) {
