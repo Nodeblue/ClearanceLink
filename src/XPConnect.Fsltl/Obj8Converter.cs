@@ -56,6 +56,11 @@ public static class Obj8Converter
 
         var untextured = used[0].Materials.Count(m => m.BaseColor is null);
         if (untextured > 0) warnings.Add($"{untextured} material(s) without a texture left out");
+        // Translucent parts (propeller blur discs, glass) last: X-Plane draws a model's objects in order and a blended
+        // surface still writes depth, so one drawn before the body hides the body behind it (Dash 8 discs, 2026-10-04).
+        bool Blended(Obj8Part p) => used.SelectMany(m => m.Materials)
+            .Any(m => m.AlphaMode == "BLEND" && m.BaseColor == p.BaseColor && m.Emissive == p.Emissive);
+        parts = [.. parts.OrderBy(p => Blended(p) ? 1 : 0)];
         return new Obj8Result(parts, warnings.Distinct().ToList(), size);
     }
 
