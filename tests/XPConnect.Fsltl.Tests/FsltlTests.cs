@@ -44,6 +44,17 @@ public sealed class FsltlTests
     }
 
     [Fact]
+    public void Winding_is_read_from_the_vertex_normals()
+    {
+        float[] positions = [0, 0, 0, 1, 0, 0, 0, 1, 0];
+        var facingUs = new GltfPrimitive(positions, [0, 0, 1, 0, 0, 1, 0, 0, 1], new float[6], [0, 1, 2], 0);
+        var facingAway = facingUs with { Normals = [0, 0, -1, 0, 0, -1, 0, 0, -1] };
+
+        Assert.True(Obj8Converter.IsCounterClockwise(facingUs));   // glTF standard: reversed for X-Plane
+        Assert.False(Obj8Converter.IsCounterClockwise(facingAway)); // Asobo's clockwise export: kept as is
+    }
+
+    [Fact]
     public void Gltf_decodes_asobo_half_float_uvs_and_byte_normals()
     {
         using var package = new FakePackage();
@@ -67,9 +78,9 @@ public sealed class FsltlTests
 
         // Node at (1, 2, 3); a half turn about Y maps (x, y, z) to (-x, y, -z).
         var vertices = Lines(part.Text, "VT").Select(l => l.Split(' ').Skip(1).Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray()).ToList();
-        Assert.Equal([-1f, 2f, -3f, 0f, 0f, -1f, 0f, 0f], vertices[0]);
-        Assert.Equal([-2f, 2f, -3f, 0f, 0f, -1f, 1f, 0f], vertices[1]);
-        Assert.Equal(["IDX 0", "IDX 2", "IDX 1"], Lines(part.Text, "IDX"));
+        Assert.Equal([-1f, 2f, -3f, 0f, 0f, -1f, 0f, 1f], vertices[0]); // t = 1 - v
+        Assert.Equal([-2f, 2f, -3f, 0f, 0f, -1f, 1f, 1f], vertices[1]);
+        Assert.Equal(["IDX 0", "IDX 2", "IDX 1"], Lines(part.Text, "IDX")); // counter-clockwise against its normals: reversed
         Assert.Contains("TEXTURE {TEXTURE}", part.Text);
         Assert.Contains("ATTR_no_blend 0.5", part.Text); // MASK material
         Assert.DoesNotContain("ANIM_", part.Text);

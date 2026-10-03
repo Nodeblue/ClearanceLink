@@ -18,7 +18,8 @@ public sealed record Obj8Result(List<Obj8Part> Parts, List<string> Warnings, flo
 ///
 /// Coordinates: MSFS models are Y up with the nose towards +Z (X to the left); X-Plane objects are Y up with the
 /// nose towards -Z (X to the right): a half turn about Y. Animated parts keep the glTF node hierarchy as nested
-/// ANIM blocks; still parts are baked into their vertices. Triangles are written clockwise, as X-Plane expects.
+/// ANIM blocks; still parts are baked into their vertices. Triangles are written clockwise, as X-Plane expects
+/// (whichever way the glTF wound them).
 /// </summary>
 public static class Obj8Converter
 {
@@ -30,7 +31,8 @@ public static class Obj8Converter
         var warnings = new List<string>();
         var used = lods.Count > 1 && lods[^1].Path != lods[0].Path ? new[] { lods[0], lods[^1] } : new[] { lods[0] };
         var size = Size(used[0]);
-        var switchDistance = MathF.Max(400, 25 * size);
+        // FSLTL's low LOD is ~1.5k triangles: only once the aircraft is a few pixels (about 2 km for an A320).
+        var switchDistance = MathF.Max(1500, 60 * size);
         var ranges = used.Length == 1 ? new[] { (0f, 30000f) } : new[] { (0f, switchDistance), (switchDistance, 30000f) };
 
         var groups = used.SelectMany(m => m.Materials).Where(m => m.BaseColor is not null)
@@ -42,6 +44,7 @@ public static class Obj8Converter
             for (var l = 0; l < used.Length; l++)
             {
                 var scene = new SceneWalker(used[l], roles, baseColor, emissive, builder, warnings);
+                if (!used[l].Roots.Any(scene.HasGeometry)) continue;  // e.g. windows that the low LOD paints on
                 builder.Command($"ATTR_LOD {Num(ranges[l].Item1)} {Num(ranges[l].Item2)}");
                 builder.ResetState();
                 foreach (var root in used[l].Roots) scene.Emit(root, ToXPlane);
@@ -91,6 +94,8 @@ public static class Obj8Converter
 
     /// <summary>Drops animation keys that lie on the straight line between their neighbours.</summary>
     internal static List<(float Value, float[] Data)> SimplifyKeys(List<(float Value, float[] Data)> keys) => SceneWalker.Simplify(keys);
+
+    internal static bool IsCounterClockwise(GltfPrimitive p) => ObjBuilder.IsCounterClockwise(p);
 
     internal static string Num(float v)
     {
@@ -267,12 +272,22 @@ public static class Obj8Converter
             axis = Vector3.Normalize(axis);
             var offAxis = false;
             var angles = new List<(float Value, float[] Data)>();
+            float? previous = null;
             foreach (var (value, key) in Keys(d))
             {
                 var q = deltas[key];
                 var v = new Vector3(q.X, q.Y, q.Z);
                 if (Vector3.Cross(v, axis).Length() > 0.02f) offAxis = true;
-                angles.Add((value, [2 * MathF.Atan2(Vector3.Dot(v, axis), q.W) * 180 / MathF.PI]));
+                var angle = 2 * MathF.Atan2(Vector3.Dot(v, axis), q.W) * 180 / MathF.PI;
+                // Exporters store the shortest arc, so a wheel jumps from +171° to -171°; keep turning the same way.
+                if (previous is { } p)
+                {
+                    while (angle - p > 180) angle -= 360;
+                    while (angle - p < -180) angle += 360;
+                }
+
+                previous = angle;
+                angles.Add((value, [angle]));
             }
 
             _out.Command($"ANIM_rotate_begin {Vec(axis)} {dataref}");
@@ -348,7 +363,7 @@ public static class Obj8Converter
             && _model.Materials[p.Material] is { BaseColor: { } baseColor } m
             && baseColor == _baseColor && m.Emissive == _emissive;
 
-        private bool HasGeometry(int index)
+        public bool HasGeometry(int index)
         {
             if (_hasGeometry.TryGetValue(index, out var known)) return known;
             var node = _model.Nodes[index];
@@ -408,6 +423,26 @@ public static class Obj8Converter
             }
         }
 
+        /// <summary>
+        /// True when the primitive's triangles face where their vertices run counter-clockwise: the counter-clockwise
+        /// face normals agree with the stored vertex normals over the primitive as a whole.
+        /// </summary>
+        internal static bool IsCounterClockwise(GltfPrimitive p)
+        {
+            double agreement = 0;
+            for (var i = 0; i + 2 < p.Indices.Length; i += 3) agreement += Agreement(p, i);
+            return agreement > 0;
+        }
+
+        /// <summary>Positive when triangle <paramref name="first"/>'s counter-clockwise normal agrees with its vertex normals.</summary>
+        private static double Agreement(GltfPrimitive p, int first)
+        {
+            Vector3 At(float[] a, int i) => new(a[i * 3], a[i * 3 + 1], a[i * 3 + 2]);
+            int a = p.Indices[first], b = p.Indices[first + 1], c = p.Indices[first + 2];
+            var face = Vector3.Cross(At(p.Positions, b) - At(p.Positions, a), At(p.Positions, c) - At(p.Positions, a));
+            return Vector3.Dot(face, At(p.Normals, a) + At(p.Normals, b) + At(p.Normals, c));
+        }
+
         public void AddTriangles(GltfPrimitive p, Matrix4x4 transform)
         {
             var baseVertex = VertexCount;
@@ -416,20 +451,27 @@ public static class Obj8Converter
                 var pos = Vector3.Transform(new Vector3(p.Positions[i * 3], p.Positions[i * 3 + 1], p.Positions[i * 3 + 2]), transform);
                 var normal = Vector3.TransformNormal(new Vector3(p.Normals[i * 3], p.Normals[i * 3 + 1], p.Normals[i * 3 + 2]), transform);
                 normal = normal.LengthSquared() > 1e-12f ? Vector3.Normalize(normal) : Vector3.UnitY;
-                // X-Plane reads DDS rows bottom-up and MSFS writes them top-down, so glTF's v is X-Plane's t as is.
+                // glTF's v runs down from the image top; X-Plane's t runs up from the bottom (it flips DDS on load).
                 _vertices.Append("VT ").Append(Num(pos.X)).Append(' ').Append(Num(pos.Y)).Append(' ').Append(Num(pos.Z)).Append(' ')
                     .Append(Num(normal.X)).Append(' ').Append(Num(normal.Y)).Append(' ').Append(Num(normal.Z)).Append(' ')
-                    .Append(Num(p.Uvs[i * 2])).Append(' ').Append(Num(p.Uvs[i * 2 + 1])).Append('\n');
+                    .Append(Num(p.Uvs[i * 2])).Append(' ').Append(Num(1 - p.Uvs[i * 2 + 1])).Append('\n');
                 VertexCount++;
             }
 
+            // X-Plane fronts are clockwise. Asobo's exporter already writes clockwise (DirectX style), against the glTF
+            // standard; other exporters may not, and some models mix both (FSLTL's E170/E190 windows). So each triangle
+            // faces where its own vertex normals point, and the primitive's majority decides when they are unclear.
+            // A mirroring node transform (negative scale) turns the winding over as well.
+            var mirrored = transform.GetDeterminant() < 0;
+            var majority = IsCounterClockwise(p);
             var start = _indices.Count;
             for (var i = 0; i + 2 < p.Indices.Length; i += 3)
             {
-                // glTF fronts are counter-clockwise; X-Plane's are clockwise.
+                var agreement = Agreement(p, i);
+                var reverse = (Math.Abs(agreement) > 1e-9 ? agreement > 0 : majority) ^ mirrored;
                 _indices.Add(baseVertex + p.Indices[i]);
-                _indices.Add(baseVertex + p.Indices[i + 2]);
-                _indices.Add(baseVertex + p.Indices[i + 1]);
+                _indices.Add(baseVertex + p.Indices[reverse ? i + 2 : i + 1]);
+                _indices.Add(baseVertex + p.Indices[reverse ? i + 1 : i + 2]);
             }
 
             var count = _indices.Count - start;
