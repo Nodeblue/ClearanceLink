@@ -26,19 +26,17 @@ newer than the other.
 On the ground the plugin also pitches each aircraft to the slope of the terrain under it (probed 8 m ahead and
 behind, at most 4°), added to the `pitch` XPConnect sends (plugin 0.2.0+).
 
-Plugin 0.3.0+ also fits each CSL model to the ground from its own 3D files, so no per-type tuning is needed. The
-first time a model is drawn, it reads the model's `.obj` files (found from its `OBJ8` lines in `xsb_aircraft.txt`,
-`plugin/src/GroundFit.cpp`), in the background, and takes the lowest point of the front quarter near the centre line
-as the nose wheel and the lowest point of the middle half as the main wheels (OBJ8: nose towards -z). On the ground it
-adds the pitch that puts both on level ground, and sets the model's height from its wheels so the lower one touches
-(this also keeps the main wheels down while BATC rotates for take-off). Since plugin 0.3.2 that height replaces XPMP2's
-vertical offset, which comes from the package's `VERT_OFFSET` when it has one and left Bluebell main wheels 10 to 50 cm
-up at YBBN. Models needing more
-than 3° are left level. The X-Plane log gets one line per model:
-`XPConnect: ground fit <csl id>: nose wheel 0.05 m above mains, pitch -0.19 deg, wheels 2.10 m below the model origin
-(CSL offset 2.30 m)` or
-`XPConnect: ground fit <csl id>: none (<reason>), drawn level`. XPConnect's `ground_pitch` and `ground_offset_ft`
-then only adjust types that still sit wrong.
+Plugin 0.3.0 and 0.3.1 also tried to fit each CSL model to the ground from its own 3D files: the first time a model
+is drawn, it reads the model's `.obj` files (found from its `OBJ8` lines in `xsb_aircraft.txt`,
+`plugin/src/GroundFit.cpp`) in the background, takes the lowest point of the front quarter near the centre line as the
+nose wheel and the lowest point of the middle half as the main wheels (OBJ8: nose towards -z), and pitched the model so
+both touched. Live at YBBN (2026-10-03) that did not work with Bluebell: a 737-800 read its nose wheel 0.36 m above its
+mains and was drawn 2.9° nose down with the main wheels in the air, and most models (E190, A319, A320, A333, A388,
+SF34, B733) needed more than 3° and were left level. The wheels are posed by animation, which the reader does not
+apply. Since 0.3.2 the result is only logged, one line per model:
+`XPConnect: ground fit <csl id>: nose wheel 0.36 m above mains, pitch -2.93 deg, wheels 2.10 m below the model origin
+(CSL offset 2.30 m)` or `XPConnect: ground fit <csl id>: none (<reason>), drawn level`. Models are drawn at XPMP2's
+vertical offset, with XPConnect's per-type `ground_pitch` and `ground_offset_ft`.
 
 BATC writes each moving AI aircraft about 55 times a second (one every 16.7 ms in the 2026-09-30 MSFS recording).
 XPConnect sends the latest state 10 times a second, and a parked aircraft whose state has not changed only every 2 s.

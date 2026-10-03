@@ -193,15 +193,13 @@ void TrafficAircraft::UpdatePosition(float, int) {
     SetRoll(p.bank);
 
     if (ProbeGround(p.onGround, now) && p.onGround) {
-        // Pitch the model so its nose and main wheels both touch, and put its wheels on the ground, from where they
-        // are in its .obj files; without that, level at XPMP2's vertical offset. XPConnect's per-type pitch and
-        // height adjust on top of that.
-        const Wheels* wheels = ModelWheels();
-        const float pitch = p.pitch + (wheels ? wheels->LevelPitchDeg() : 0.0f);
-        const float height = wheels ? wheels->GroundHeightM(pitch) : GetVertOfs();
-        drawInfo.y = probeY_ + height + float(groundOffsetFt_ / FeetPerMeter);
+        // The wheel positions read from the model's .obj files are only logged: with Bluebell they put the nose wheel
+        // 0.36 m above the mains of a 737-800 (its gear is posed by animation), and most models could not be read at
+        // all (YBBN, 2026-10-03). Height is XPMP2's vertical offset; XPConnect's per-type pitch and height adjust it.
+        ModelWheels();
+        drawInfo.y = probeY_ + GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
-        SetPitch(pitch + slope_.value_or(0.0f));
+        SetPitch(p.pitch + slope_.value_or(0.0f));
     }
     SetOnGrnd(p.onGround);
 
