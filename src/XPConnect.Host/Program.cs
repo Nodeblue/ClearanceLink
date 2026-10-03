@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using XPConnect.Airports;
+using XPConnect.Fsltl;
 using XPConnect.Host;
 using XPConnect.Host.Status;
 using XPConnect.Host.Support;
@@ -53,6 +54,11 @@ namespace XPConnect.Host
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
               xpconnect plugin install|remove|status [--xplane-root <dir>]
                   Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
+              xpconnect fsltl import|status [--fsltl <fsltl-traffic-base folder>] [--xplane-root <dir>] [--size 1024|2048|4096]
+                    [--only <text>] [--force] [--out <dir>]
+                  Convert your own FSLTL install (MSFS Community folder) into an X-Plane CSL package for the traffic
+                  plugin, in <X-Plane>/Custom Data/CSL/XPConnect-FSLTL. Only reads FSLTL. --size caps textures (default
+                  2048); --only imports liveries whose title or folder contains the text. Restart X-Plane afterwards.
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
@@ -120,6 +126,7 @@ namespace XPConnect.Host
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
                     "plugin" => Plugin(options),
+                    "fsltl" => Fsltl(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -614,6 +621,51 @@ namespace XPConnect.Host
             Console.WriteLine();
         }
 
+        private static int Fsltl(Options options)
+        {
+            var action = options.Positional.FirstOrDefault() ?? "status";
+            if (XPlaneInstall.Find(options.Get("xplane-root")) is not { } xplane)
+            {
+                return Fail("X-Plane folder not found; pass --xplane-root <dir>");
+            }
+
+            var output = options.Get("out") ?? Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL");
+            var package = FsltlLocator.Find(options.Get("fsltl"));
+            switch (action)
+            {
+                case "status":
+                    Console.WriteLine(package is null ? "FSLTL: not found (pass --fsltl <folder>)" : $"FSLTL: {package}");
+                    var catalogue = FsltlImporter.LoadCatalogue(output);
+                    Console.WriteLine(catalogue.Count == 0 ? $"Imported: none ({output})" : $"Imported: {catalogue.Count} liveries in {output}");
+                    return 0;
+                case "import":
+                    if (package is null)
+                    {
+                        return Fail(options.Get("fsltl") is { } given
+                            ? $"No FSLTL package (SimObjects/Airplanes) in {given}"
+                            : "FSLTL not found in the MSFS Community folder; pass --fsltl <fsltl-traffic-base folder>");
+                    }
+
+                    var only = options.Get("only");
+                    var result = FsltlImporter.Import(new ImportOptions
+                    {
+                        PackageRoot = package,
+                        Output = output,
+                        MaxTextureSize = int.Parse(options.Get("size") ?? "2048", System.Globalization.CultureInfo.InvariantCulture),
+                        Force = options.Has("force"),
+                        Filter = only is null ? null : l => l.Title.Contains(only, StringComparison.OrdinalIgnoreCase)
+                            || Path.GetFileName(l.Folder).Contains(only, StringComparison.OrdinalIgnoreCase),
+                        Log = Console.WriteLine,
+                    });
+                    foreach (var problem in result.Problems) Console.WriteLine($"FSLTL problem: {problem}");
+                    Console.WriteLine($"FSLTL: imported {result.Liveries} liveries ({result.Models} models, {result.Textures} textures, {result.Skipped} skipped) into {output}");
+                    Console.WriteLine("Restart X-Plane (or reload plugins) so the traffic plugin loads them.");
+                    return result.Liveries > 0 ? 0 : 1;
+                default:
+                    return Fail($"Unknown fsltl action '{action}' (import, status)");
+            }
+        }
+
         private static int Plugin(Options options)
         {
             var action = options.Positional.FirstOrDefault() ?? "status";
@@ -721,7 +773,15 @@ namespace XPConnect.Host
                 return TrafficModels.Empty;
             }
 
-            return TrafficModels.Load(path);
+            var models = TrafficModels.Load(path);
+            if (XPlaneInstall.Find(options.Get("xplane-root")) is { } xplane)
+            {
+                var imported = Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL");
+                models.UseImported(FsltlImporter.LoadCatalogue(imported).Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline)));
+                if (models.ImportedCount > 0) PacketConsole.Info($"Traffic: {models.ImportedCount} imported FSLTL liveries from {imported}");
+            }
+
+            return models;
         }
 
         private static MappingSet LoadMappings(Options options)
