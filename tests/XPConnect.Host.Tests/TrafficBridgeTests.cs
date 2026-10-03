@@ -60,6 +60,8 @@ public sealed class TrafficBridgeTests
         registry.Remove(qantas.ObjectId);
         bridge.Sync();
         Assert.Equal([id], plugin.Removes);
+        for (var i = 0; i < TrafficBridge.RemoveRepeats + 2; i++) bridge.Sync();
+        Assert.Equal(Enumerable.Repeat(id, TrafficBridge.RemoveRepeats), plugin.Removes); // in case UDP drops a `del`
     }
 
     [Fact]

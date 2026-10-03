@@ -55,6 +55,10 @@ bool UdpSocket::Open(uint16_t port, std::string& error) {
         return false;
     }
     socket_ = s;
+    // Room for a few seconds of XPConnect's updates (64 aircraft is about 75 KB a second): the socket is only read
+    // once a frame, and X-Plane stalls for a second or more loading scenery. The default is 64 KB on Windows.
+    int receiveBuffer = 4 * 1024 * 1024;
+    ::setsockopt(s, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&receiveBuffer), sizeof(receiveBuffer));
     sockaddr_in address = Loopback(port);
     if (::bind(s, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
         error = "bind 127.0.0.1:" + std::to_string(port) + ": " + LastError();

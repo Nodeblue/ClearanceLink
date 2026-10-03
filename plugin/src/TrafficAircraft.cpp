@@ -34,25 +34,33 @@ struct FitResult {
     std::optional<Wheels> wheels;
     std::string bogieDataref;
     float bogieLevel = 0;
+    float bogieTiltDeg = 0;
     std::string why;
 };
 
 // XPMP2's index for World Traffic's main gear deflection in each aircraft's dataref values, 0 when not added.
 size_t g_worldTrafficDeflection = 0;
 
-CslPackages g_packages;
+std::shared_ptr<const CslPackages> g_packages = std::make_shared<CslPackages>();
 
-FitResult ReadWheels(const std::vector<std::string>& files) {
-    if (files.empty()) return {std::nullopt, {}, 0.0f, "no .obj file found"};
-    PosedModel model;
-    for (const auto& file : files) {
-        std::ifstream obj(std::filesystem::u8path(file));
-        ReadPosedObj(obj, model);
-    }
+// Runs in the background: finds the model's .obj files from its xsb_aircraft.txt and reads its wheels.
+FitResult ReadWheels(std::string xsbFolder, int line, std::shared_ptr<const CslPackages> packages) {
     FitResult result;
-    result.wheels = FindWheels(model, &result.why);
-    result.bogieDataref = model.bogieDataref;
-    result.bogieLevel = model.bogieLevel;
+    try {
+        const auto files = ModelObjFiles(xsbFolder, line, *packages);
+        if (files.empty()) {
+            result.why = "no .obj file found";
+            return result;
+        }
+        const PosedModel model = PoseObjFiles(files);
+        result.wheels = FindWheels(model, &result.why);
+        result.bogieDataref = model.bogieDataref;
+        result.bogieLevel = model.bogieLevel;
+        result.bogieTiltDeg = model.bogieTiltDeg;
+    } catch (const std::exception& e) {
+        result = FitResult{};
+        result.why = std::string("cannot read the model: ") + e.what();
+    }
     return result;
 }
 
@@ -72,7 +80,9 @@ namespace {
 std::map<std::string, std::shared_ptr<ModelFit>> g_fits;
 }
 
-void TrafficAircraft::SetCslPackages(CslPackages packages) { g_packages = std::move(packages); }
+void TrafficAircraft::SetCslPackages(CslPackages packages) {
+    g_packages = std::make_shared<const CslPackages>(std::move(packages));
+}
 
 void TrafficAircraft::ForgetModelFits() { g_fits.clear(); }
 
@@ -100,7 +110,7 @@ const Wheels* TrafficAircraft::ModelWheels() {
         if (!fit) {
             fit = std::make_shared<ModelFit>();
             fit->name = info.cslId;
-            fit->reading = std::async(std::launch::async, ReadWheels, ModelObjFiles(info.xsbAircraftPath, info.xsbAircraftLn, g_packages));
+            fit->reading = std::async(std::launch::async, ReadWheels, info.xsbAircraftPath, info.xsbAircraftLn, g_packages);
         }
         fit_ = fit;
     }
@@ -110,12 +120,17 @@ const Wheels* TrafficAircraft::ModelWheels() {
         fit_->bogieDataref = result.bogieDataref;
         fit_->bogieLevel = result.bogieLevel;
         fit_->done = true;
-        char text[256];
+        char text[512];
         if (result.wheels) {
             const auto& w = *result.wheels;
+            char bogies[200] = "";
+            if (!result.bogieDataref.empty()) {
+                std::snprintf(bogies, sizeof(bogies), ", bogies tilted %.1f deg levelled at %s %.3f", result.bogieTiltDeg,
+                              result.bogieDataref.c_str(), result.bogieLevel);
+            }
             std::snprintf(text, sizeof(text),
-                          "XPConnect: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, wheels %.2f m below the model origin (CSL offset %.2f m)\n",
-                          fit_->name.c_str(), w.noseY - w.mainY, w.LevelPitchDeg(), w.GroundHeightM(w.LevelPitchDeg()), GetVertOfs());
+                          "XPConnect: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, wheels %.2f m below the model origin (CSL offset %.2f m)%s\n",
+                          fit_->name.c_str(), w.noseY - w.mainY, w.LevelPitchDeg(), w.GroundHeightM(w.LevelPitchDeg()), GetVertOfs(), bogies);
         } else {
             std::snprintf(text, sizeof(text), "XPConnect: ground fit %s: none (%s), drawn level\n", fit_->name.c_str(), result.why.c_str());
         }

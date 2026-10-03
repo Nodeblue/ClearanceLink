@@ -86,6 +86,9 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
 
     public void Start()
     {
+        // A plugin still drawing a previous XPConnect's aircraft (restarted within the plugin's 10 s hello timeout)
+        // would keep them, and the ids start again at 1.
+        Send("clear");
         _receive = Task.Run(ReceiveAsync);
         _hello = Task.Run(HelloAsync);
     }
