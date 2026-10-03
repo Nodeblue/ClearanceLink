@@ -56,11 +56,6 @@ public static class Obj8Converter
 
         var untextured = used[0].Materials.Count(m => m.BaseColor is null);
         if (untextured > 0) warnings.Add($"{untextured} material(s) without a texture left out");
-        // Translucent parts (propeller blur discs, glass) last: X-Plane draws a model's objects in order and a blended
-        // surface still writes depth, so one drawn before the body hides the body behind it (Dash 8 discs, 2026-10-04).
-        bool Blended(Obj8Part p) => used.SelectMany(m => m.Materials)
-            .Any(m => m.AlphaMode == "BLEND" && m.BaseColor == p.BaseColor && m.Emissive == p.Emissive);
-        parts = [.. parts.OrderBy(p => Blended(p) ? 1 : 0)];
         return new Obj8Result(parts, warnings.Distinct().ToList(), size);
     }
 
@@ -231,7 +226,7 @@ public static class Obj8Converter
             if (engine == AnimationRoles.EnginePart.Blur) _out.Command($"ANIM_hide -1 {Num(AnimationRoles.EngineTurningRpm)} {AnimationRoles.EngineRpm}");
             if (engine == AnimationRoles.EnginePart.Still) _out.Command($"ANIM_hide {Num(AnimationRoles.EngineTurningRpm)} 1000000 {AnimationRoles.EngineRpm}");
             var inner = Matrix4x4.CreateScale((hide.Count > 0 ? Vector3.One : s) * parentScale);
-            Geometry(node, inner);
+            Geometry(node, inner, alphaTest: engine == AnimationRoles.EnginePart.Blur);
             foreach (var c in node.Children) Emit(c, inner);
             _out.Command("ANIM_end");
         }
@@ -412,14 +407,14 @@ public static class Obj8Converter
             _out.Command($"ANIM_rotate {Vec(axis)} {Num(angle)} {Num(angle)} 0 0 none");
         }
 
-        private void Geometry(GltfNode node, Matrix4x4 transform)
+        private void Geometry(GltfNode node, Matrix4x4 transform, bool alphaTest = false)
         {
             if (node.Mesh < 0) return;
             foreach (var p in _model.Meshes[node.Mesh])
             {
                 if (!Uses(p)) continue;
                 var material = p.Material >= 0 && p.Material < _model.Materials.Count ? _model.Materials[p.Material] : null;
-                _out.State(material);
+                _out.State(material, alphaTest);
                 _out.AddTriangles(p, transform);
             }
         }
@@ -467,10 +462,16 @@ public static class Obj8Converter
             _cull = null;
         }
 
-        public void State(GltfMaterial? material)
+        /// <param name="alphaTest">
+        /// Draw a blended material cut out at half alpha instead. An X-Plane CSL model is several objects drawn in no
+        /// fixed order, and a blended surface still writes depth: a propeller blur disc drawn before the body cut a
+        /// see-through hole in it (Dash 8, 2026-10-04). Cut-out pixels write no depth.
+        /// </param>
+        public void State(GltfMaterial? material, bool alphaTest = false)
         {
             var blend = material?.AlphaMode switch
             {
+                "BLEND" when alphaTest => "ATTR_no_blend 0.5",
                 "BLEND" => "ATTR_blend",
                 "MASK" => $"ATTR_no_blend {Num(material.AlphaCutoff)}",
                 _ => "ATTR_no_blend 0",
