@@ -21,7 +21,7 @@ Read before any substantial change: `docs/STATUS.md` (where we are), `docs/archi
 |---|---|
 | `src/XPConnect.Protocol` | SimConnect wire format: framing, names, decoders, builders. Pure, no I/O besides streams. |
 | `src/XPConnect.Recorder` | JSONL recording of every packet + `CallInventory` summary. |
-| `src/XPConnect.Host` | CLI entry point (`XPConnect.exe`): `record`, `fake`, `summarize`. Transports (named pipe, TCP). |
+| `src/XPConnect.Host` | `XPConnect.exe`: the FMS-style window (`Panel/`, Avalonia; pages from `CduPages.Build`) and the CLI (`serve`, `record`, `fake`, `settings`, `support`...). Transports (named pipe, TCP). |
 | `tests/*` | xUnit tests, one project per src project. |
 | `mapping/` | MSFS SimVar/event to X-Plane mapping tables (data, not code). |
 | `recordings/samples/` | Sanitised recordings used as test fixtures. `recordings/local/` is gitignored scratch. |
