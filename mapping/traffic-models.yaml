@@ -131,14 +131,25 @@ asobo:
   SR22: SR22
   TBM930: TBM9
 
-# Adjustments for parked and slow-taxiing aircraft, by ICAO type, on top of the plugin's own fit. Plugin 0.3.0 and later
-# read each CSL model's .obj files, find its nose and main wheels, and pitch and raise it so both touch the ground
-# (docs/protocol/plugin.md), so these are only for models that still sit wrong. Older plugins draw models level.
-# Pitch: degrees, nose up positive.
+# Pitch (degrees, nose up positive) for parked and slow-taxiing aircraft, by ICAO type. Some CSL models sit with the
+# nose wheel off the ground when drawn level; a little nose-down puts it back. Tune per type from screenshots.
+# Live tests at YBBN (Bluebell): 2026-10-01 E-Jets at -1.5 with -1 ft sank a little, 737s at -0.75 had a small
+# nose-wheel gap. Reading the wheels from the models' .obj files did not work (plugin 0.3.x, 2026-10-03; see
+# docs/protocol/plugin.md), so these stay hand-tuned.
 ground_pitch:
   default: 0
+  E170: -1.0
+  E175: -1.0
+  E190: -1.0
+  E195: -1.0
+  B736: -1.0
+  B737: -1.0
+  B738: -1.0
+  B739: -1.0
+  B38M: -1.0
+  B39M: -1.0
 
-# Feet to raise (+) or lower (-), by ICAO type (plugin 0.2.0 or later).
+# Feet to raise (+) or lower (-), by ICAO type (plugin 0.2.0 or later). 2026-10-03: a level Bluebell CRJ sat right at 0.
 ground_offset_ft:
   default: 0
 
