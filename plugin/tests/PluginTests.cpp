@@ -231,6 +231,16 @@ void ReadsOnlyTrianglePoints() {
     CHECK(model.gear.empty());
 }
 
+void ReadsOnlyTheNearestLod() {
+    // Vertices come before the commands, so a far LOD's points are in the file but drawn only after its ATTR_LOD.
+    std::istringstream obj("I\n800\nOBJ\nTEXTURE a.dds\nPOINT_COUNTS 2 0 0 2\nVT 0 -2 0 0 1 0 0 0\nVT 0 -3 0 0 1 0 0 0\n"
+                           "IDX 0\nIDX 1\nATTR_LOD 0 2000\nTRIS 0 1\nATTR_LOD 2000 30000\nTRIS 1 1\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.all.size() == 1);
+    CHECK(!model.all.empty() && model.all[0].y == -2);
+}
+
 void FindsModelObjFiles() {
     namespace fs = std::filesystem;
     const auto root = fs::temp_directory_path() / "xpconnect-plugin-tests";
@@ -477,6 +487,7 @@ int main() {
     LeavesOddModelsLevel();
     PosesGearDown();
     ReadsOnlyTrianglePoints();
+    ReadsOnlyTheNearestLod();
     FindsObjFilesInSplitPackages();
     LevelsTiltingBogies();
     LevelsWorldTrafficBogies();
