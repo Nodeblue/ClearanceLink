@@ -15,6 +15,16 @@ constexpr float MinInterval = 0.02f;
 constexpr float MaxInterval = 0.5f;
 // Further apart than this is a jump (a new position from BATC), drawn at once.
 constexpr double MaxBlendMeters = 1000;
+// So is a move faster than twice its speed plus this (metres a second): BATC placing a parked aircraft at its gate
+// moved it 100 m and more, which the blend slid across and the move-on then overshot, back and forth
+// (YBBN, 2026-10-03). Speeds are measured over at least a tenth of a second (two updates can land in one frame).
+constexpr double JumpMarginMps = 15;
+constexpr float MinSpeedInterval = 0.1f;
+// Updates further apart than this are XPConnect's keep-alives for an aircraft that is not moving: no speed.
+constexpr float MaxMovingInterval = 1.0f;
+// Moves on for at most this long after the updates stop.
+constexpr float MaxAheadSeconds = 1.0f;
+constexpr double KnotsToMps = 0.514444;
 
 template <typename T>
 T Lerp(T a, T b, float f) {
@@ -48,21 +58,43 @@ Pos Blend(const Pos& a, const Pos& b, float f) {
     return p;
 }
 
-Pos DrawnPosition(const Pos& prev, float prevTime, const Pos& last, float lastTime, float now, float maxAhead) {
-    const float interval = std::clamp(lastTime - prevTime, MinInterval, MaxInterval);
-    const float since = std::max(0.0f, now - lastTime);
-    if (since < interval && DistanceMeters(prev, last) <= MaxBlendMeters) return Blend(prev, last, since / interval);
-
-    // Move on as it was moving between the last two updates. Not at gsKt: BATC's speed for a stopped aircraft is not
-    // always 0, which slid parked aircraft forward and back again with each update (VH-XZA at YBBN, 2026-10-03).
-    Pos p = last;
-    const float ahead = std::min(since - interval, maxAhead);
-    const double meters = DistanceMeters(prev, last);
-    if (ahead > 0 && meters > MinMoveMeters && meters <= MaxBlendMeters) {
-        const double scale = ahead / interval;
-        p.lat += (last.lat - prev.lat) * scale;
-        p.lon += (last.lon - prev.lon) * scale;
+void Track::Update(const Pos& pos, float now) {
+    if (!has_) {
+        from_ = to_ = pos;
+        fromTime_ = now - MinInterval;
+        toTime_ = now;
+        has_ = true;
+        return;
     }
+    const float since = now - toTime_;
+    const double meters = DistanceMeters(to_, pos);
+    const double speed = meters / std::max(since, MinSpeedInterval);
+    const double reported = std::max(std::fabs(to_.groundSpeedKt), std::fabs(pos.groundSpeedKt)) * KnotsToMps;
+    if (meters > MaxBlendMeters || speed > 2 * reported + JumpMarginMps) {
+        from_ = pos;  // drawn there at once
+        fromTime_ = now - MinInterval;
+        latPerSecond_ = lonPerSecond_ = 0;
+    } else {
+        from_ = Drawn(now);  // blend on from where it is drawn now, so a late or early update never jumps
+        fromTime_ = now - std::max(MinInterval, since);
+        // Not at gsKt: BATC's speed for a stopped aircraft is not always 0, which slid parked aircraft forward and
+        // back again with each update (VH-XZA at YBBN, 2026-10-03).
+        const bool moving = since > 0 && since <= MaxMovingInterval && meters > MinMoveMeters;
+        latPerSecond_ = moving ? (pos.lat - to_.lat) / since : 0;
+        lonPerSecond_ = moving ? (pos.lon - to_.lon) / since : 0;
+    }
+    to_ = pos;
+    toTime_ = now;
+}
+
+Pos Track::Drawn(float now) const {
+    const float interval = std::clamp(toTime_ - fromTime_, MinInterval, MaxInterval);
+    const float since = std::max(0.0f, now - toTime_);
+    if (since < interval) return Blend(from_, to_, since / interval);
+    Pos p = to_;
+    const float ahead = std::min(since - interval, MaxAheadSeconds);
+    p.lat += latPerSecond_ * ahead;
+    p.lon += lonPerSecond_ * ahead;
     return p;
 }
 

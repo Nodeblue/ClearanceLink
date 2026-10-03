@@ -283,25 +283,50 @@ void BlendsBetweenUpdates() {
     CHECK(std::fabs(xpc::Blend(At(0, 0, 10, 0), At(0, 0, 350, 0), 0.25f).heading - 5) < 1e-3);
 
     // Drawn one update interval (0.1 s) behind: halfway through it, halfway between the two updates.
-    auto drawn = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.15f);
-    CHECK(std::fabs(drawn.altFt - 1050) < 1e-3);
-    CHECK(std::fabs(xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.1f).altFt - 1000) < 1e-3);
-    CHECK(std::fabs(xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.2f).altFt - 1100) < 1e-3);
+    xpc::Track track;
+    track.Update(a, 10.0f);
+    track.Update(At(-27.0, 1100, 10, 6), 10.1f);  // climbing in place: 111 m in 0.1 s would be a jump
+    CHECK(std::fabs(track.Drawn(10.15f).altFt - 1050) < 1e-3);
+    CHECK(std::fabs(track.Drawn(10.1f).altFt - 1000) < 1e-3);
+    CHECK(std::fabs(track.Drawn(10.2f).altFt - 1100) < 1e-3);
 }
 
 void MovesOnWhenUpdatesStop() {
     auto a = At(0, 0, 0, 0, 100), b = At(0.00005, 0, 0, 0, 100);  // 5.6 m in 0.1 s
+    xpc::Track track;
+    track.Update(a, 10.0f);
+    track.Update(b, 10.1f);
     // 0.5 s after the blend ended, moved on as far as 5 updates; never more than 1 s ahead.
-    auto later = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.7f);
-    CHECK(std::fabs(later.lat - 0.00005 * 6) < 1e-7);  // float times
-    auto stale = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 60.0f);
-    CHECK(std::fabs(stale.lat - 0.00005 * 11) < 1e-7);
+    CHECK(std::fabs(track.Drawn(10.7f).lat - 0.00005 * 6) < 1e-7);  // float times
+    CHECK(std::fabs(track.Drawn(60.0f).lat - 0.00005 * 11) < 1e-7);
     // A parked aircraft stays put, whatever speed BATC gives it (it is not always 0).
-    auto parked = At(0, 0, 0, 0, 12);
-    CHECK(xpc::DrawnPosition(parked, 10.0f, parked, 12.0f, 13.5f).lat == 0);
+    xpc::Track parked;
+    parked.Update(At(0, 0, 0, 0, 12), 10.0f);
+    parked.Update(At(0, 0, 0, 0, 12), 12.0f);
+    CHECK(parked.Drawn(13.5f).lat == 0);
     // A jump of more than a kilometre is drawn at once, not slid across.
-    auto far = At(0.1, 0, 0, 0);
-    CHECK(xpc::DrawnPosition(a, 10.0f, far, 10.1f, 10.11f).lat == 0.1);
+    track.Update(At(0.1, 0, 0, 0, 100), 10.2f);
+    CHECK(track.Drawn(10.21f).lat == 0.1);
+}
+
+void DrawsBatcPlacingAnAircraftAtOnce() {
+    // A parked aircraft that BATC moves 150 m to its gate, then keeps sending there every 2 s: drawn at the gate at
+    // once and kept there, not slid across and overshot back and forth (YBBN, 2026-10-03).
+    xpc::Track track;
+    track.Update(At(0, 0, 0, 0, 0), 10.0f);
+    const auto gate = At(0.00135, 0, 0, 0, 0);  // 150 m north
+    float now = 10.1f;
+    track.Update(gate, now);
+    for (int i = 0; i < 10; ++i) {
+        for (float t = 0; t < 2.0f; t += 0.05f) CHECK(std::fabs(track.Drawn(now + t).lat - gate.lat) < 1e-9);
+        now += 2.0f;
+        track.Update(gate, now);
+    }
+    // Taxiing at 15 kt, updates every 0.1 s: blended, not jumped.
+    xpc::Track taxi;
+    taxi.Update(At(0, 0, 0, 0, 15), 10.0f);
+    taxi.Update(At(0.0000069, 0, 0, 0, 15), 10.1f);  // 0.77 m
+    CHECK(taxi.Drawn(10.15f).lat > 0 && taxi.Drawn(10.15f).lat < 0.0000069);
 }
 
 void FindsObjFilesInSplitPackages() {
@@ -459,6 +484,7 @@ int main() {
     FindsModelObjFiles();
     BlendsBetweenUpdates();
     MovesOnWhenUpdatesStop();
+    DrawsBatcPlacingAnAircraftAtOnce();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }

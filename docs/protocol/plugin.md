@@ -63,7 +63,10 @@ Plugin 0.3.1+ draws each aircraft one update interval behind and blends between 
 height, heading the short way round, pitch, bank, gear, flaps), so turns, climbs and the flare are smooth; a new `pos`
 blends on from where the aircraft is drawn, so nothing jumps. If updates stop, it moves on as it moved between the last
 two updates, for at most 1 s (0.3.2+; 0.3.1 used `gsKt`, which is BATC's airspeed and not always 0 for a stopped
-aircraft, so parked aircraft slid forward and back). Positions more than 1 km apart are drawn at once.
+aircraft, so parked aircraft slid forward and back). Positions more than 1 km apart, or a move faster than twice
+`gsKt` plus 15 m/s, are drawn at once: BATC placing a parked aircraft 100 m+ away was slid across and the move-on then
+overshot, back and forth, until 0.4.3 (YBBN, 2026-10-03). Since 0.4.3 the move-on speed comes from the last two `pos`
+lines received (not the blended point), and is 0 when they are more than 1 s apart (XPConnect's keep-alives).
 
 Terrain probes are kept cheap: on the ground an aircraft is probed again only when it has moved 25 cm or turned 1°,
 or every 5 s when parked; in the air every 0.25 s (for the `ground` report).

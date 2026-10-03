@@ -148,7 +148,7 @@ TrafficAircraft::TrafficAircraft(const Add& add)
 }
 
 std::optional<float> TrafficAircraft::GroundSlopeDeg(float centreY) {
-    const double heading = state_.heading * Pi / 180.0;
+    const double heading = track_.Latest().heading * Pi / 180.0;
     // X-Plane local coordinates: x east, z south.
     const float dx = float(std::sin(heading) * SlopeProbeMeters);
     const float dz = float(-std::cos(heading) * SlopeProbeMeters);
@@ -183,20 +183,9 @@ void TrafficAircraft::SetLabel(const Add& add) {
 }
 
 void TrafficAircraft::Apply(const Pos& pos, float now) {
-    if (hasState_) {
-        prev_ = Drawn(now);  // blend on from where it is drawn now, so a late or early update never jumps
-        prevTime_ = now - std::max(0.02f, now - stateTime_);
-    } else {
-        prev_ = pos;
-        prevTime_ = now - 0.1f;
-        hasState_ = true;
-        SetVisible(true);
-    }
-    state_ = pos;
-    stateTime_ = now;
+    if (!track_.HasState()) SetVisible(true);
+    track_.Update(pos, now);
 }
-
-Pos TrafficAircraft::Drawn(float now) const { return DrawnPosition(prev_, prevTime_, state_, stateTime_, now); }
 
 bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     const float dx = drawInfo.x - probeX_, dz = drawInfo.z - probeZ_;
@@ -224,10 +213,10 @@ bool TrafficAircraft::ProbeGround(bool onGround, float now) {
 }
 
 void TrafficAircraft::UpdatePosition(float, int) {
-    if (!hasState_) return;
+    if (!track_.HasState()) return;
 
     const float now = XPLMGetElapsedTime();
-    const Pos p = Drawn(now);
+    const Pos p = track_.Drawn(now);
     SetLocation(p.lat, p.lon, p.altFt);
     SetHeading(p.heading);
     SetPitch(p.pitch);
