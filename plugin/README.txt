@@ -1,0 +1,13 @@
+XPConnect plugin for X-Plane 12
+===============================
+
+Draws the traffic BeyondATC creates, using CSL aircraft models, while XPConnect is running.
+
+XPConnect.exe installs this folder into X-Plane's Resources\plugins folder for you. It needs a CSL model
+package, for example Bluebell. If you already use LiveTraffic, xPilot or X-IvAp, their CSL models are found
+automatically. Otherwise put the CSL package in X-Plane's "Custom Data\CSL" folder, or list its folder in
+csl_paths.txt (one folder per line) next to this file.
+
+Log lines start with "XPConnect:" in X-Plane's Log.txt.
+
+Uses XPMP2 by Birger Hoppe (MIT licence, XPMP2-LICENSE.txt).
