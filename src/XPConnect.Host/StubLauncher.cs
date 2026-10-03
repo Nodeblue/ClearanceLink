@@ -65,7 +65,7 @@ public sealed class StubLauncher : IDisposable
             return $"stub: {ProcessName} executable not found next to XPConnect; BATC will say the sim is not running (use --stub <path>)";
         }
 
-        _started = Process.Start(new ProcessStartInfo(path)
+        _started = Process.Start(new ProcessStartInfo(path, ["--parent", Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)])
         {
             UseShellExecute = true,
             WindowStyle = ProcessWindowStyle.Minimized,
