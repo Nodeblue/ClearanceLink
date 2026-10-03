@@ -8,6 +8,11 @@
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The traffic bridge tests write AI object state the way a session does. -->
+    <InternalsVisibleTo Include="XPConnect.Host.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
