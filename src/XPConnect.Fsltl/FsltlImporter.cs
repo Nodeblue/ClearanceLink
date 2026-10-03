@@ -56,6 +56,7 @@ public static class FsltlImporter
         Directory.CreateDirectory(objects);
         var airplanes = Path.Combine(options.PackageRoot, "SimObjects", "Airplanes");
         var textureJobs = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);  // output name -> source
+        var keepAlpha = new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);       // used by a MASK/BLEND material
         var entries = new StringBuilder($"EXPORT_NAME {ExportName}\n\n");
         var catalogue = new List<CatalogueEntry>();
         var models = 0;
@@ -129,6 +130,7 @@ public static class FsltlImporter
                     }
 
                     textureJobs.TryAdd(texture.Name, texture.Source);
+                    if (!converted.Parts[i].Opaque) keepAlpha[texture.Name] = true;
                     if (lit is not null) textureJobs.TryAdd(lit.Name, lit.Source);
                     lines.Append(CultureInfo($"OBJ8 SOLID YES {ExportName}/{ObjectsFolder}/{ObjName(modelName, i)}"));
                     if (texture.Name != defaults[i].Texture?.Name || lit?.Name != defaults[i].Lit?.Name)
@@ -156,7 +158,7 @@ public static class FsltlImporter
             options.Log($"FSLTL: {modelName}: {converted.Parts.Count} object(s), {converted.Parts.Sum(p => p.Triangles)} triangles, {model.Count()} liveries");
         }
 
-        var textures = ConvertTextures(textureJobs, objects, options, problems);
+        var textures = ConvertTextures(textureJobs, keepAlpha, objects, options, problems);
         if (options.Filter is null)
         {
             // Objects a previous import wrote that this one did not (a model now has fewer parts), and their XPMP2 copies.
@@ -232,7 +234,7 @@ public static class FsltlImporter
 
     private static string CultureInfo(FormattableString s) => FormattableString.Invariant(s);
 
-    private static int ConvertTextures(ConcurrentDictionary<string, string> jobs, string folder, ImportOptions options, List<string> problems)
+    private static int ConvertTextures(ConcurrentDictionary<string, string> jobs, ConcurrentDictionary<string, bool> keepAlpha, string folder, ImportOptions options, List<string> problems)
     {
         var failures = new ConcurrentBag<string>();
         var done = 0;
@@ -242,7 +244,7 @@ public static class FsltlImporter
         {
             try
             {
-                var bytes = DdsTexture.Load(job.Value).ToXPlane(options.MaxTextureSize);
+                var bytes = DdsTexture.Load(job.Value).ToXPlane(options.MaxTextureSize, opaque: !keepAlpha.ContainsKey(job.Key));
                 var target = Path.Combine(folder, job.Key);
                 File.WriteAllBytes(target + ".tmp", bytes);
                 File.Move(target + ".tmp", target, overwrite: true);

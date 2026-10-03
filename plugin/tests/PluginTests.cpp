@@ -283,6 +283,17 @@ xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0
     return p;
 }
 
+void EasesHeightAcrossLiftOff() {
+    xpc::Smoothed h;
+    CHECK(h.Next(10, 0.1f, false, false) == 10);                  // first value: as is
+    const float atSwitch = h.Next(14, 0.0f, true, false);         // source changed: carries on from 10
+    CHECK(std::fabs(atSwitch - 10) < 1e-4f);
+    float v = atSwitch;
+    for (int i = 0; i < 20; ++i) v = h.Next(14, 0.1f, false, false);  // 2 s later: 95% of the way
+    CHECK(std::fabs(v - 14) < 0.25f);
+    CHECK(h.Next(100, 0.1f, true, true) == 100);                   // placed: snaps
+}
+
 void SteersTheNoseWheelAlongTheTurn() {
     // 15 m wheelbase, 10 kt (5.14 m/s), turning right at 10 deg/s: atan(15 x 0.1745 / 5.14) = 27 deg right.
     CHECK(std::fabs(xpc::SteeringAngleDeg(10, 10, 15) - 27.0f) < 0.5f);
@@ -517,6 +528,7 @@ int main() {
     BlendsBetweenUpdates();
     TurnsPropellersAndWheels();
     SteersTheNoseWheelAlongTheTurn();
+    EasesHeightAcrossLiftOff();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);

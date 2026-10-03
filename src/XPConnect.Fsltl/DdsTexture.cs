@@ -88,7 +88,11 @@ public sealed class DdsTexture
     /// This texture as an X-Plane-friendly DDS (DXT1 or DXT5) no larger than <paramref name="maxSize"/>. DXT textures
     /// just drop their top mip levels; BC7 is decoded at the right level and re-encoded as DXT5.
     /// </summary>
-    public byte[] ToXPlane(int maxSize)
+    /// <param name="opaque">
+    /// Make every texel fully opaque. MSFS ignores the albedo alpha of an opaque material and FSLTL liveries often
+    /// leave it low or zero, which X-Plane's alpha test cuts out (a CRJ700 without wings, a 747 with only its fin).
+    /// </param>
+    public byte[] ToXPlane(int maxSize, bool opaque = false)
     {
         var level = 0;
         int w = Width, h = Height;
@@ -105,7 +109,9 @@ public sealed class DdsTexture
         var fullChain = Mips.Count >= MipCount(Width, Height);
         if (Format is DdsFormat.Dxt1 or DdsFormat.Dxt3 or DdsFormat.Dxt5 && fullChain)
         {
-            return Write(Format, w, h, Mips.Skip(level).ToList());
+            var kept = Mips.Skip(level).ToList();
+            if (opaque && Format is DdsFormat.Dxt3 or DdsFormat.Dxt5) kept = [.. kept.Select(OpaqueAlpha)];
+            return Write(Format, w, h, kept);
         }
 
         var source = Format switch
@@ -123,7 +129,7 @@ public sealed class DdsTexture
             bytes[i * 4] = decoded[i].r;
             bytes[i * 4 + 1] = decoded[i].g;
             bytes[i * 4 + 2] = decoded[i].b;
-            bytes[i * 4 + 3] = decoded[i].a;
+            bytes[i * 4 + 3] = opaque ? (byte)255 : decoded[i].a;
         }
 
         while ((w > maxSize || h > maxSize) && w > 1 && h > 1) (bytes, w, h) = Halve(bytes, w, h);
@@ -132,6 +138,30 @@ public sealed class DdsTexture
         encoder.OutputOptions.Quality = CompressionQuality.Balanced;
         var mips = encoder.EncodeToRawBytes(bytes, w, h, PixelFormat.Rgba32);
         return Write(DdsFormat.Dxt5, w, h, [.. mips]);
+    }
+
+    /// <summary>
+    /// A DXT3/DXT5 mip level with every block's alpha set to 255: both store alpha in the first 8 bytes of each
+    /// 16-byte block (DXT3 explicit 4-bit values, DXT5 two endpoints and indices; 255, 255 and index 0 is opaque).
+    /// </summary>
+    private byte[] OpaqueAlpha(byte[] level)
+    {
+        var copy = (byte[])level.Clone();
+        for (var block = 0; block + 16 <= copy.Length; block += 16)
+        {
+            if (Format == DdsFormat.Dxt3)
+            {
+                Array.Fill(copy, (byte)0xFF, block, 8);
+            }
+            else
+            {
+                copy[block] = 0xFF;
+                copy[block + 1] = 0xFF;
+                Array.Clear(copy, block + 2, 6);
+            }
+        }
+
+        return copy;
     }
 
     /// <summary>Levels in a full mip chain down to 1x1.</summary>

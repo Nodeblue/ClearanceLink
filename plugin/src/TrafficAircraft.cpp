@@ -241,6 +241,20 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
         SetPitch(pitch + slope_.value_or(0.0f));
     }
+    // Lift-off and touchdown: on the ground the height comes from the terrain and the model's wheels, in the air from
+    // BATC's altitude, and the two rarely agree, so the aircraft jumped up or down as it rotated or touched down
+    // (2026-10-04). The drawn height eases from one to the other instead; a big move (BATC placing the aircraft)
+    // still snaps.
+    {
+        const float dx = float(drawInfo.x) - lastX_, dz = float(drawInfo.z) - lastZ_;
+        const bool placed = !hasLast_ || dx * dx + dz * dz > 200.0f * 200.0f;
+        drawInfo.y = height_.Next(float(drawInfo.y), elapsed, hasLast_ && p.onGround != wasOnGround_, placed);
+        lastX_ = float(drawInfo.x);
+        lastZ_ = float(drawInfo.z);
+        wasOnGround_ = p.onGround;
+        hasLast_ = true;
+    }
+
     // Drawn with the bogie value the wheels were measured with: levels tilting bogies on the ground; unloaded in the
     // air, so they tilt.
     SetBogies(p.onGround);
