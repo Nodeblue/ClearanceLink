@@ -32,14 +32,18 @@ std::string Requested(const Add& add) { return add.icaoType + ' ' + add.icaoAirl
 
 struct FitResult {
     std::optional<Wheels> wheels;
-    float tireDeflectionM = 0;
+    std::string bogieDataref;
+    float bogieLevel = 0;
     std::string why;
 };
+
+// XPMP2's index for World Traffic's main gear deflection in each aircraft's dataref values, 0 when not added.
+size_t g_worldTrafficDeflection = 0;
 
 CslPackages g_packages;
 
 FitResult ReadWheels(const std::vector<std::string>& files) {
-    if (files.empty()) return {std::nullopt, 0.0f, "no .obj file found"};
+    if (files.empty()) return {std::nullopt, {}, 0.0f, "no .obj file found"};
     PosedModel model;
     for (const auto& file : files) {
         std::ifstream obj(std::filesystem::u8path(file));
@@ -47,7 +51,8 @@ FitResult ReadWheels(const std::vector<std::string>& files) {
     }
     FitResult result;
     result.wheels = FindWheels(model, &result.why);
-    result.tireDeflectionM = model.tireDeflectionM;
+    result.bogieDataref = model.bogieDataref;
+    result.bogieLevel = model.bogieLevel;
     return result;
 }
 
@@ -58,7 +63,8 @@ struct ModelFit {
     std::string name;
     std::future<FitResult> reading;
     std::optional<Wheels> wheels;
-    float tireDeflectionM = 0;
+    std::string bogieDataref;
+    float bogieLevel = 0;
     bool done = false;
 };
 
@@ -69,6 +75,21 @@ std::map<std::string, std::shared_ptr<ModelFit>> g_fits;
 void TrafficAircraft::SetCslPackages(CslPackages packages) { g_packages = std::move(packages); }
 
 void TrafficAircraft::ForgetModelFits() { g_fits.clear(); }
+
+bool TrafficAircraft::AddModelDatarefs() {
+    g_worldTrafficDeflection = XPMPAddModelDataRef(WorldTrafficDeflectionDataref);
+    return g_worldTrafficDeflection != 0;
+}
+
+void TrafficAircraft::SetBogies(bool onGround) {
+    const bool fitted = onGround && fit_ && fit_->done && fit_->wheels;
+    const std::string dataref = fitted ? fit_->bogieDataref : std::string();
+    const float level = fitted ? fit_->bogieLevel : 0.0f;
+    SetTireDeflection(dataref == TireDeflectionDataref ? level : 0.0f);
+    if (g_worldTrafficDeflection != 0 && g_worldTrafficDeflection < v.size()) {
+        v[g_worldTrafficDeflection] = dataref == WorldTrafficDeflectionDataref ? level : 0.0f;
+    }
+}
 
 const Wheels* TrafficAircraft::ModelWheels() {
     if (GetModel() != fitModel_ || !fit_) {
@@ -86,7 +107,8 @@ const Wheels* TrafficAircraft::ModelWheels() {
     if (!fit_->done && fit_->reading.valid() && fit_->reading.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         const auto result = fit_->reading.get();
         fit_->wheels = result.wheels;
-        fit_->tireDeflectionM = result.tireDeflectionM;
+        fit_->bogieDataref = result.bogieDataref;
+        fit_->bogieLevel = result.bogieLevel;
         fit_->done = true;
         char text[256];
         if (result.wheels) {
@@ -205,8 +227,6 @@ void TrafficAircraft::UpdatePosition(float, int) {
         float pitch = p.pitch;
         float height = 0;
         if (wheels) {
-            // Drawn with the tyre deflection it was measured with: levels tilting bogies, 0 for everything else.
-            SetTireDeflection(fit_->tireDeflectionM);
             pitch += wheels->LevelPitchDeg();
             height = wheels->GroundHeightM(pitch);
         } else {
@@ -217,7 +237,9 @@ void TrafficAircraft::UpdatePosition(float, int) {
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
         SetPitch(pitch + slope_.value_or(0.0f));
     }
-    if (!p.onGround) SetTireDeflection(0);  // unloaded in the air: bogies tilt
+    // Drawn with the bogie value the wheels were measured with: levels tilting bogies on the ground; unloaded in the
+    // air, so they tilt.
+    SetBogies(p.onGround);
     SetOnGrnd(p.onGround);
 
     SetGearRatio(p.gear);

@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
     const auto packages = xpc::FindCslPackages(folders);
     std::fprintf(stderr, "%zu CSL packages\n", packages.size());
 
-    std::printf("package,model,icao,vert_offset_m,obj_files,points,gear_points,tire_deflection_m,fit,nose_above_mains_m,"
+    std::printf("package,model,icao,vert_offset_m,obj_files,points,gear_points,bogie_dataref,bogie_level,fit,nose_above_mains_m,"
                 "pitch_deg,wheels_below_origin_m,why\n");
     // Liveries of one model share their .obj files; read each set once.
     std::map<std::vector<std::string>, std::pair<xpc::PosedModel, std::optional<xpc::Wheels>>> read;
@@ -69,15 +69,15 @@ int main(int argc, char** argv) {
             ++models;
             if (wheels) {
                 ++fitted;
-                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,%.3f,yes,%.3f,%.2f,%.3f,\n", Csv(package).c_str(), Csv(model).c_str(),
+                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,%s,%.3f,yes,%.3f,%.2f,%.3f,\n", Csv(package).c_str(), Csv(model).c_str(),
                             Csv(icao).c_str(), offset.c_str(), files.size(), posed.all.size(), posed.gear.size(),
-                            posed.tireDeflectionM,
+                            Csv(posed.bogieDataref).c_str(), posed.bogieLevel,
                             wheels->noseY - wheels->mainY, wheels->LevelPitchDeg(),
                             wheels->GroundHeightM(wheels->LevelPitchDeg()));
             } else {
-                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,%.3f,no,,,,%s\n", Csv(package).c_str(), Csv(model).c_str(),
+                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,%s,%.3f,no,,,,%s\n", Csv(package).c_str(), Csv(model).c_str(),
                             Csv(icao).c_str(), offset.c_str(), files.size(), posed.all.size(), posed.gear.size(),
-                            posed.tireDeflectionM,
+                            Csv(posed.bogieDataref).c_str(), posed.bogieLevel,
                             Csv(reasons[files]).c_str());
             }
         };

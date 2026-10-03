@@ -32,9 +32,12 @@ struct Wheels {
 struct PosedModel {
     std::vector<Vertex> all;
     std::vector<Vertex> gear;
-    // Main tyre deflection (libxplanemp/gear/tire_vertical_deflection_mtr) it was posed with: the value that levels
-    // a tilting bogie (777, A340, A380 tilt theirs about 20 degrees when unloaded), else 0. Draw it with this too.
-    float tireDeflectionM = 0;
+    // The dataref that tilts its main bogies, and the value it was posed with: the one that levels them (777, A340,
+    // A380 tilt theirs about 20 degrees when unloaded), else empty and 0. Draw it with this too. Standard models use
+    // libxplanemp/gear/tire_vertical_deflection_mtr; Bluebell's virtual-airline repaints use World Traffic's
+    // cjs/world_traffic/main_gear_deflection (B772_PAY at YBBN, 2026-10-03: bogies drawn tilted at 0).
+    std::string bogieDataref;
+    float bogieLevel = 0;
 };
 
 // Finds the wheels among a model's points. With gear points, the nose wheel is the lowest gear point in the front
@@ -49,8 +52,12 @@ std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why = nul
 // animation (B738 and E190 at YBBN, 2026-10-03), so the raw VT points are not where the wheels are drawn.
 void ReadPosedObj(std::istream& obj, PosedModel& model);
 
-// Value a posed model uses for a dataref, given the tyre deflection it is posed with.
-float PoseValue(const std::string& dataref, float tireDeflectionM = 0);
+// The datarefs a model may tilt its main bogies with, by how much they are loaded.
+constexpr const char* TireDeflectionDataref = "libxplanemp/gear/tire_vertical_deflection_mtr";
+constexpr const char* WorldTrafficDeflectionDataref = "cjs/world_traffic/main_gear_deflection";
+
+// Value a posed model uses for a dataref, given the bogie dataref and the level it is posed with.
+float PoseValue(const std::string& dataref, const std::string& bogieDataref = "", float bogieLevel = 0);
 
 // CSL package names (EXPORT_NAME) and their folders. One package can span several folders, each with the same
 // xsb_aircraft.txt but different .obj files (Bluebell's __Bluebell_Airbus is BB_Airbus, BB_Airbus1 and BB_Airbus2).

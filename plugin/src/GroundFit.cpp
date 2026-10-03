@@ -131,9 +131,9 @@ float Wheels::GroundHeightM(float pitchDeg) const {
     return float(-std::min(pitched(noseY, noseZ), pitched(mainY, mainZ)));
 }
 
-float PoseValue(const std::string& dataref, float tireDeflectionM) {
+float PoseValue(const std::string& dataref, const std::string& bogieDataref, float bogieLevel) {
     if (dataref.find("gear_ratio") != std::string::npos || dataref.find("gear_door") != std::string::npos) return 1.0f;
-    if (dataref.find("tire_vertical_deflection_mtr") != std::string::npos) return tireDeflectionM;
+    if (!bogieDataref.empty() && dataref.find(bogieDataref) != std::string::npos) return bogieLevel;
     return 0.0f;
 }
 
@@ -181,7 +181,7 @@ std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why) {
 
 namespace {
 
-// The tyre deflection at which a rotation keyed to it is 0 degrees: where a tilting bogie is level. Keys are
+// The deflection at which a rotation keyed to it is 0 degrees: where a tilting bogie is level. Keys are
 // (deflection, degrees). Empty when it never crosses 0.
 std::optional<double> LevelAt(const std::vector<std::pair<double, double>>& keys) {
     for (size_t i = 1; i < keys.size(); ++i) {
@@ -194,24 +194,37 @@ std::optional<double> LevelAt(const std::vector<std::pair<double, double>>& keys
     return std::nullopt;
 }
 
-// Finds the tyre deflection that levels the model's bogies, from its first rotation keyed to the deflection.
-std::optional<double> BogieLevelDeflection(const std::vector<std::string>& lines) {
-    constexpr const char* Deflection = "tire_vertical_deflection_mtr";
+// The bogie dataref this animation is keyed to, or empty.
+std::string BogieDataref(const std::string& dataref) {
+    for (const char* name : {TireDeflectionDataref, WorldTrafficDeflectionDataref}) {
+        if (dataref.find(name) != std::string::npos) return name;
+    }
+    return {};
+}
+
+// Finds the dataref and value that level the model's bogies, from its first rotation keyed to a deflection dataref.
+std::optional<std::pair<std::string, double>> BogieLevel(const std::vector<std::string>& lines) {
     for (size_t i = 0; i < lines.size(); ++i) {
         const auto tokens = Tokens(lines[i]);
         if (tokens.empty()) continue;
-        if (tokens[0] == "ANIM_rotate" && tokens.size() >= 9 && tokens[8].find(Deflection) != std::string::npos) {
-            return LevelAt({{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}});
-        }
-        if (tokens[0] == "ANIM_rotate_begin" && tokens.size() >= 5 && tokens[4].find(Deflection) != std::string::npos) {
+        const bool single = tokens[0] == "ANIM_rotate" && tokens.size() >= 9;
+        const bool keyed = tokens[0] == "ANIM_rotate_begin" && tokens.size() >= 5;
+        const std::string dataref = single ? BogieDataref(tokens[8]) : keyed ? BogieDataref(tokens[4]) : std::string();
+        if (dataref.empty()) continue;
+        std::optional<double> level;
+        if (single) {
+            level = LevelAt({{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}});
+        } else {
             std::vector<std::pair<double, double>> keys;
             for (size_t k = i + 1; k < lines.size(); ++k) {
                 const auto key = Tokens(lines[k]);
                 if (key.empty() || key[0] != "ANIM_rotate_key") break;
                 keys.emplace_back(Number(key, 1), Number(key, 2));
             }
-            return LevelAt(keys);
+            level = LevelAt(keys);
         }
+        if (!level) return std::nullopt;
+        return std::make_pair(dataref, *level);
     }
     return std::nullopt;
 }
@@ -223,9 +236,11 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
     for (std::string line; GetLine(obj, line);) {
         if (line.size() >= 3) lines.push_back(std::move(line));
     }
-    if (auto level = BogieLevelDeflection(lines)) model.tireDeflectionM = float(*level);
-    const float deflection = model.tireDeflectionM;
-    auto pose = [deflection](const std::string& ref) { return PoseValue(ref, deflection); };
+    if (auto level = BogieLevel(lines)) {
+        model.bogieDataref = level->first;
+        model.bogieLevel = float(level->second);
+    }
+    auto pose = [&model](const std::string& ref) { return PoseValue(ref, model.bogieDataref, model.bogieLevel); };
 
     std::vector<Vertex> vt;
     std::vector<int> idx;

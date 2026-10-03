@@ -331,10 +331,30 @@ void LevelsTiltingBogies() {
         "ANIM_end\nANIM_end\n");
     xpc::PosedModel model;
     xpc::ReadPosedObj(obj, model);
-    CHECK(std::fabs(model.tireDeflectionM - 0.6667f) < 0.001f);
+    CHECK(model.bogieDataref == xpc::TireDeflectionDataref);
+    CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
     CHECK(model.gear.size() == 2 && std::fabs(model.gear[0].y - model.gear[1].y) < 1e-4f);  // level
-    CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", 0.5f) == 0.5f);
-    CHECK(xpc::PoseValue("libxplanemp/controls/flap_ratio", 0.5f) == 0);
+    CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", xpc::TireDeflectionDataref, 0.5f) == 0.5f);
+    CHECK(xpc::PoseValue("libxplanemp/controls/flap_ratio", xpc::TireDeflectionDataref, 0.5f) == 0);
+}
+
+void LevelsWorldTrafficBogies() {
+    // Bluebell's virtual-airline repaints (B772_PAY at YBBN, 2026-10-03) tilt the same bogie on World Traffic's
+    // main gear deflection, with keyed rotations, instead of XPMP2's tyre deflection.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 0 0 1 3 -80 0 1 libxplanemp/controls/gear_ratio\n"
+        "ANIM_begin\nANIM_rotate_begin 1 0 0 cjs/world_traffic/main_gear_deflection\n"
+        "ANIM_rotate_key 0 -20\nANIM_rotate_key 0.5 0\nANIM_rotate_key 1 5\nANIM_rotate_end\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 0 30 0 1 cjs/world_traffic/nose_gear_steering_angle\nANIM_end\n"
+        "TRIS 0 2\nANIM_end\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.bogieDataref == xpc::WorldTrafficDeflectionDataref);
+    CHECK(std::fabs(model.bogieLevel - 0.5f) < 0.001f);
+    CHECK(model.gear.size() == 2 && std::fabs(model.gear[0].y - model.gear[1].y) < 1e-4f);  // level
+    // The libxplanemp tyre deflection does not move this model's bogies, and vice versa.
+    CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", model.bogieDataref, model.bogieLevel) == 0);
 }
 
 }  // namespace
@@ -353,6 +373,7 @@ int main() {
     ReadsOnlyTrianglePoints();
     FindsObjFilesInSplitPackages();
     LevelsTiltingBogies();
+    LevelsWorldTrafficBogies();
     FindsModelObjFiles();
     BlendsBetweenUpdates();
     MovesOnWhenUpdatesStop();
