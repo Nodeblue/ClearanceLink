@@ -357,6 +357,22 @@ void LevelsWorldTrafficBogies() {
     CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", model.bogieDataref, model.bogieLevel) == 0);
 }
 
+void LevelsBogiesModelledTilted() {
+    // Bluebell's 747 (B744_QFA, B744_XSN at YBBN, 2026-10-03) models its wing-gear bogies already tilted and turns them
+    // 30 to 73 degrees on the tyre deflection, so the angle never reads 0: level is where the wheels end up level.
+    // These two points are level after a 50 degree turn, at deflection (50 - 30) / 43.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 -1.532089 -1.285575 0 1 0 0 0\nVT 0 1.532089 1.285575 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 0 0 0 1 libxplanemp/controls/gear_ratio\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 30 73 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\n"
+        "ANIM_end\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.bogieDataref == xpc::TireDeflectionDataref);
+    CHECK(std::fabs(model.bogieLevel - 0.4651f) < 0.001f);
+    CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);  // level
+}
+
 void SkipsLinksKeyedToDeflection() {
     // A torque link keyed to the same deflection (0 to 5 degrees) before the bogie must not be taken for it.
     std::istringstream obj(
@@ -412,6 +428,7 @@ int main() {
     FindsObjFilesInSplitPackages();
     LevelsTiltingBogies();
     LevelsWorldTrafficBogies();
+    LevelsBogiesModelledTilted();
     SkipsLinksKeyedToDeflection();
     KeepsOneBogieLevelAcrossFiles();
     ReadsAnimationsKeyedHighToLow();

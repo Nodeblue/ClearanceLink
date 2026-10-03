@@ -42,8 +42,11 @@ draws the model with the bogie value it measured. The bogie dataref is XPMP2's
 `libxplanemp/gear/tire_vertical_deflection_mtr`, or World Traffic's `cjs/world_traffic/main_gear_deflection`, which
 Bluebell's virtual-airline repaints use (95 models; B772_PAY drawn at touchdown tilt at YBBN, 2026-10-03). The plugin
 adds that one to XPMP2 with `XPMPAddModelDataRef`; the other World Traffic gear datarefs stay at 0. The bogie is the
-rotation keyed to either dataref that is tilted furthest when unloaded and reaches level at some value (smaller ones,
-under 5°, are links and struts), searched over all of a model's files before any is posed. Models it cannot fit (no gear animation, such as fixed-gear
+rotation keyed to either dataref that turns furthest (smaller ones, under 5°, are links and struts), searched over all
+of a model's files before any is posed. Its level value is found from the posed wheels, not from the angle: the value
+at which the lowest points of the bogie's front and rear halves are at the same height. Bluebell's 747 models its
+wing-gear bogies already tilted and turns them 30° to 73°, so the angle never reads 0 when they are level (YBBN,
+2026-10-03). Models it cannot fit (no gear animation, such as fixed-gear
 Cessnas and helicopters, or a fit beyond 3°) use XPConnect's per-type pitch and height on XPMP2's vertical offset.
 
 Checked against Ben's Bluebell library (2,027 models): the measured wheels agree with each model's own `VERT_OFFSET`

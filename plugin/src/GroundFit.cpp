@@ -185,19 +185,6 @@ std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why) {
 
 namespace {
 
-// The deflection at which a rotation keyed to it is 0 degrees: where a tilting bogie is level. Keys are
-// (deflection, degrees). Empty when it never crosses 0.
-std::optional<double> LevelAt(const std::vector<std::pair<double, double>>& keys) {
-    for (size_t i = 1; i < keys.size(); ++i) {
-        const auto [v1, r1] = keys[i - 1];
-        const auto [v2, r2] = keys[i];
-        const bool crossesZero = (r1 <= 0 && r2 >= 0) || (r1 >= 0 && r2 <= 0);
-        if (r1 == r2 || !crossesZero) continue;
-        return v1 + (0 - r1) / (r2 - r1) * (v2 - v1);
-    }
-    return std::nullopt;
-}
-
 // The bogie dataref this animation is keyed to, or empty.
 std::string BogieDataref(const std::string& dataref) {
     for (const char* name : {TireDeflectionDataref, WorldTrafficDeflectionDataref}) {
@@ -206,102 +193,41 @@ std::string BogieDataref(const std::string& dataref) {
     return {};
 }
 
-struct BogieTilt {
-    std::string dataref;
-    double level = 0;   // dataref value that levels it
-    double tiltDeg = 0; // its angle unloaded (dataref 0)
-};
-
-// Finds the rotation keyed to a deflection dataref that levels the model's bogies: of those that reach 0 degrees at
-// some deflection, the one tilted furthest when unloaded. Others keyed to the same dataref (torque links, strut
-// linkages) move only a few degrees and are level when unloaded already.
-std::optional<BogieTilt> FindBogieTilt(const std::vector<std::string>& lines) {
-    std::optional<BogieTilt> best;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        const auto tokens = Tokens(lines[i]);
-        if (tokens.empty()) continue;
-        const bool single = tokens[0] == "ANIM_rotate" && tokens.size() >= 9;
-        const bool keyed = tokens[0] == "ANIM_rotate_begin" && tokens.size() >= 5;
-        const std::string dataref = single ? BogieDataref(tokens[8]) : keyed ? BogieDataref(tokens[4]) : std::string();
-        if (dataref.empty()) continue;
-        std::vector<std::pair<double, double>> keys;
-        if (single) {
-            keys = {{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}};
-        } else {
-            for (size_t k = i + 1; k < lines.size(); ++k) {
-                const auto key = Tokens(lines[k]);
-                if (key.empty() || key[0] != "ANIM_rotate_key") break;
-                keys.emplace_back(Number(key, 1), Number(key, 2));
-            }
-        }
-        std::stable_sort(keys.begin(), keys.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-        const double tilt = Interpolate(keys, 0);
-        const auto level = LevelAt(keys);
-        if (!level || std::fabs(tilt) < MinBogieTiltDeg) continue;
-        if (!best || std::fabs(tilt) > std::fabs(best->tiltDeg)) best = BogieTilt{dataref, *level, tilt};
-    }
-    return best;
-}
-
-std::vector<std::string> ReadLines(std::istream& obj) {
-    std::vector<std::string> lines;
-    for (std::string line; GetLine(obj, line);) {
-        if (line.size() >= 3) lines.push_back(std::move(line));
-    }
-    return lines;
-}
-
-void Pose(const std::vector<std::string>& lines, PosedModel& model);
-
-}  // namespace
-
-void ScanBogies(std::istream& obj, PosedModel& model) {
-    model.bogiesScanned = true;
-    const auto tilt = FindBogieTilt(ReadLines(obj));
-    if (tilt && std::fabs(tilt->tiltDeg) > std::fabs(model.bogieTiltDeg)) {
-        model.bogieDataref = tilt->dataref;
-        model.bogieLevel = float(tilt->level);
-        model.bogieTiltDeg = float(tilt->tiltDeg);
-    }
-}
-
-void ReadPosedObj(std::istream& obj, PosedModel& model) {
-    const auto lines = ReadLines(obj);
-    if (!model.bogiesScanned) {
-        if (const auto tilt = FindBogieTilt(lines)) {
-            model.bogieDataref = tilt->dataref;
-            model.bogieLevel = float(tilt->level);
-            model.bogieTiltDeg = float(tilt->tiltDeg);
-        }
-        model.bogiesScanned = true;
-    }
-    Pose(lines, model);
-}
-
-PosedModel PoseObjFiles(const std::vector<std::string>& files) {
-    PosedModel model;
-    for (const auto& file : files) {
-        std::ifstream obj(std::filesystem::u8path(file));
-        ScanBogies(obj, model);
-    }
-    for (const auto& file : files) {
-        std::ifstream obj(std::filesystem::u8path(file));
-        ReadPosedObj(obj, model);
-    }
-    return model;
-}
-
-namespace {
-
-void Pose(const std::vector<std::string>& lines, PosedModel& model) {
-    auto pose = [&model](const std::string& ref) { return PoseValue(ref, model.bogieDataref, model.bogieLevel); };
-
+// An .obj file read once: its vertices and indices, and its other lines as tokens, to pose it several times.
+struct Obj {
     std::vector<Vertex> vt;
     std::vector<int> idx;
+    std::vector<std::vector<std::string>> commands;
+};
+
+Obj ReadObj(std::istream& in) {
+    Obj obj;
+    for (std::string line; GetLine(in, line);) {
+        if (line.size() < 3) continue;
+        auto tokens = Tokens(line);
+        if (tokens.empty()) continue;
+        if (tokens[0] == "VT") {
+            if (tokens.size() >= 4) obj.vt.push_back({float(Number(tokens, 1)), float(Number(tokens, 2)), float(Number(tokens, 3))});
+        } else if (tokens[0] == "IDX10" || tokens[0] == "IDX") {
+            for (size_t i = 1; i < tokens.size(); ++i) obj.idx.push_back(std::atoi(tokens[i].c_str()));
+        } else if (tokens[0].rfind("ANIM_", 0) == 0 || tokens[0] == "TRIS") {
+            obj.commands.push_back(std::move(tokens));
+        }
+    }
+    return obj;
+}
+
+// Poses the file with gear datarefs at 1, `dataref` at `value` and everything else at 0, adding its drawn points to
+// `model`. With `bogieCommand`, the points that rotation moves also go to `bogie`.
+void Pose(const Obj& obj, const std::string& dataref, float value, PosedModel& model, long bogieCommand = -1,
+          std::vector<Vertex>* bogie = nullptr) {
+    auto pose = [&](const std::string& ref) { return PoseValue(ref, dataref, value); };
+
     struct Frame {
         Affine transform;
         bool visible = true;
         bool gear = false;
+        bool bogie = false;
     };
     std::vector<Frame> stack(1);
     // Keyed animations collect their keys until their _end line.
@@ -309,34 +235,31 @@ void Pose(const std::vector<std::string>& lines, PosedModel& model) {
     std::vector<std::pair<double, Vertex>> transKeys;
     double axis[3] = {0, 0, 0};
     std::string keyedRef;
+    long keyedBegin = -1;
 
     // Only the gear legs and what hangs from them (wheels), not the gear doors.
     auto isGear = [](const std::string& ref) { return ref.find("gear_ratio") != std::string::npos; };
-    auto rotate = [&](double x, double y, double z, double deg, const std::string& ref) {
+    auto rotate = [&](double x, double y, double z, double deg, const std::string& ref, long command) {
         stack.back().transform = stack.back().transform * Affine::Rotate(x, y, z, deg);
         if (ref != "none" && isGear(ref)) stack.back().gear = true;
+        if (command == bogieCommand) stack.back().bogie = true;
     };
     auto translate = [&](const Vertex& by, const std::string& ref) {
         stack.back().transform = stack.back().transform * Affine::Translate(by.x, by.y, by.z);
         if (ref != "none" && isGear(ref) && (by.x != 0 || by.y != 0 || by.z != 0)) stack.back().gear = true;
     };
 
-    for (const auto& line : lines) {
-        const auto tokens = Tokens(line);
-        if (tokens.empty()) continue;
+    for (size_t c = 0; c < obj.commands.size(); ++c) {
+        const auto& tokens = obj.commands[c];
         const auto& cmd = tokens[0];
-        if (cmd == "VT") {
-            if (tokens.size() >= 4) vt.push_back({float(Number(tokens, 1)), float(Number(tokens, 2)), float(Number(tokens, 3))});
-        } else if (cmd == "IDX10" || cmd == "IDX") {
-            for (size_t i = 1; i < tokens.size(); ++i) idx.push_back(std::atoi(tokens[i].c_str()));
-        } else if (cmd == "ANIM_begin") {
+        if (cmd == "ANIM_begin") {
             stack.push_back(stack.back());
         } else if (cmd == "ANIM_end") {
             if (stack.size() > 1) stack.pop_back();
         } else if (cmd == "ANIM_rotate" && tokens.size() >= 9) {
             const double v = pose(tokens[8]);
             const double deg = Interpolate({{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}}, v);
-            rotate(Number(tokens, 1), Number(tokens, 2), Number(tokens, 3), deg, tokens[8]);
+            rotate(Number(tokens, 1), Number(tokens, 2), Number(tokens, 3), deg, tokens[8], long(c));
         } else if (cmd == "ANIM_trans" && tokens.size() >= 10) {
             const double v = pose(tokens[9]);
             const double v1 = Number(tokens, 7), v2 = Number(tokens, 8);
@@ -350,11 +273,12 @@ void Pose(const std::vector<std::string>& lines, PosedModel& model) {
             axis[1] = Number(tokens, 2);
             axis[2] = Number(tokens, 3);
             keyedRef = tokens[4];
+            keyedBegin = long(c);
             rotateKeys.clear();
         } else if (cmd == "ANIM_rotate_key") {
             rotateKeys.emplace_back(Number(tokens, 1), Number(tokens, 2));
         } else if (cmd == "ANIM_rotate_end") {
-            rotate(axis[0], axis[1], axis[2], Interpolate(rotateKeys, pose(keyedRef)), keyedRef);
+            rotate(axis[0], axis[1], axis[2], Interpolate(rotateKeys, pose(keyedRef)), keyedRef, keyedBegin);
         } else if (cmd == "ANIM_trans_begin" && tokens.size() >= 2) {
             keyedRef = tokens[1];
             transKeys.clear();
@@ -376,18 +300,170 @@ void Pose(const std::vector<std::string>& lines, PosedModel& model) {
             const Frame& frame = stack.back();
             if (!frame.visible) continue;
             const long first = std::atol(tokens[1].c_str()), count = std::atol(tokens[2].c_str());
-            for (long i = first; i < first + count && i >= 0 && size_t(i) < idx.size(); ++i) {
-                const int n = idx[size_t(i)];
-                if (n < 0 || size_t(n) >= vt.size()) continue;
-                const Vertex v = frame.transform.Apply(vt[size_t(n)]);
+            for (long i = first; i < first + count && i >= 0 && size_t(i) < obj.idx.size(); ++i) {
+                const int n = obj.idx[size_t(i)];
+                if (n < 0 || size_t(n) >= obj.vt.size()) continue;
+                const Vertex v = frame.transform.Apply(obj.vt[size_t(n)]);
                 model.all.push_back(v);
                 if (frame.gear) model.gear.push_back(v);
+                if (bogie && frame.bogie) bogie->push_back(v);
             }
         }
     }
 }
 
+// A rotation keyed to a deflection dataref, and the range of values and angles it covers.
+struct BogieRotation {
+    long command = -1;
+    std::string dataref;
+    double lo = 0, hi = 1;  // dataref range of its keys
+    double rangeDeg = 0;    // how far it turns over that range
+};
+
+// The rotation keyed to a deflection dataref that turns furthest: the bogie. Others keyed to the same dataref (torque
+// links, strut linkages) turn only a few degrees.
+std::optional<BogieRotation> FindBogieRotation(const Obj& obj) {
+    std::optional<BogieRotation> best;
+    for (size_t c = 0; c < obj.commands.size(); ++c) {
+        const auto& tokens = obj.commands[c];
+        const bool single = tokens[0] == "ANIM_rotate" && tokens.size() >= 9;
+        const bool keyed = tokens[0] == "ANIM_rotate_begin" && tokens.size() >= 5;
+        const std::string dataref = single ? BogieDataref(tokens[8]) : keyed ? BogieDataref(tokens[4]) : std::string();
+        if (dataref.empty()) continue;
+        std::vector<std::pair<double, double>> keys;
+        if (single) {
+            keys = {{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}};
+        } else {
+            for (size_t k = c + 1; k < obj.commands.size() && obj.commands[k][0] == "ANIM_rotate_key"; ++k) {
+                keys.emplace_back(Number(obj.commands[k], 1), Number(obj.commands[k], 2));
+            }
+        }
+        if (keys.size() < 2) continue;
+        double lo = keys[0].first, hi = lo, minDeg = keys[0].second, maxDeg = minDeg;
+        for (const auto& [v, deg] : keys) {
+            lo = std::min(lo, v);
+            hi = std::max(hi, v);
+            minDeg = std::min(minDeg, deg);
+            maxDeg = std::max(maxDeg, deg);
+        }
+        const double range = maxDeg - minDeg;
+        if (hi <= lo || range < MinBogieTiltDeg) continue;
+        if (!best || range > best->rangeDeg) best = BogieRotation{long(c), dataref, lo, hi, range};
+    }
+    return best;
+}
+
+// Tilt (degrees, nose down negative) of a bogie's points: the lowest point of its front half against its rear half.
+std::optional<double> TiltDeg(const std::vector<Vertex>& points) {
+    if (points.size() < 2) return std::nullopt;
+    double meanZ = 0;
+    for (const auto& p : points) meanZ += p.z;
+    meanZ /= double(points.size());
+    const Vertex* front = nullptr;
+    const Vertex* rear = nullptr;
+    for (const auto& p : points) {
+        const Vertex*& end = p.z < meanZ ? front : rear;
+        if (!end || p.y < end->y) end = &p;
+    }
+    if (!front || !rear || rear->z - front->z < 0.1f) return std::nullopt;
+    return std::atan2(double(front->y) - rear->y, double(rear->z) - front->z) * 180.0 / Pi;
+}
+
+// The deflection that levels the bogie, found from where its wheels end up when posed: Bluebell's 747 models its
+// wing-gear bogies already tilted and turns them 30 to 73 degrees, so the angle itself never reads 0 when level.
+struct BogieLevelResult {
+    double level = 0;
+    double tiltDeg = 0;  // tilt unloaded (at the low end of the range)
+};
+
+std::optional<BogieLevelResult> FindBogieLevel(const Obj& obj, const BogieRotation& rotation) {
+    auto tiltAt = [&](double value) {
+        PosedModel scratch;
+        std::vector<Vertex> bogie;
+        Pose(obj, rotation.dataref, float(value), scratch, rotation.command, &bogie);
+        return TiltDeg(bogie);
+    };
+    const auto unloaded = tiltAt(rotation.lo);
+    if (!unloaded) return std::nullopt;
+    constexpr int Samples = 20;
+    double prevValue = rotation.lo, prevTilt = *unloaded;
+    std::optional<double> bestValue;
+    double bestTilt = std::fabs(*unloaded);
+    for (int i = 1; i <= Samples; ++i) {
+        const double value = rotation.lo + (rotation.hi - rotation.lo) * i / Samples;
+        const auto tilt = tiltAt(value);
+        if (!tilt) return std::nullopt;
+        if ((prevTilt <= 0 && *tilt >= 0) || (prevTilt >= 0 && *tilt <= 0)) {
+            // Level between the two samples: halve the interval down to a millionth of the range.
+            double a = prevValue, ta = prevTilt, b = value;
+            for (int k = 0; k < 16; ++k) {
+                const double m = (a + b) / 2;
+                const auto tm = tiltAt(m);
+                if (!tm) break;
+                if ((ta <= 0) == (*tm <= 0)) {
+                    a = m;
+                    ta = *tm;
+                } else {
+                    b = m;
+                }
+            }
+            return BogieLevelResult{(a + b) / 2, *unloaded};
+        }
+        if (std::fabs(*tilt) < bestTilt) {
+            bestTilt = std::fabs(*tilt);
+            bestValue = value;
+        }
+        prevValue = value;
+        prevTilt = *tilt;
+    }
+    // Never quite level: the value where it is closest, if that is within a degree.
+    if (bestValue && bestTilt < 1.0) return BogieLevelResult{*bestValue, *unloaded};
+    return std::nullopt;
+}
+
 }  // namespace
+
+void ScanBogies(std::istream& in, PosedModel& model) {
+    model.bogiesScanned = true;
+    const Obj obj = ReadObj(in);
+    const auto rotation = FindBogieRotation(obj);
+    if (!rotation || rotation->rangeDeg <= model.bogieRangeDeg) return;
+    if (const auto level = FindBogieLevel(obj, *rotation)) {
+        model.bogieDataref = rotation->dataref;
+        model.bogieLevel = float(level->level);
+        model.bogieTiltDeg = float(level->tiltDeg);
+        model.bogieRangeDeg = float(rotation->rangeDeg);
+    }
+}
+
+void ReadPosedObj(std::istream& in, PosedModel& model) {
+    const Obj obj = ReadObj(in);
+    if (!model.bogiesScanned) {
+        model.bogiesScanned = true;
+        if (const auto rotation = FindBogieRotation(obj)) {
+            if (const auto level = FindBogieLevel(obj, *rotation)) {
+                model.bogieDataref = rotation->dataref;
+                model.bogieLevel = float(level->level);
+                model.bogieTiltDeg = float(level->tiltDeg);
+                model.bogieRangeDeg = float(rotation->rangeDeg);
+            }
+        }
+    }
+    Pose(obj, model.bogieDataref, model.bogieLevel, model);
+}
+
+PosedModel PoseObjFiles(const std::vector<std::string>& files) {
+    PosedModel model;
+    for (const auto& file : files) {
+        std::ifstream obj(std::filesystem::u8path(file));
+        ScanBogies(obj, model);
+    }
+    for (const auto& file : files) {
+        std::ifstream obj(std::filesystem::u8path(file));
+        ReadPosedObj(obj, model);
+    }
+    return model;
+}
 
 CslPackages FindCslPackages(const std::vector<std::string>& folders) {
     CslPackages packages;

@@ -39,6 +39,7 @@ struct PosedModel {
     std::string bogieDataref;
     float bogieLevel = 0;
     float bogieTiltDeg = 0;      // the bogie's angle unloaded, for the log
+    float bogieRangeDeg = 0;     // how far its rotation turns: the bogie is the one that turns furthest
     bool bogiesScanned = false;  // bogie level already found (ScanBogies over all of a model's files)
 };
 
