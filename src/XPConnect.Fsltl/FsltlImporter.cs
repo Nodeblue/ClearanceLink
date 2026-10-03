@@ -61,6 +61,7 @@ public static class FsltlImporter
         var models = 0;
         var skipped = 0;
         var modelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var model in liveries.GroupBy(l => l.ModelId, StringComparer.OrdinalIgnoreCase))
         {
@@ -107,6 +108,7 @@ public static class FsltlImporter
                     .Replace("{TEXTURE_LIT}", lit?.Name ?? "missing.dds", StringComparison.Ordinal);
                 var objPath = Path.Combine(objects, ObjName(modelName, i));
                 File.WriteAllText(objPath, text);
+                written.Add(Path.GetFileName(objPath));
                 // XPMP2 writes a copy per livery texture ("<obj name>.<texture>.xpmp2.obj") and would keep using a stale one.
                 var copies = Path.GetFileNameWithoutExtension(objPath) + ".*.xpmp2.obj";
                 foreach (var copy in Directory.EnumerateFiles(objects, copies)) File.Delete(copy);
@@ -155,6 +157,17 @@ public static class FsltlImporter
         }
 
         var textures = ConvertTextures(textureJobs, objects, options, problems);
+        if (options.Filter is null)
+        {
+            // Objects a previous import wrote that this one did not (a model now has fewer parts), and their XPMP2 copies.
+            foreach (var obj in Directory.EnumerateFiles(objects, "*.obj"))
+            {
+                var name = Path.GetFileName(obj);
+                var owner = name.EndsWith(".xpmp2.obj", StringComparison.OrdinalIgnoreCase) ? name[..name.IndexOf('.')] + ".obj" : name;
+                if (!written.Contains(owner)) File.Delete(obj);
+            }
+        }
+
         File.WriteAllText(Path.Combine(options.Output, "xsb_aircraft.txt"), entries.ToString());
         File.WriteAllText(Path.Combine(options.Output, CatalogueFile), JsonSerializer.Serialize(catalogue, CatalogueJson.Options));
         File.WriteAllText(Path.Combine(options.Output, "README.txt"),
