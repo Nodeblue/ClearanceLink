@@ -54,6 +54,11 @@ namespace XPConnect.Host
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
               xpconnect plugin install|remove|status [--xplane-root <dir>]
                   Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
+              xpconnect showcase [--airport YBBN] [--runway <end, e.g. 01R>] [--taxiway <name>] [--per-group 9] [--taxiers 8]
+                    [--gap 25] [--speed 15] [--xplane-root <dir>]
+                  Traffic check without BeyondATC (close XPConnect first; X-Plane running with the plugin): lines up
+                  aircraft from small to heavy nose to tail on a runway, grouped by size, and keeps some taxiing up and
+                  down a taxiway. Uses imported FSLTL liveries when there are any. Ctrl+C removes them.
               xpconnect fsltl import|status [--fsltl <fsltl-traffic-base folder>] [--xplane-root <dir>] [--size 1024|2048|4096]
                     [--only <text>] [--force] [--out <dir>]
                   Convert your own FSLTL install (MSFS Community folder) into an X-Plane CSL package for the traffic
@@ -127,6 +132,7 @@ namespace XPConnect.Host
                     "support" => SupportCommand(),
                     "plugin" => Plugin(options),
                     "fsltl" => Fsltl(options),
+                    "showcase" => await ShowcaseAsync(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -619,6 +625,127 @@ namespace XPConnect.Host
             }
 
             Console.WriteLine();
+        }
+
+        private static async Task<int> ShowcaseAsync(Options options)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (FindXPlane(options) is not { } xplane)
+            {
+                return Fail("X-Plane folder not found; pass --xplane-root <dir>");
+            }
+
+            var icao = (options.Get("airport") ?? "YBBN").ToUpperInvariant();
+            var airport = AptDatIndex.Build(xplane.AirportFiles()).Load(icao);
+            if (airport is null || airport.Runways.Count == 0) return Fail($"{icao}: no airport with runways in {xplane.Root}");
+
+            // Runway: the end asked for (line up from it), else the longest runway from its first end.
+            var wanted = options.Get("runway");
+            var (from, to) = wanted is null
+                ? airport.Runways.MaxBy(r => r.LengthMeters) is { } longest ? (longest.End1, longest.End2) : default
+                : airport.Runways.SelectMany(r => new[] { (r.End1, r.End2), (r.End2, r.End1) })
+                    .FirstOrDefault(e => e.Item1.Number.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+            if (from is null) return Fail($"{icao}: no runway end {wanted}");
+
+            var (taxiway, route) = Showcase.TaxiRoute(airport, options.Get("taxiway"));
+            var imported = FsltlImporter.LoadCatalogue(Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL"))
+                .Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline)).ToList();
+            var aircraft = Showcase.Pick(imported, int.Parse(options.Get("per-group") ?? "9", inv));
+            var lineUp = Showcase.LineUp(aircraft, from, to, double.Parse(options.Get("gap") ?? "25", inv));
+            var lineUpLength = lineUp.Count == 0 ? 0 : Geo.DistanceMeters(from.Latitude, from.Longitude, lineUp[^1].Latitude, lineUp[^1].Longitude);
+            var runwayLength = Geo.DistanceMeters(from.Latitude, from.Longitude, to.Latitude, to.Longitude);
+            if (lineUpLength > runwayLength) Console.WriteLine($"Note: the line-up ({lineUpLength:0} m) is longer than the runway ({runwayLength:0} m); use --per-group or --gap to shorten it.");
+            var taxiers = Math.Min(int.Parse(options.Get("taxiers") ?? "8", inv), route.Count >= 2 ? aircraft.Count : 0);
+            // Taxiers: one from each group in turn, so every size class turns corners.
+            var moving = aircraft.Select((a, i) => (a, i)).GroupBy(x => x.a.Group)
+                .SelectMany(g => g.Select((x, k) => (x.a, k))).OrderBy(x => x.k).Take(taxiers).Select(x => x.a).ToList();
+            var speedKt = double.Parse(options.Get("speed") ?? "15", inv);
+
+            Console.WriteLine($"Showcase at {icao}: {aircraft.Count} aircraft lined up on runway {from.Number} towards {to.Number} " +
+                $"({(imported.Count > 0 ? "imported FSLTL liveries" : "CSL models by type")}), {moving.Count} taxiing " +
+                (route.Count >= 2 ? $"up and down taxiway {taxiway} ({Showcase.Length(route):0} m)" : "(no named taxiway found)") + ". Ctrl+C to stop.");
+            foreach (var g in aircraft.GroupBy(a => a.Group))
+            {
+                Console.WriteLine($"  {g.Key}: {string.Join(", ", g.Select(a => a.IcaoType + (a.IcaoAirline is null ? "" : " " + a.IcaoAirline)))}");
+            }
+
+            PluginLink link;
+            try
+            {
+                link = new PluginLink(Version, Console.WriteLine);
+                link.Start();
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                return Fail($"Cannot listen on 127.0.0.1:{PluginLink.XPConnectPort} ({ex.Message}). Close XPConnect first.");
+            }
+
+            await using var _ = link;
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            const uint FirstId = 900_000;
+            var elevation = airport.ElevationFeet;
+            var allIds = new List<uint>();
+            void AddAll()
+            {
+                for (var i = 0; i < aircraft.Count; i++)
+                {
+                    var a = aircraft[i];
+                    link.Add(FirstId + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"{a.Group} {a.IcaoType}");
+                    allIds.Add(FirstId + (uint)i);
+                }
+
+                for (var i = 0; i < moving.Count; i++)
+                {
+                    var a = moving[i];
+                    link.Add(FirstId + 1000 + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"taxi {a.IcaoType}");
+                    allIds.Add(FirstId + 1000 + (uint)i);
+                }
+            }
+
+            var parked = TrafficLights.Nav;
+            var taxiing = TrafficLights.Nav | TrafficLights.Beacon | TrafficLights.Taxi;
+            var started = DateTime.UtcNow;
+            var lastAdd = DateTime.MinValue;
+            var loop = 2 * Showcase.Length(route);
+            try
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    var now = DateTime.UtcNow;
+                    if (now - lastAdd > TimeSpan.FromSeconds(10))
+                    {
+                        AddAll();  // again now and then: a plugin that (re)started later still gets them
+                        lastAdd = now;
+                        for (var i = 0; i < lineUp.Count; i++)
+                        {
+                            var p = lineUp[i];
+                            link.Update(FirstId + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, 0, true, 1, 0, 0, 0, parked));
+                        }
+                    }
+
+                    var travelled = (now - started).TotalSeconds * speedKt * 0.514444;
+                    for (var i = 0; i < moving.Count; i++)
+                    {
+                        var p = Showcase.Along(route, travelled + i * loop / moving.Count);
+                        link.Update(FirstId + 1000 + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, speedKt, true, 1, 0, 0, 0.15, taxiing));
+                    }
+
+                    await Task.Delay(100, cts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            foreach (var id in allIds.Distinct()) link.Remove(id);
+            Console.WriteLine("Showcase stopped; aircraft removed.");
+            return 0;
         }
 
         private static int Fsltl(Options options)
