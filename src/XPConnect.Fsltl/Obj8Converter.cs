@@ -182,8 +182,12 @@ public static class Obj8Converter
             var r = rotation is null ? node.Rotation : rotation.Channel.Quat(Pose(rotation));
             var s = scale is null ? node.Scale : scale.Channel.Vec3(Pose(scale));
             var hide = scale is { Role.Dataref: not null } ? HiddenRanges(scale) : [];
+            // Propeller and fan blur discs are left out: X-Plane draws a CSL model's objects in no fixed order and a
+            // translucent disc hides whatever is drawn after it (Dash 8 fuselage, lamp posts; 2026-10-04). The still
+            // blades are always drawn and turn with the engine instead.
             var engine = EngineVisibility(index, node);
-            var moves = translation is { Role.Dataref: not null } || rotation is { Role.Dataref: not null } || hide.Count > 0 || engine is not null;
+            if (engine == AnimationRoles.EnginePart.Blur) return;
+            var moves = translation is { Role.Dataref: not null } || rotation is { Role.Dataref: not null } || hide.Count > 0;
 
             if (!moves)
             {
@@ -222,11 +226,8 @@ public static class Obj8Converter
             }
 
             foreach (var (from, to) in hide) _out.Command($"ANIM_hide {Num(from)} {Num(to)} {scale!.Role.Dataref}");
-            // Propeller and fan blur discs show only while the engine turns; the still blades only while it does not.
-            if (engine == AnimationRoles.EnginePart.Blur) _out.Command($"ANIM_hide -1 {Num(AnimationRoles.EngineTurningRpm)} {AnimationRoles.EngineRpm}");
-            if (engine == AnimationRoles.EnginePart.Still) _out.Command($"ANIM_hide {Num(AnimationRoles.EngineTurningRpm)} 1000000 {AnimationRoles.EngineRpm}");
             var inner = Matrix4x4.CreateScale((hide.Count > 0 ? Vector3.One : s) * parentScale);
-            Geometry(node, inner, alphaTest: engine == AnimationRoles.EnginePart.Blur);
+            Geometry(node, inner);
             foreach (var c in node.Children) Emit(c, inner);
             _out.Command("ANIM_end");
         }
@@ -407,14 +408,14 @@ public static class Obj8Converter
             _out.Command($"ANIM_rotate {Vec(axis)} {Num(angle)} {Num(angle)} 0 0 none");
         }
 
-        private void Geometry(GltfNode node, Matrix4x4 transform, bool alphaTest = false)
+        private void Geometry(GltfNode node, Matrix4x4 transform)
         {
             if (node.Mesh < 0) return;
             foreach (var p in _model.Meshes[node.Mesh])
             {
                 if (!Uses(p)) continue;
                 var material = p.Material >= 0 && p.Material < _model.Materials.Count ? _model.Materials[p.Material] : null;
-                _out.State(material, alphaTest);
+                _out.State(material);
                 _out.AddTriangles(p, transform);
             }
         }
@@ -462,16 +463,10 @@ public static class Obj8Converter
             _cull = null;
         }
 
-        /// <param name="alphaTest">
-        /// Draw a blended material cut out at half alpha instead. An X-Plane CSL model is several objects drawn in no
-        /// fixed order, and a blended surface still writes depth: a propeller blur disc drawn before the body cut a
-        /// see-through hole in it (Dash 8, 2026-10-04). Cut-out pixels write no depth.
-        /// </param>
-        public void State(GltfMaterial? material, bool alphaTest = false)
+        public void State(GltfMaterial? material)
         {
             var blend = material?.AlphaMode switch
             {
-                "BLEND" when alphaTest => "ATTR_no_blend 0.5",
                 "BLEND" => "ATTR_blend",
                 "MASK" => $"ATTR_no_blend {Num(material.AlphaCutoff)}",
                 _ => "ATTR_no_blend 0",
