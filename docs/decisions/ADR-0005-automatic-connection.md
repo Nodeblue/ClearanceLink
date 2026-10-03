@@ -1,4 +1,4 @@
-# ADR-0004: Answer on MSFS's default connection while MSFS is closed
+# ADR-0005: Answer on MSFS's default connection while MSFS is closed
 
 Date: 2026-10-02. Status: accepted.
 

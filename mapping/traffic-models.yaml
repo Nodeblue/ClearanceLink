@@ -1,0 +1,157 @@
+# BATC traffic model title -> ICAO aircraft type and airline, read by XPConnect.Host (TrafficModels).
+# The X-Plane plugin (docs/protocol/plugin.md) hands both to XPMP2, which picks the closest CSL model and livery it has.
+#
+# BATC's titles come from MSFS's model list (mapping/liveries.json), e.g.
+#   FSLTL_B738_Qantas, FSLTL_FAIB_A21N_JST-Jetstar Airways, FSLTL_TFS_A332_QFA-Qantas, FSLTL_B738F_ZZZZ,
+#   Asobo PassiveAircraft King Air 350i
+# FSLTL titles are read as FSLTL_[prefix_]<type>[F]_<airline>: the airline is the 3-letter code before "-" when there
+# is one, else the first name below found in the title, else a bare 3-letter code. Everything else uses these lists.
+
+# Words after "FSLTL_" that name a model pack, not a type.
+prefixes: [FAIB, TFS, FSPXAI, OSP, FSLTL, SBAI, GA]
+
+# FSLTL type words that are not ICAO type codes. A 5-letter word ending in F (freighter, e.g. B738F) drops the F first.
+types:
+  C208B: C208
+  B73X: B738
+
+# Words that look like airline codes but are not (engine makers, FSLTL's "no airline").
+not_airlines: [IAE, CFM, ZZZZ, LIC, NEO, CEO, OC, NC]
+
+# Airline names as they appear in titles (case-insensitive) -> ICAO airline code. Longest match wins.
+airlines:
+  Qantas: QFA
+  QantasLink: QLK
+  Virgin Australia: VOZ
+  Velocity: VOZ
+  Jetstar: JST
+  Alliance: UTY
+  Rex: RXA
+  Air New Zealand: ANZ
+  Emirates: UAE
+  Singapore: SIA
+  Qatar: QTR
+  Cathay: CPA
+  Etihad: ETD
+  Koreanair: KAL
+  Korean Air: KAL
+  American: AAL
+  United: UAL
+  Delta: DAL
+  Lufthansa: DLH
+  British Airways: BAW
+  Air Canada: ACA
+  Air France: AFR
+  KLM: KLM
+  Fiji: FJI
+  Air Niugini: ANG
+  Nok Air: NOK
+  Elal: ELY
+  FedEx: FDX
+  DHL: DHK
+  UPS: UPS
+
+# Asobo passive models: text after "Asobo PassiveAircraft " -> ICAO type. The longest matching start wins.
+asobo:
+  A220-100: BCS1
+  A220-300: BCS3
+  A310: A310
+  A318: A318
+  A319: A319
+  A320 CEO: A320
+  A320 NEO: A20N
+  A321 CEO: A321
+  A321 NEO: A21N
+  A330-200: A332
+  A330-300: A333
+  A330-900: A339
+  A340-300: A343
+  A340-600: A346
+  A350-1000: A35K
+  A350-900: A359
+  A380: A388
+  ATR42: AT45
+  ATR72: AT76
+  B717: B712
+  B737-300: B733
+  B737-400: B734
+  B737-500: B735
+  B737-600: B736
+  B737-700: B737
+  B737-800: B738
+  B737-900: B739
+  B737-Max8: B38M
+  B737-Max9: B39M
+  B747-400: B744
+  B747-8: B748
+  B757-200: B752
+  B757-300: B753
+  B767-200: B762
+  B767-300: B763
+  B767-400: B764
+  B777-200LR: B77L
+  B777-200: B772
+  B777-300ER: B77W
+  B777-300: B773
+  B777-F: B77L
+  B787-08: B788
+  B787-09: B789
+  B787-10: B78X
+  Beechcraft 1900: B190
+  C152: C152
+  C172: C172
+  C182: C182
+  C208: C208
+  Citation CJ4: C25C
+  Citation CJ3: C25B
+  Citation Latitude: C68A
+  Citation Longitude: C700
+  Citation Mustang: C510
+  DA40: DA40
+  DA42: DA42
+  DA62: DA62
+  DHC-8 100: DH8A
+  DHC-8 200: DH8B
+  DHC-8 300: DH8C
+  DHC-8 400: DH8D
+  E170: E170
+  E175: E175
+  E190: E190
+  E195: E195
+  King Air 200: BE20
+  King Air 260: BE20
+  King Air 350: B350
+  King Air 360: B350
+  MD11: MD11
+  MD88: MD88
+  PC12: PC12
+  PC24: PC24
+  Phenom 100: E50P
+  Phenom 300: E55P
+  SR22: SR22
+  TBM930: TBM9
+
+# Pitch (degrees, nose up positive) for parked and slow-taxiing aircraft, by ICAO type. Some CSL models sit with the
+# nose wheel off the ground when drawn level; a little nose-down puts it back. Tune per type from screenshots.
+# Live tests at YBBN (Bluebell): 2026-10-01 E-Jets at -1.5 with -1 ft sank a little, 737s at -0.75 had a small
+# nose-wheel gap. Plugin 0.4.0 and later fit each model to its own wheels and use these only for models they cannot fit
+# (docs/protocol/plugin.md); older plugins use them for every model.
+ground_pitch:
+  default: 0
+  E170: -1.0
+  E175: -1.0
+  E190: -1.0
+  E195: -1.0
+  B736: -1.0
+  B737: -1.0
+  B738: -1.0
+  B739: -1.0
+  B38M: -1.0
+  B39M: -1.0
+
+# Feet to raise (+) or lower (-), by ICAO type (plugin 0.2.0 or later). 2026-10-03: a level Bluebell CRJ sat right at 0.
+ground_offset_ft:
+  default: 0
+
+# Used when nothing above gives a type (XPMP2 then draws its closest model).
+default_type: A320

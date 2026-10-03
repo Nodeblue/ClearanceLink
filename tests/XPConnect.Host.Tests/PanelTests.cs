@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using XPConnect.Host.Panel;
 using XPConnect.Host.Support;
+using XPConnect.Host.Traffic;
 
 [assembly: AvaloniaTestApplication(typeof(XPConnect.Host.Tests.PanelTestApp))]
 
@@ -84,6 +85,21 @@ public sealed class PanelTests
 
         Assert.Contains(CduPages.Build(PanelPage.Setup, old).Rows, r => r.KeyRight == CduKey.RemoveOldFiles);
         Assert.DoesNotContain(CduPages.Build(PanelPage.Setup, old with { Connection = ConnectionMode.AlwaysOn }).Rows, r => r.KeyRight == CduKey.RemoveOldFiles);
+    }
+
+    [Fact]
+    public void Traffic_add_on_is_offered_on_setup_and_its_aircraft_shown_on_status()
+    {
+        var missing = Ready with { TrafficAddOn = PluginInstall.State.NotInstalled };
+        Assert.Contains(CduPages.Build(PanelPage.Setup, missing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn && r.Right.Text == "INSTALL>");
+        Assert.Contains(CduPages.Build(PanelPage.Status, missing).Rows, r => r.Right.Text == "SEE SETUP");
+
+        // Old BeyondATC files take that row until they are removed.
+        Assert.DoesNotContain(CduPages.Build(PanelPage.Setup, missing with { OldConfigFiles = true }).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
+
+        var drawing = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 42 };
+        Assert.Contains(CduPages.Build(PanelPage.Status, drawing).Rows, r => r.Right.Text == "42 AIRCRAFT");
+        Assert.DoesNotContain(CduPages.Build(PanelPage.Setup, drawing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
     }
 
     [Fact]

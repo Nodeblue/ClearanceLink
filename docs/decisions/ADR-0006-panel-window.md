@@ -1,4 +1,4 @@
-# ADR-0005: An FMS-style window built with Avalonia
+# ADR-0006: An FMS-style window built with Avalonia
 
 Date: 2026-10-02. Status: accepted.
 

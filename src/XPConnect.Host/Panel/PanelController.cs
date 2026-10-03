@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using XPConnect.Host.Status;
 using XPConnect.Host.Support;
+using XPConnect.Host.Traffic;
 using XPConnect.Host.Transport;
 
 namespace XPConnect.Host.Panel;
@@ -18,7 +19,7 @@ public sealed class PanelController : IAsyncDisposable
     private CancellationTokenSource? _stop;
     private Task? _serve;
     private StatusBoard? _board;
-    private (string? Batc, string? XPlane, DateTime At) _folders;
+    private (string? Batc, string? XPlane, PluginInstall.State AddOn, DateTime At) _folders;
 
     public void Start()
     {
@@ -43,6 +44,7 @@ public sealed class PanelController : IAsyncDisposable
     {
         var settings = AppSettings.Load(AppFolders.Default.Settings);
         var (batc, xplane) = Folders();
+        var addOn = _folders.AddOn;
         var snapshot = _board?.Snapshot();
         var names = snapshot?.Clients.Select(c => c.Name).ToList() ?? [];
         var airport = snapshot is { Airports.Count: > 0 } ? snapshot.Airports[0] : null;
@@ -65,7 +67,9 @@ public sealed class PanelController : IAsyncDisposable
             settings.KeepDays,
             DateTime.Now - _started,
             batc,
-            xplane);
+            xplane,
+            addOn,
+            snapshot?.Plugin?.Aircraft);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -100,6 +104,8 @@ public sealed class PanelController : IAsyncDisposable
                 Directory.CreateDirectory(AppFolders.Default.Logs);
                 Cli.ShowInExplorer(AppFolders.Default.Logs);
                 return "OPENING LOG FOLDER";
+            case CduKey.InstallTrafficAddOn:
+                return InstallTrafficAddOn();
             case CduKey.OpenWebsite:
                 Cli.OpenInBrowser(CduPages.Website);
                 return "OPENING WEBSITE";
@@ -175,6 +181,32 @@ public sealed class PanelController : IAsyncDisposable
         }
     }
 
+    private string InstallTrafficAddOn()
+    {
+        if (Folders().XPlane is not { } xplane)
+        {
+            return "SET X-PLANE FOLDER";
+        }
+
+        // X-Plane keeps the plugin file open while it runs.
+        if (_board?.Snapshot().XPlane.Connected == true)
+        {
+            return "CLOSE X-PLANE FIRST";
+        }
+
+        try
+        {
+            new PluginInstall(xplane).Install().ToList().ForEach(l => PacketConsole.Info($"plugin: {l}"));
+            _folders = default;
+            return "TRAFFIC ADD-ON INSTALLED";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            PacketConsole.Info($"plugin: could not install: {ex.Message}");
+            return "CLOSE X-PLANE FIRST";
+        }
+    }
+
     private static string SetSessionLog(bool on)
     {
         var settings = AppSettings.Load(AppFolders.Default.Settings);
@@ -198,7 +230,9 @@ public sealed class PanelController : IAsyncDisposable
         if (DateTime.Now - _folders.At > FolderRefresh)
         {
             var none = new Options();
-            _folders = (Cli.BatcFolder(none), Cli.FindXPlane(none)?.Root, DateTime.Now);
+            var xplane = Cli.FindXPlane(none)?.Root;
+            var addOn = xplane is null ? PluginInstall.State.NotBundled : new PluginInstall(xplane).Check();
+            _folders = (Cli.BatcFolder(none), xplane, addOn, DateTime.Now);
         }
 
         return (_folders.Batc, _folders.XPlane);
