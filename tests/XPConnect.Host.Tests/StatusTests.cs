@@ -35,6 +35,19 @@ public sealed class StatusTests : IDisposable
     }
 
     [Fact]
+    public void Overall_says_to_close_MSFS_while_it_holds_the_default_connection()
+    {
+        var xp = new XPlaneStatus(true, null, "http://127.0.0.1:8086/");
+
+        var blocked = StatusBoard.Overall(xp, [OpenSession(1, "FS2024BridgeService")], msfsRunning: true);
+        var connected = StatusBoard.Overall(xp, [OpenSession(1, "BeyondATC"), OpenSession(2, "BATCDLLSimConnection")], msfsRunning: true);
+
+        Assert.Equal(StatusLevel.Problem, blocked.Level);
+        Assert.Contains("Close it", blocked.Message, StringComparison.Ordinal);
+        Assert.Equal(StatusLevel.Ok, connected.Level);
+    }
+
+    [Fact]
     public async Task Status_page_shows_live_connections_and_airports_sent()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
