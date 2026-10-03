@@ -32,6 +32,9 @@ struct Wheels {
 struct PosedModel {
     std::vector<Vertex> all;
     std::vector<Vertex> gear;
+    // Main tyre deflection (libxplanemp/gear/tire_vertical_deflection_mtr) it was posed with: the value that levels
+    // a tilting bogie (777, A340, A380 tilt theirs about 20 degrees when unloaded), else 0. Draw it with this too.
+    float tireDeflectionM = 0;
 };
 
 // Finds the wheels among a model's points. With gear points, the nose wheel is the lowest gear point in the front
@@ -46,14 +49,18 @@ std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why = nul
 // animation (B738 and E190 at YBBN, 2026-10-03), so the raw VT points are not where the wheels are drawn.
 void ReadPosedObj(std::istream& obj, PosedModel& model);
 
-// Value a posed model uses for a dataref.
-float PoseValue(const std::string& dataref);
+// Value a posed model uses for a dataref, given the tyre deflection it is posed with.
+float PoseValue(const std::string& dataref, float tireDeflectionM = 0);
 
-// CSL package names (EXPORT_NAME) to their folders, searching each folder like XPMP2 does.
-std::map<std::string, std::string> FindCslPackages(const std::vector<std::string>& folders);
+// CSL package names (EXPORT_NAME) and their folders. One package can span several folders, each with the same
+// xsb_aircraft.txt but different .obj files (Bluebell's __Bluebell_Airbus is BB_Airbus, BB_Airbus1 and BB_Airbus2).
+using CslPackages = std::multimap<std::string, std::string>;
 
-// The .obj files of the model whose OBJ8_AIRCRAFT line is line `line` (1-based) of `xsbFolder`/xsb_aircraft.txt.
-std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line,
-                                       const std::map<std::string, std::string>& packages);
+// Finds the CSL packages in these folders, searching each like XPMP2 does.
+CslPackages FindCslPackages(const std::vector<std::string>& folders);
+
+// The .obj files of the model whose OBJ8_AIRCRAFT line is line `line` (1-based) of `xsbFolder`/xsb_aircraft.txt,
+// each from the first of its package's folders that has it.
+std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line, const CslPackages& packages);
 
 }  // namespace xpc

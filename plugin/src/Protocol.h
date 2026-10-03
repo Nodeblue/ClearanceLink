@@ -36,8 +36,9 @@ struct Pos {
 
 struct Del { uint32_t id = 0; };
 
-// Raise (+) or lower (-) aircraft `id` by this many feet when it is drawn on the ground (per-model fine tuning).
-struct Offset { uint32_t id = 0; float groundFt = 0; };
+// Raise (+) or lower (-) aircraft `id` by this many feet when it is drawn on the ground, and (0.4.0+, optional) the
+// pitch to park it at when its model's wheels could not be read (XPConnect's per-type tuning).
+struct Offset { uint32_t id = 0; float groundFt = 0; std::optional<float> groundPitch; };
 
 struct Clear {};
 

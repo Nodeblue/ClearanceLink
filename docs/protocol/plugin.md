@@ -19,28 +19,34 @@ newer than the other.
 | `hello <version>` | Sent every second. If the plugin hears nothing for 10 s it removes all its aircraft (XPConnect closed). |
 | `add <id> <icaoType> <icaoAirline> <livery> <label...>` | Create aircraft `id` (1..16777215). `icaoAirline` and `livery` are `-` when unknown. `label` (rest of the line) is shown next to the aircraft, for example the registration. Re-sending `add` for an existing id changes its model. |
 | `pos <id> <lat> <lon> <altFt> <hdgTrue> <pitch> <bank> <gsKt> <onGround> <gear> <flaps> <spoilers> <thrust> <lights>` | Latest state. `altFt` is MSL; when `onGround` is `1` the plugin puts the wheels on X-Plane's terrain and ignores `altFt`. `gear`, `flaps`, `spoilers`, `thrust` are 0..1. `lights` is a bit mask: 1 nav, 2 beacon, 4 strobe, 8 landing, 16 taxi. |
-| `offset <id> <feet>` | Raise (+) or lower (-) aircraft `id` by this much when it is on the ground, to fine-tune a CSL model's height (from `ground_offset_ft` in `mapping/traffic-models.yaml`; sent after each `add`). Plugin 0.2.0+; older plugins ignore it. |
+| `offset <id> <feet> [<pitch>]` | Per-type height (feet, + raises) and parked pitch (degrees, nose up +) for aircraft `id`, from `ground_offset_ft` and `ground_pitch` in `mapping/traffic-models.yaml`, sent after each `add`. Plugin 0.4.0+ uses them only for models it cannot fit to their own wheels, and XPConnect then sends the pitch here rather than in each `pos`; to older plugins XPConnect sends `<feet>` only (0.2.0+) and puts the pitch in `pos`. |
 | `del <id>` | Remove aircraft `id`. |
 | `clear` | Remove all aircraft. |
 
 On the ground the plugin also pitches each aircraft to the slope of the terrain under it (probed 8 m ahead and
 behind, at most 4°), added to the `pitch` XPConnect sends (plugin 0.2.0+).
 
-Plugin 0.3.0 and 0.3.1 also tried to fit each CSL model to the ground from its own 3D files: the first time a model
-is drawn, it reads the model's `.obj` files (found from its `OBJ8` lines in `xsb_aircraft.txt`,
-`plugin/src/GroundFit.cpp`) in the background, takes the lowest point of the front quarter near the centre line as the
-nose wheel and the lowest point of the middle half as the main wheels (OBJ8: nose towards -z), and pitched the model so
-both touched. Live at YBBN (2026-10-03) that did not work with Bluebell: a 737-800 read its nose wheel 0.36 m above its
-mains and was drawn 2.9° nose down with the main wheels in the air, and most models (E190, A319, A320, A333, A388,
-SF34, B733) needed more than 3° and were left level. The wheels are posed by animation, which the reader does not
-apply. Since 0.3.3 the reader poses the model with its gear down first (`ReadPosedObj`: every `ANIM_` transform applied
-with gear and gear-door datarefs at 1 and others at 0, `ANIM_hide`/`ANIM_show` respected, only points of drawn
-triangles) and takes the wheels from the points the `gear_ratio` animations move. `xpconnect-groundfit <CSL folder>...`
-(in the plugin build's `tools` folder) prints that fit for every model of a CSL library as CSV, to check it before the
-plugin uses it. Since 0.3.2 the result is only logged, one line per model:
-`XPConnect: ground fit <csl id>: nose wheel 0.36 m above mains, pitch -2.93 deg, wheels 2.10 m below the model origin
-(CSL offset 2.30 m)` or `XPConnect: ground fit <csl id>: none (<reason>), drawn level`. Models are drawn at XPMP2's
-vertical offset, with XPConnect's per-type `ground_pitch` and `ground_offset_ft`.
+Plugin 0.4.0+ parks each CSL model on its own wheels. The first time a model is drawn it reads the model's `.obj`
+files in the background (found from its `OBJ8` lines in `xsb_aircraft.txt`; a package can span several folders with
+the same `EXPORT_NAME`, as Bluebell's `__Bluebell_Airbus` does over `BB_Airbus`, `BB_Airbus1` and `BB_Airbus2`), and
+poses it with the gear down (`plugin/src/GroundFit.cpp`, `ReadPosedObj`): every `ANIM_` transform applied in the
+OBJ8 order (the last command applies to a point first), `gear_ratio` and gear-door datarefs at 1, the main tyre
+deflection at the value that levels a tilting bogie (777, A340, A380; 0 for other models), everything else at 0, and
+parts hidden by `ANIM_hide`/`ANIM_show` left out. Bluebell keeps its gear retracted in the file and lowers it by
+animation (B738 and E190 read on Ben's PC, 2026-10-03), so the raw `VT` points are not where the wheels are drawn.
+The nose wheel is the lowest point the `gear_ratio` animations move in the front 35% of the model, the main wheels
+the lowest one behind that. On the ground the plugin adds the pitch that puts both on level ground, sets the height
+from the wheels so the lower one touches (this also keeps the main gear down while BATC rotates for take-off), and
+draws the model with the tyre deflection it measured. Models it cannot fit (no gear animation, such as fixed-gear
+Cessnas and helicopters, or a fit beyond 3°) use XPConnect's per-type pitch and height on XPMP2's vertical offset.
+
+Checked against Ben's Bluebell library (2,027 models): the measured wheels agree with each model's own `VERT_OFFSET`
+within 5 cm for 1,247 models, and parked pitches are 0.2° to 2.6° nose down (B738 -1.98°, E190 -2.59°, A320 -1.33°,
+DH8D -0.69°). Plugin 0.3.0 and 0.3.1 read the raw `VT` points without posing the gear and got the 737 wrong and most
+other models not at all; 0.3.2 and 0.3.3 only logged the fit. `xpconnect-groundfit <CSL folder>...` (in the plugin
+build's `tools` folder) prints the fit for every model of a CSL library as CSV. The X-Plane log gets one line per model:
+`XPConnect: ground fit <csl id>: nose wheel 0.52 m above mains, pitch -1.98 deg, wheels 3.33 m below the model origin
+(CSL offset 3.31 m)` or `XPConnect: ground fit <csl id>: none (<reason>), drawn level`.
 
 BATC writes each moving AI aircraft about 55 times a second (one every 16.7 ms in the 2026-09-30 MSFS recording).
 XPConnect sends the latest state 10 times a second, and a parked aircraft whose state has not changed only every 2 s.

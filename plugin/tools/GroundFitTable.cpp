@@ -37,14 +37,16 @@ int main(int argc, char** argv) {
     const auto packages = xpc::FindCslPackages(folders);
     std::fprintf(stderr, "%zu CSL packages\n", packages.size());
 
-    std::printf("package,model,icao,vert_offset_m,obj_files,points,gear_points,fit,nose_above_mains_m,pitch_deg,"
-                "wheels_below_origin_m,why\n");
+    std::printf("package,model,icao,vert_offset_m,obj_files,points,gear_points,tire_deflection_m,fit,nose_above_mains_m,"
+                "pitch_deg,wheels_below_origin_m,why\n");
     // Liveries of one model share their .obj files; read each set once.
     std::map<std::vector<std::string>, std::pair<xpc::PosedModel, std::optional<xpc::Wheels>>> read;
     std::map<std::vector<std::string>, std::string> reasons;
     int models = 0, fitted = 0;
 
-    for (const auto& [package, folder] : packages) {
+    // A package split over several folders has the same xsb_aircraft.txt in each: read it once.
+    for (auto it = packages.begin(); it != packages.end(); it = packages.upper_bound(it->first)) {
+        const auto& [package, folder] = *it;
         std::ifstream xsb(std::filesystem::u8path(folder) / "xsb_aircraft.txt");
         std::string line, model, icao, offset;
         int start = 0;
@@ -67,13 +69,15 @@ int main(int argc, char** argv) {
             ++models;
             if (wheels) {
                 ++fitted;
-                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,yes,%.3f,%.2f,%.3f,\n", Csv(package).c_str(), Csv(model).c_str(),
+                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,%.3f,yes,%.3f,%.2f,%.3f,\n", Csv(package).c_str(), Csv(model).c_str(),
                             Csv(icao).c_str(), offset.c_str(), files.size(), posed.all.size(), posed.gear.size(),
+                            posed.tireDeflectionM,
                             wheels->noseY - wheels->mainY, wheels->LevelPitchDeg(),
                             wheels->GroundHeightM(wheels->LevelPitchDeg()));
             } else {
-                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,no,,,,%s\n", Csv(package).c_str(), Csv(model).c_str(),
+                std::printf("%s,%s,%s,%s,%zu,%zu,%zu,%.3f,no,,,,%s\n", Csv(package).c_str(), Csv(model).c_str(),
                             Csv(icao).c_str(), offset.c_str(), files.size(), posed.all.size(), posed.gear.size(),
+                            posed.tireDeflectionM,
                             Csv(reasons[files]).c_str());
             }
         };
@@ -87,7 +91,7 @@ int main(int argc, char** argv) {
                 model = tokens.size() > 1 ? tokens[1] : "";
                 icao.clear();
                 offset.clear();
-            } else if (tokens[0] == "ICAO" && tokens.size() > 1) {
+            } else if ((tokens[0] == "ICAO" || tokens[0] == "MATCHES") && tokens.size() > 1 && icao.empty()) {
                 icao = tokens[1];
             } else if (tokens[0] == "VERT_OFFSET" && tokens.size() > 1) {
                 offset = tokens[1];

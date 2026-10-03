@@ -20,7 +20,7 @@ struct ModelFit;
 class TrafficAircraft : public XPMP2::Aircraft {
 public:
     // The CSL packages (FindCslPackages) for reading models' wheel positions; set after the CSL folders load.
-    static void SetCslPackages(std::map<std::string, std::string> packages);
+    static void SetCslPackages(CslPackages packages);
     // Drops the cached wheel positions (waits for reads still running).
     static void ForgetModelFits();
 
@@ -30,7 +30,12 @@ public:
 
     void Apply(const Pos& pos, float now);
     void ChangeTo(const Add& add);
-    void SetGroundOffsetFt(float feet) { groundOffsetFt_ = feet; }
+    // XPConnect's per-type height (feet) and, from XPConnect versions that send it, parked pitch: used for models whose
+    // wheels could not be read. Without a pitch, XPConnect puts its per-type pitch in each `pos` itself.
+    void SetGroundTrim(float feet, std::optional<float> pitch) {
+        groundOffsetFt_ = feet;
+        groundPitch_ = pitch;
+    }
 
     // Terrain elevation (MSL feet) under the aircraft at the last frame, once known.
     std::optional<double> GroundElevationFt() const { return groundFt_; }
@@ -48,6 +53,7 @@ private:
     std::shared_ptr<ModelFit> fit_;
 
     float groundOffsetFt_ = 0;
+    std::optional<float> groundPitch_;
     std::string requested_;  // type, airline and livery last asked for, to skip re-matching on a repeated add
     // Probes the terrain under the aircraft now, or reuses the last probe while it has not moved (parked) or is
     // airborne (only the reported ground height needs it). Returns false when there is no terrain under it.

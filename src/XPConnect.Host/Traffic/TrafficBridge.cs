@@ -12,7 +12,8 @@ public interface IPluginTraffic
 
     void Update(uint id, TrafficState state);
 
-    void SetGroundOffset(uint id, double feet);
+    /// <summary>Per-type height (feet) and, for plugins that take it, parked pitch for models it cannot fit itself.</summary>
+    void SetGroundOffset(uint id, double feet, double? pitch = null);
 
     void Remove(uint id);
 
@@ -71,6 +72,9 @@ public sealed class TrafficBridge(
         }
 
         var connected = plugin.Status is not null;
+        // Plugin 0.4.0+ parks each model on its own wheels and takes the per-type pitch only as a fallback; older ones
+        // get that pitch in every position.
+        var pluginFits = PluginFitsModels(plugin.Status);
         foreach (var o in aircraft.Values)
         {
             var drawn = _drawn.GetOrAdd(o.ObjectId, _ => new Drawn(NextPluginId(), models.Match(o.Title)));
@@ -90,11 +94,12 @@ public sealed class TrafficBridge(
                 }
 
                 plugin.Add(drawn.PluginId, drawn.Model.IcaoType, drawn.Model.IcaoAirline, null, o.TailNumber);
-                plugin.SetGroundOffset(drawn.PluginId, models.GroundOffsetFeet(drawn.Model.IcaoType));
+                var type = drawn.Model.IcaoType;
+                plugin.SetGroundOffset(drawn.PluginId, models.GroundOffsetFeet(type), pluginFits ? models.GroundPitch(type) : null);
                 drawn.LastAdd = now;
             }
 
-            var state = State(o, fallback?.ElevationMeters(o.Latitude, o.Longitude) / FeetToMeters, models.GroundPitch(drawn.Model.IcaoType));
+            var state = State(o, fallback?.ElevationMeters(o.Latitude, o.Longitude) / FeetToMeters, pluginFits ? 0 : models.GroundPitch(drawn.Model.IcaoType));
             if (readded || state != drawn.LastState || now - drawn.LastSent >= UnchangedInterval)
             {
                 plugin.Update(drawn.PluginId, state);
@@ -219,6 +224,10 @@ public sealed class TrafficBridge(
             .FirstOrDefault();
         return nearest is not null && PluginId(nearest.ObjectId) is { } id && plugin.TryGetGroundFeet(id, out var feet) ? feet : null;
     }
+
+    /// <summary>Whether the plugin parks models on their own wheels (version 0.4.0 or later).</summary>
+    public static bool PluginFitsModels(PluginStatus? status) =>
+        status is not null && Version.TryParse(status.Version, out var v) && v >= new Version(0, 4, 0);
 
     private uint NextPluginId() => (uint)((Interlocked.Increment(ref _nextPluginId) - 1) % 0xFFFFFF) + 1;
 
