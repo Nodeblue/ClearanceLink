@@ -28,7 +28,8 @@ behind, at most 4°), added to the `pitch` XPConnect sends (plugin 0.2.0+).
 
 Plugin 0.4.0+ parks each CSL model on its own wheels. The first time a model is drawn it reads the model's `.obj`
 files in the background (found from its `OBJ8` lines in `xsb_aircraft.txt`; a package can span several folders with
-the same `EXPORT_NAME`, as Bluebell's `__Bluebell_Airbus` does over `BB_Airbus`, `BB_Airbus1` and `BB_Airbus2`), and
+the same `EXPORT_NAME`, as Bluebell's `__Bluebell_Airbus` does over `BB_Airbus`, `BB_Airbus1` and `BB_Airbus2`; plugin 0.4.2
+patches XPMP2 so it loads those models too, see `plugin/cmake/xpmp2-split-packages.patch`), and
 poses it with the gear down (`plugin/src/GroundFit.cpp`, `ReadPosedObj`): every `ANIM_` transform applied in the
 OBJ8 order (the last command applies to a point first), `gear_ratio` and gear-door datarefs at 1, the bogie dataref
 at the value that levels a tilting bogie (777, A340, A380; 0 for other models), everything else at 0, and
