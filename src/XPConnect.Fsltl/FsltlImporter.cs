@@ -78,7 +78,7 @@ public static class FsltlImporter
                     continue;
                 }
 
-                converted = Obj8Converter.Convert(lods, AnimationRoles.Load(model.Key));
+                converted = Obj8Converter.Convert(lods, AnimationRoles.Load(model.Key), AnimationRoles.EngineParts(model.Key));
             }
             catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or ArgumentException)
             {
