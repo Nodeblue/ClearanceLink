@@ -39,13 +39,13 @@ std::map<std::string, std::string> g_packages;
 
 FitResult ReadWheels(const std::vector<std::string>& files) {
     if (files.empty()) return {std::nullopt, "no .obj file found"};
-    std::vector<Vertex> vertices;
+    PosedModel model;
     for (const auto& file : files) {
         std::ifstream obj(std::filesystem::u8path(file));
-        ReadObjVertices(obj, vertices);
+        ReadPosedObj(obj, model);
     }
     FitResult result;
-    result.wheels = FindWheels(vertices, &result.why);
+    result.wheels = FindWheels(model, &result.why);
     return result;
 }
 

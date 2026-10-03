@@ -3,7 +3,7 @@
 # Linux (compile check): cmake -S plugin -B build/plugin && cmake --build build/plugin
 # Output: build/plugin/XPConnect/64/<win|lin|mac>.xpl plus XPConnect/Resources (XPMP2's support files).
 cmake_minimum_required(VERSION 3.16)
-project(XPConnectPlugin VERSION 0.3.2 LANGUAGES C CXX)
+project(XPConnectPlugin VERSION 0.3.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -93,3 +93,11 @@ enable_testing()
 add_executable(XPConnectPluginTests tests/PluginTests.cpp src/Protocol.cpp src/CslFolders.cpp src/GroundFit.cpp src/Motion.cpp)
 target_include_directories(XPConnectPluginTests PRIVATE src)
 add_test(NAME PluginTests COMMAND XPConnectPluginTests)
+
+# Checks the ground fit against a whole CSL library: xpconnect-groundfit <CSL folder>... > table.csv
+add_executable(xpconnect-groundfit tools/GroundFitTable.cpp src/GroundFit.cpp)
+target_include_directories(xpconnect-groundfit PRIVATE src)
+set_target_properties(xpconnect-groundfit PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/XPConnect/tools"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/XPConnect/tools"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/XPConnect/tools")
