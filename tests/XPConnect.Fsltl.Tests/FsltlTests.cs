@@ -122,7 +122,7 @@ public sealed class FsltlTests
     [InlineData("main_gear_l", AnimationRoles.GearRatio)]
     [InlineData("l_tire_anim", AnimationRoles.TireRotation)]
     [InlineData("nose_gear_steering", null)]
-    [InlineData("N1_still_left", null)]
+    [InlineData("N1_still_left", AnimationRoles.EngineAngle)] // still blades turn with the engine
     public void Animations_missing_from_the_xml_are_judged_by_name(string name, string? dataref) =>
         Assert.Equal(dataref, AnimationRoles.FromName(name).Dataref);
 

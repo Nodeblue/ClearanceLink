@@ -31,10 +31,7 @@ public static class AnimationRoles
     public const string SpoilerRatio = "libxplanemp/controls/spoiler_ratio";
     public const string ReverserRatio = "libxplanemp/engines/thrust_reverser_deploy_ratio";
     public const string TireRotation = "libxplanemp/gear/tire_rotation_angle_deg";
-    public const string EngineRpm = "libxplanemp/engines/engine_rotation_speed_rpm1";
-
-    /// <summary>Below this the engine counts as stopped: still blades show, the blur disc does not.</summary>
-    public const float EngineTurningRpm = 10;
+    public const string EngineAngle = "libxplanemp/engines/engine_rotation_angle_deg1";
 
     /// <summary>An engine part that MSFS shows or hides by engine speed (FSLTL_Engine_Blur / FSLTL_Engine_Static).</summary>
     public enum EnginePart
@@ -95,6 +92,8 @@ public static class AnimationRoles
             parameter?.Invoke(name) is { } text && float.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
         if (Has(template, "GEAR") && !Has(template, "DOOR")) return new AnimationRole("gear", GearRatio);
+        // FSLTL_Engine_Static turns the still blades a full turn over its length; XPMP2's engine angle turns them.
+        if (template.Equals("FSLTL_Engine_Static", StringComparison.OrdinalIgnoreCase)) return new AnimationRole("propeller", EngineAngle, Scale: 360);
         if (Has(template, "Wheel_Roll") || Has(template, "WHEEL_ROTATION")) return new AnimationRole("wheel", TireRotation, Scale: 360);
         // FSLTL_Steering's frame is (yaw rate * P1 + P2) * 10 + OFFSET, so straight ahead is frame P2 * 10 + OFFSET;
         // FSLTL_Alt_Steering's is |yaw rate * SHARP + START|, straight at START.
@@ -118,6 +117,7 @@ public static class AnimationRoles
         bool Has(string word) => name.Contains(word, StringComparison.OrdinalIgnoreCase);
         if (Has("tire") || Has("tyre") || Has("wheel_rot") || Has("WHEEL_ROTATION")) return new AnimationRole("wheel", TireRotation, Scale: 360);
         if (Has("gear") && !Has("steer")) return new AnimationRole("gear", GearRatio);
+        if (EnginePartFromName(name) == EnginePart.Still) return new AnimationRole("propeller", EngineAngle, Scale: 360);
         return AnimationRole.Still;
     }
 

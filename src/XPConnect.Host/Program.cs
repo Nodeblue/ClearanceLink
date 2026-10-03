@@ -646,7 +646,7 @@ namespace XPConnect.Host
                             : "FSLTL not found in the MSFS Community folder; pass --fsltl <fsltl-traffic-base folder>");
                     }
 
-                    if (System.Diagnostics.Process.GetProcessesByName("X-Plane").Length > 0)
+                    if (options.Get("out") is null && System.Diagnostics.Process.GetProcessesByName("X-Plane").Length > 0)
                     {
                         // Replacing objects and textures X-Plane has open can leave it drawing a mix of old and new files.
                         return Fail("Close X-Plane before importing; it reads the CSL files while it runs");
