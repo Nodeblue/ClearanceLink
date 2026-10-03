@@ -465,9 +465,12 @@ public static class Obj8Converter
 
         public void State(GltfMaterial? material)
         {
+            // Nothing is blended. A CSL model is several X-Plane objects drawn in no fixed order, and a blended
+            // surface still writes depth, so anything translucent drawn before the body cuts a see-through hole in
+            // it (Dash 8 propeller discs, 2026-10-04). Translucent materials are cut out at half alpha instead.
             var blend = material?.AlphaMode switch
             {
-                "BLEND" => "ATTR_blend",
+                "BLEND" => "ATTR_no_blend 0.5",
                 "MASK" => $"ATTR_no_blend {Num(material.AlphaCutoff)}",
                 _ => "ATTR_no_blend 0",
             };

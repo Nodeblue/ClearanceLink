@@ -283,6 +283,12 @@ xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0
     return p;
 }
 
+void TurnsPropellersAndWheels() {
+    CHECK(std::fabs(xpc::AdvanceAngle(350, 10, 0.5f, 1000) - 20) < 1e-3);    // 10 rpm = 60 deg/s, wraps past 360
+    CHECK(std::fabs(xpc::AdvanceAngle(0, 1000, 0.1f, 1500) - 150) < 1e-3);   // capped at 1500 deg/s
+    CHECK(xpc::AdvanceAngle(42, 0, 1, 1500) == 42);                          // stopped engine stays put
+}
+
 void BlendsBetweenUpdates() {
     auto a = At(-27.0, 1000, 350, 2), b = At(-26.999, 1100, 10, 6);
     auto mid = xpc::Blend(a, b, 0.5f);
@@ -499,6 +505,7 @@ int main() {
     ReadsAnimationsKeyedHighToLow();
     FindsModelObjFiles();
     BlendsBetweenUpdates();
+    TurnsPropellersAndWheels();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
