@@ -176,6 +176,24 @@ public sealed class FsltlTests
     }
 
     [Fact]
+    public void Opaque_textures_lose_their_alpha()
+    {
+        var dds = DdsTexture.Parse(DdsBuilder.Dxt5(8, 8));  // blocks filled with the level number: alpha near 0
+
+        var opaque = DdsTexture.Parse(dds.ToXPlane(8, opaque: true));
+
+        for (var m = 0; m < opaque.Mips.Count; m++)
+        {
+            var level = opaque.Mips[m];
+            for (var b = 0; b < level.Length; b += 16)
+            {
+                Assert.Equal([0xFF, 0xFF, 0, 0, 0, 0, 0, 0], level[b..(b + 8)]);
+                Assert.Equal(dds.Mips[m][(b + 8)..(b + 16)], level[(b + 8)..(b + 16)]);  // colour untouched
+            }
+        }
+    }
+
+    [Fact]
     public void Dxt_textures_without_mips_get_a_full_chain()
     {
         var full = DdsTexture.Parse(DdsBuilder.Dxt5(16, 16));

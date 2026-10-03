@@ -20,6 +20,19 @@ float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond);
 // steers FSLTL models from the yaw rate in the same way; XPMP2 draws only the angle it is given.
 float SteeringAngleDeg(float yawDegPerSecond, float speedKt, float wheelbaseM, float maxDeg = 70.0f);
 
+// Smooths a drawn height (or any value) that switches source, e.g. between the wheels-on-terrain height on the ground
+// and BATC's altitude in the air at lift-off and touchdown: when the target jumps, the drawn value carries on from
+// where it was and eases onto the new target, `seconds` being the time to close most (95%) of the gap.
+class Smoothed {
+public:
+    // The value to draw this frame for `target`; `snap` (a placed or first-seen aircraft) jumps straight to it.
+    float Next(float target, float elapsed, bool sourceChanged, bool snap, float seconds = 2.0f);
+
+private:
+    float offset_ = 0, last_ = 0;
+    bool has_ = false;
+};
+
 // Heading change from `from` to `to` in degrees, the short way round (-180..180).
 float HeadingDelta(float from, float to);
 

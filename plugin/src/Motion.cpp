@@ -55,6 +55,19 @@ float SteeringAngleDeg(float yawDegPerSecond, float speedKt, float wheelbaseM, f
     return std::clamp(deg, -maxDeg, maxDeg);
 }
 
+float Smoothed::Next(float target, float elapsed, bool sourceChanged, bool snap, float seconds) {
+    if (!has_ || snap) {
+        offset_ = 0;
+    } else {
+        if (sourceChanged) offset_ = last_ - target;  // carry on from where it was drawn
+        offset_ *= std::exp(-3.0f * std::max(elapsed, 0.0f) / std::max(seconds, 0.01f));
+        if (std::fabs(offset_) < 0.001f) offset_ = 0;
+    }
+    has_ = true;
+    last_ = target + offset_;
+    return last_;
+}
+
 float HeadingDelta(float from, float to) {
     float d = std::fmod(to - from, 360.0f);
     if (d > 180) d -= 360;

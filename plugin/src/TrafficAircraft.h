@@ -80,6 +80,11 @@ private:
     // Nose wheel steering: the drawn heading last frame and the turn rate measured from it, smoothed (deg/s).
     std::optional<float> lastHeading_;
     float yawRate_ = 0;
+    // Height drawn, eased across lift-off and touchdown, and the frame's position to spot BATC placing the aircraft.
+    Smoothed height_;
+    bool wasOnGround_ = false;
+    float lastX_ = 0, lastZ_ = 0;
+    bool hasLast_ = false;
 };
 
 }  // namespace xpc

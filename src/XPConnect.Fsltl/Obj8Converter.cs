@@ -8,7 +8,8 @@ namespace XPConnect.Fsltl;
 /// <param name="BaseColor">glTF image name of the albedo texture (resolved per livery by the importer).</param>
 /// <param name="Emissive">glTF image name of the emissive texture, used as X-Plane's _LIT texture.</param>
 /// <param name="Text">The .obj file with <c>{TEXTURE}</c> and <c>{TEXTURE_LIT}</c> placeholders for the texture lines.</param>
-public sealed record Obj8Part(string BaseColor, string? Emissive, string Text, int Triangles, int Vertices);
+/// <param name="Opaque">Every material drawing with this texture is opaque in MSFS, which then ignores its alpha.</param>
+public sealed record Obj8Part(string BaseColor, string? Emissive, string Text, int Triangles, int Vertices, bool Opaque = false);
 
 public sealed record Obj8Result(List<Obj8Part> Parts, List<string> Warnings, float Size);
 
@@ -51,7 +52,9 @@ public static class Obj8Converter
                 foreach (var root in used[l].Roots) scene.Emit(root, ToXPlane);
             }
 
-            if (builder.Triangles > 0) parts.Add(new Obj8Part(baseColor, emissive, builder.Text(emissive is not null), builder.Triangles, builder.VertexCount));
+            var opaque = used.SelectMany(m => m.Materials).Where(m => m.BaseColor == baseColor && m.Emissive == emissive)
+                .All(m => m.AlphaMode is not ("MASK" or "BLEND"));
+            if (builder.Triangles > 0) parts.Add(new Obj8Part(baseColor, emissive, builder.Text(emissive is not null), builder.Triangles, builder.VertexCount, opaque));
         }
 
         var untextured = used[0].Materials.Count(m => m.BaseColor is null);
