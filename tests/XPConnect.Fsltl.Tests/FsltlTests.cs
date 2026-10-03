@@ -148,6 +148,18 @@ public sealed class FsltlTests
     }
 
     [Fact]
+    public void Dxt_textures_without_mips_get_a_full_chain()
+    {
+        var full = DdsTexture.Parse(DdsBuilder.Dxt5(16, 16));
+        var single = new DdsTexture { Format = DdsFormat.Dxt5, Width = 16, Height = 16, Mips = [full.Mips[0]] };
+
+        var converted = DdsTexture.Parse(single.ToXPlane(8));
+
+        Assert.Equal((8, 8), (converted.Width, converted.Height));
+        Assert.Equal(4, converted.Mips.Count); // 8, 4, 2, 1
+    }
+
+    [Fact]
     public void Bc7_textures_are_reencoded_as_dxt5()
     {
         var pixels = new byte[8 * 8 * 4];

@@ -99,33 +99,63 @@ public sealed class DdsTexture
             h = Math.Max(1, h / 2);
         }
 
-        switch (Format)
+        // A DXT texture with its full mip chain just drops its top levels. Others (BC7, or DXT shipped without mips,
+        // like FSLTL's SF34 base livery, which X-Plane then draws as its background colour) are decoded, halved down
+        // to size and re-encoded with a full chain.
+        var fullChain = Mips.Count >= MipCount(Width, Height);
+        if (Format is DdsFormat.Dxt1 or DdsFormat.Dxt3 or DdsFormat.Dxt5 && fullChain)
         {
-            case DdsFormat.Dxt1:
-            case DdsFormat.Dxt3:
-            case DdsFormat.Dxt5:
-                return Write(Format, w, h, Mips.Skip(level).ToList());
-            case DdsFormat.Bc7:
-                var pixels = new BcDecoder().DecodeRaw(Mips[level], w, h, CompressionFormat.Bc7);
-                var encoder = new BcEncoder(CompressionFormat.Bc3);
-                encoder.OutputOptions.GenerateMipMaps = true;
-                encoder.OutputOptions.Quality = CompressionQuality.Balanced;
-                var bytes = new byte[pixels.Length * 4];
-                for (var i = 0; i < pixels.Length; i++)
-                {
-                    bytes[i * 4] = pixels[i].r;
-                    bytes[i * 4 + 1] = pixels[i].g;
-                    bytes[i * 4 + 2] = pixels[i].b;
-                    bytes[i * 4 + 3] = pixels[i].a;
-                }
-
-                var mips = encoder.EncodeToRawBytes(bytes, w, h, PixelFormat.Rgba32);
-                return Write(DdsFormat.Dxt5, w, h, [.. mips]);
-            default:
-                throw new NotSupportedException($"DDS format {Format} is not converted");
+            return Write(Format, w, h, Mips.Skip(level).ToList());
         }
+
+        var source = Format switch
+        {
+            DdsFormat.Dxt1 => CompressionFormat.Bc1WithAlpha,
+            DdsFormat.Dxt3 => CompressionFormat.Bc2,
+            DdsFormat.Dxt5 => CompressionFormat.Bc3,
+            DdsFormat.Bc7 => CompressionFormat.Bc7,
+            _ => throw new NotSupportedException($"DDS format {Format} is not converted"),
+        };
+        var decoded = new BcDecoder().DecodeRaw(Mips[level], w, h, source);
+        var bytes = new byte[decoded.Length * 4];
+        for (var i = 0; i < decoded.Length; i++)
+        {
+            bytes[i * 4] = decoded[i].r;
+            bytes[i * 4 + 1] = decoded[i].g;
+            bytes[i * 4 + 2] = decoded[i].b;
+            bytes[i * 4 + 3] = decoded[i].a;
+        }
+
+        while ((w > maxSize || h > maxSize) && w > 1 && h > 1) (bytes, w, h) = Halve(bytes, w, h);
+        var encoder = new BcEncoder(CompressionFormat.Bc3);
+        encoder.OutputOptions.GenerateMipMaps = true;
+        encoder.OutputOptions.Quality = CompressionQuality.Balanced;
+        var mips = encoder.EncodeToRawBytes(bytes, w, h, PixelFormat.Rgba32);
+        return Write(DdsFormat.Dxt5, w, h, [.. mips]);
     }
 
+    /// <summary>Levels in a full mip chain down to 1x1.</summary>
+    public static int MipCount(int width, int height) => 1 + (int)Math.Floor(Math.Log2(Math.Max(1, Math.Max(width, height))));
+
+    /// <summary>Halves an RGBA image by averaging each 2x2 block.</summary>
+    private static (byte[] Pixels, int Width, int Height) Halve(byte[] src, int w, int h)
+    {
+        int nw = w / 2, nh = h / 2;
+        var dst = new byte[nw * nh * 4];
+        for (var y = 0; y < nh; y++)
+        {
+            for (var x = 0; x < nw; x++)
+            {
+                for (var c = 0; c < 4; c++)
+                {
+                    int At(int sx, int sy) => src[((sy * w) + sx) * 4 + c];
+                    dst[((y * nw) + x) * 4 + c] = (byte)((At(2 * x, 2 * y) + At(2 * x + 1, 2 * y) + At(2 * x, 2 * y + 1) + At(2 * x + 1, 2 * y + 1) + 2) / 4);
+                }
+            }
+        }
+
+        return (dst, nw, nh);
+    }
     /// <summary>A classic (non-DX10) DDS file: 128-byte header, then the mip levels.</summary>
     public static byte[] Write(DdsFormat format, int width, int height, IReadOnlyList<byte[]> mips)
     {
