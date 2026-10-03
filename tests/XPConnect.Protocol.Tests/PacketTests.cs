@@ -19,6 +19,18 @@ public class PacketTests
         Assert.Equal("Open", packet.Name);
     }
 
+    [Theory]
+    [InlineData(0x29u)]
+    [InlineData(0x2Au)]
+    [InlineData(0x5Au)]
+    public void Truncated_ai_create_is_flagged_not_thrown(uint function)
+    {
+        // Fewer than 4 bytes left after the strings: the position length would be negative.
+        var f = PacketDecoder.Decode(PacketBuilder.Client(function, TestPackets.SunRise, 9).U8(0x41).U8(0).Build());
+
+        Assert.True(f.ContainsKey("decodeWarning"));
+    }
+
     [Fact]
     public void Decodes_open_fields()
     {
