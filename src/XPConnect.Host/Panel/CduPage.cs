@@ -1,4 +1,5 @@
 using XPConnect.Host.Support;
+using XPConnect.Host.Traffic;
 
 namespace XPConnect.Host.Panel;
 
@@ -41,6 +42,7 @@ public enum CduKey
     ShowLiveLog,
     OpenLogFolder,
     OpenWebsite,
+    InstallTrafficAddOn,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -72,7 +74,9 @@ public sealed record PanelState(
     int KeepDays,
     TimeSpan Uptime,
     string? BatcFolder,
-    string? XPlaneFolder);
+    string? XPlaneFolder,
+    PluginInstall.State TrafficAddOn = PluginInstall.State.NotBundled,
+    int? TrafficAircraft = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -104,7 +108,7 @@ public static class CduPages
             Row("LAST AIRPORT", "FROM", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
             Row("CONNECTION", "SESSION LOG", new(s.Connection == ConnectionMode.Automatic ? "AUTOMATIC" : "ALWAYS ON", CduColor.Magenta),
                 s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport),
-            Row("RUNNING FOR", "", new(Duration(s.Uptime)), new("")),
+            Row("RUNNING FOR", "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s.TrafficAircraft is null ? CduKey.GoSetup : CduKey.None),
             Row("", "", new("<SETUP"), new("SUPPORT>"), CduKey.GoSetup, CduKey.GoSupport),
         };
         return new($"{AppName} STATUS", rows, flash is null ? Advice(s) : new(flash));
@@ -141,7 +145,7 @@ public static class CduPages
                 s.BatcFolder is null ? CduKey.None : CduKey.StartBatc, CduKey.OpenStatusPage),
             s.OldConfigFiles && automatic
                 ? Row("OLD BEYONDATC FILES", "", new("FOUND", CduColor.Amber), new("REMOVE>"), CduKey.None, CduKey.RemoveOldFiles)
-                : CduRow.Empty,
+                : TrafficAddOn(s),
             Row("", "", new("<STATUS"), new("ABOUT>"), CduKey.GoStatus, CduKey.GoAbout),
         };
         var help = automatic ? "CLOSE MSFS BEFORE FLYING" : "BATC SET TO X-PLANE";
@@ -178,6 +182,24 @@ public static class CduPages
         };
         return new(AppName, rows, new(flash ?? ""));
     }
+
+    /// <summary>The status page's traffic half: aircraft drawn in X-Plane, or why there are none.</summary>
+    private static CduCell Traffic(PanelState s) => s switch
+    {
+        { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
+        { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SEE SETUP", CduColor.Amber),
+        { TrafficAddOn: PluginInstall.State.Installed } => new("WAITING"),
+        _ => new("-"),
+    };
+
+    /// <summary>The X-Plane plugin that draws BATC's traffic, shown to users as the traffic add-on.</summary>
+    private static CduRow TrafficAddOn(PanelState s) => s.TrafficAddOn switch
+    {
+        PluginInstall.State.NotInstalled => Row("TRAFFIC ADD-ON", "", new("NOT INSTALLED", CduColor.Amber), new("INSTALL>"), CduKey.None, CduKey.InstallTrafficAddOn),
+        PluginInstall.State.Outdated => Row("TRAFFIC ADD-ON", "", new("NEWER VERSION", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.InstallTrafficAddOn),
+        PluginInstall.State.Installed => Row("TRAFFIC ADD-ON", "", new("INSTALLED", CduColor.Green), new("")),
+        _ => CduRow.Empty,
+    };
 
     private static CduRow Folder(string label, string? folder, CduKey key) => folder is null
         ? Row(label, "", new("NOT FOUND", CduColor.Amber), new("CHOOSE>"), key, key)

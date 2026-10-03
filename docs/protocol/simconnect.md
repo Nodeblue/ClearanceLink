@@ -26,3 +26,23 @@ Recorded MSFS 2024 reply (2026-09-30, protocol 6): `"SunRise"`, app 12.2.282174.
 
 ## Function ids
 See `src/XPConnect.Protocol/FunctionNames.cs` (0x01 Open ... 0x6C CallCommBusEvent). 0x02 and 0x03 are not identified yet.
+
+## AI traffic (BATC 1.8.21 against MSFS 2024, recording 20260930-174605; fixture recordings/samples/batc-1.8.21-traffic.jsonl)
+
+- `EnumerateSimObjectsAndLiveries` (0x5B): `requestId`, `type` (BATC sends type 2). MSFS answers with
+  `EnumerateSimObjectAndLiveryList` (recv 38): list template `requestId, arraySize, entryNumber, outOf`, then
+  `arraySize` entries of `title[256], livery[256]` (512 bytes). 79 entries per packet, 70 packets for 5,497 entries.
+  BATC waits for this list before creating traffic; it also scans FSLTL liveries from the MSFS Community folder itself
+  (`Player.log`: "Available liveries 2381 FSLTL") and gives the BravoATG part of its list 15 s.
+- Creation: `AICreateNonATCAircraft` (container title, tail number, 56-byte `SIMCONNECT_DATA_INITPOSITION`, requestId),
+  `_EX1` (adds a livery after the title) for "Asobo PassiveAircraft ..." models, and `AICreateSimulatedObject` for
+  pushback tugs ("ASO_Pushback_White"). MSFS answers `AssignedObjectId (requestId, objectId)` within ~15 ms; the ids
+  are opaque (e.g. 207716368).
+- Then `AIReleaseControl`, events `FREEZE_LATITUDE_LONGITUDE_SET` / `FREEZE_ATTITUDE_SET` (data 1), and
+  `SetDataOnSimObject` many times a second per object: define 4 (airborne: lat, lon, altitude ft, bank, pitch,
+  heading true, IAS kt), define 5 (on the ground: lat, lon, heading, IAS, height above ground ft, pitch), 6 (N1/N2,
+  throttle), 0 (Initial Position), 1, 2, 12, 14 (animation state), plus light/flap/gear/spoiler events.
+- BATC polls each aircraft with ONCE requests: define 18 (GROUND ALTITUDE ft, PLANE ALTITUDE ft, GROUND VELOCITY kt),
+  19 (PLANE ALT ABOVE GROUND MINUS CG), 20 (PLANE ALTITUDE). For a frozen AI, MSFS's GROUND VELOCITY was about the IAS
+  BATC wrote (254 kt for 249 kt at FL224), and GROUND ALTITUDE the terrain under it.
+- `AIRemoveObject` when BATC is done with one; there is no reply.

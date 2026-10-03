@@ -5,7 +5,7 @@ using XPConnect.Server;
 namespace XPConnect.Host;
 
 /// <summary>Answers airport requests from the X-Plane installation's own scenery, nav data and CIFP files.</summary>
-public sealed class XPlaneFacilitySource(XPlaneAirports airports) : IFacilitySource
+public sealed class XPlaneFacilitySource(XPlaneAirports airports, AirportGround? ground = null) : IFacilitySource
 {
     public string Description => $"X-Plane at {airports.Install.Root}";
 
@@ -16,6 +16,7 @@ public sealed class XPlaneFacilitySource(XPlaneAirports airports) : IFacilitySou
             return null;
         }
 
+        ground?.Add(request.Icao, airport);
         return request.Encoder.Encode(request.Definition, airport, request.RequestId);
     }
 }

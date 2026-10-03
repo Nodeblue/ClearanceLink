@@ -3,6 +3,7 @@ using XPConnect.Airports;
 using XPConnect.Host;
 using XPConnect.Host.Status;
 using XPConnect.Host.Support;
+using XPConnect.Host.Traffic;
 using XPConnect.Host.Transport;
 using XPConnect.Protocol;
 using XPConnect.Recorder;
@@ -50,10 +51,12 @@ namespace XPConnect.Host
               xpconnect support
                   Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
+              xpconnect plugin install|remove|status [--xplane-root <dir>]
+                  Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
-                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--status-port <port> | --no-status] [--open-status]
+                    [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--no-traffic] [--status-port <port> | --no-status] [--open-status]
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Without --listen: MSFS's default pipe while MSFS
                   is closed plus tcp:5112 (connection automatic), or tcp:5112 only (always-on). Defaults:
@@ -116,6 +119,7 @@ namespace XPConnect.Host
                     "batc" => Batc(options),
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
+                    "plugin" => Plugin(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -401,7 +405,10 @@ namespace XPConnect.Host
         {
             var mappings = LoadMappings(options);
             using var xplane = new XPlaneWebApiClient(XPlaneUri(options), PacketConsole.Info);
-            var facilities = ServeFacilities(options);
+            var ground = new AirportGround();
+            var traffic = new TrafficRegistry();
+            var liveries = LoadLiveries(options);
+            var facilities = ServeFacilities(options, ground);
             using var stub = new StubLauncher();
             var stubLine = "not started (--no-stub)";
             msfs.Check();
@@ -416,13 +423,20 @@ namespace XPConnect.Host
 
             var msfsTask = msfs.RunAsync(ct);
             var xplaneTask = xplane.RunAsync(ct);
-            var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities);
+            await using var plugin = StartPluginLink();
+
+            // BATC's traffic goes to the X-Plane plugin, and the plugin's terrain answers BATC's ground questions.
+            var bridge = plugin is null || liveries is null ? null : new TrafficBridge(traffic, plugin, LoadTrafficModels(options), ground, PacketConsole.Info);
+            var bridgeTask = bridge?.RunAsync(ct) ?? Task.CompletedTask;
+            var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities, traffic, (IGroundElevation?)bridge ?? ground, liveries);
             var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(xplane.IsConnected, xplane.XPlaneVersion, XPlaneUri(options).ToString()), listener.Description)
             {
                 MsfsRunning = () => msfs.IsRunning,
                 Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
                 Recording = Path.GetFullPath(recorder.Path),
+                Traffic = () => traffic.Objects,
             };
+            board.Plugin = () => plugin?.Status;
             onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -438,6 +452,7 @@ namespace XPConnect.Host
             {
                 await xplaneTask;
                 await msfsTask;
+                await bridgeTask;
             }
         }
 
@@ -525,6 +540,8 @@ namespace XPConnect.Host
                 Console.WriteLine();
             }
 
+            OfferPluginInstall(new Options());
+
             Console.WriteLine("Start X-Plane 12 and load your aircraft, then start BeyondATC. Leave this window open while you fly;");
             Console.WriteLine("close it (or press Ctrl+C) when you are done. The status page opens in your browser.");
             Console.WriteLine();
@@ -540,6 +557,92 @@ namespace XPConnect.Host
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException)
             {
                 PacketConsole.Info($"status: could not open a browser ({ex.Message}); open {url} yourself");
+            }
+        }
+
+        /// <summary>The link to the X-Plane traffic plugin; null when its port is taken (another XPConnect running).</summary>
+        private static PluginLink? StartPluginLink()
+        {
+            try
+            {
+                var link = new PluginLink(Version, PacketConsole.Info);
+                link.Start();
+                return link;
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                PacketConsole.Info($"plugin: cannot listen on 127.0.0.1:{PluginLink.XPConnectPort} ({ex.Message}); traffic will not be drawn");
+                return null;
+            }
+        }
+
+        /// <summary>Double-click start: install or update the traffic plugin when this package carries one.</summary>
+        private static void OfferPluginInstall(Options options)
+        {
+            if (FindXPlane(options) is not { } xplane)
+            {
+                return;
+            }
+
+            var plugin = new PluginInstall(xplane.Root);
+            var state = plugin.Check();
+            if (state is PluginInstall.State.NotBundled or PluginInstall.State.Installed)
+            {
+                return;
+            }
+
+            Console.WriteLine(state == PluginInstall.State.NotInstalled
+                ? $"Install the XPConnect plugin into X-Plane ({xplane.Root}) so BeyondATC's traffic appears? [Y/n]"
+                : "A newer XPConnect plugin is included. Update the one in X-Plane? [Y/n]");
+            var answer = Console.IsInputRedirected ? "y" : Console.ReadLine();
+            if (answer is not null && answer.Trim().Length > 0 && !answer.Trim().StartsWith('y') && !answer.Trim().StartsWith('Y'))
+            {
+                Console.WriteLine();
+                return;
+            }
+
+            try
+            {
+                plugin.Install().ToList().ForEach(l => Console.WriteLine("  " + l));
+                Console.WriteLine("  Traffic needs CSL aircraft models (for example Bluebell); see README.txt.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"  Could not install the plugin ({ex.Message}). Close X-Plane, then start XPConnect again.");
+            }
+
+            Console.WriteLine();
+        }
+
+        private static int Plugin(Options options)
+        {
+            var action = options.Positional.FirstOrDefault() ?? "status";
+            if (FindXPlane(options) is not { } xplane)
+            {
+                return Fail("X-Plane folder not found; pass --xplane-root <dir>");
+            }
+
+            var plugin = new PluginInstall(xplane.Root);
+            try
+            {
+                switch (action)
+                {
+                    case "install":
+                        plugin.Install().ToList().ForEach(Console.WriteLine);
+                        return plugin.Check() == PluginInstall.State.Installed ? 0 : 1;
+                    case "remove":
+                        plugin.Remove().ToList().ForEach(Console.WriteLine);
+                        return 0;
+                    case "status":
+                        Console.WriteLine($"{plugin.Check()}: {plugin.Target} (bundled: {plugin.Bundled})");
+                        return 0;
+                    default:
+                        return Fail($"Unknown plugin action '{action}' (install, remove, status)");
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return Fail($"{ex.Message} Close X-Plane first.");
             }
         }
 
@@ -581,6 +684,44 @@ namespace XPConnect.Host
                 default:
                     return Fail($"Unknown batc action '{action}'. Use on, off or status.");
             }
+        }
+
+        /// <summary>
+        /// The model list sent for EnumerateSimObjectsAndLiveries: mapping/liveries.json, the titles and liveries MSFS
+        /// listed in the 2026-09-30 recording. BATC picks its traffic models from it. Null (no traffic) with --no-traffic.
+        /// </summary>
+        private static IReadOnlyList<(string Title, string Livery)>? LoadLiveries(Options options)
+        {
+            if (options.Has("no-traffic"))
+            {
+                PacketConsole.Info("Traffic: off (--no-traffic); BeyondATC will not create AI aircraft");
+                return null;
+            }
+
+            var dir = options.Get("mapping") ?? FindMappingDirectory();
+            var path = dir is null ? null : Path.Combine(dir, "liveries.json");
+            if (path is null || !File.Exists(path))
+            {
+                PacketConsole.Info("Traffic: mapping/liveries.json not found; BeyondATC will not create AI aircraft");
+                return null;
+            }
+
+            var list = System.Text.Json.JsonSerializer.Deserialize<string[][]>(File.ReadAllText(path)) ?? [];
+            PacketConsole.Info($"Traffic: {list.Length} models offered to BeyondATC from {Path.GetFullPath(path)}");
+            return [.. list.Where(e => e.Length >= 1).Select(e => (e[0], e.Length > 1 ? e[1] : ""))];
+        }
+        /// <summary>mapping/traffic-models.yaml: how BATC's model titles become ICAO types and airlines for the plugin.</summary>
+        private static TrafficModels LoadTrafficModels(Options options)
+        {
+            var dir = options.Get("mapping") ?? FindMappingDirectory();
+            var path = dir is null ? null : Path.Combine(dir, "traffic-models.yaml");
+            if (path is null || !File.Exists(path))
+            {
+                PacketConsole.Info("Traffic: mapping/traffic-models.yaml not found; every aircraft is drawn as the default model");
+                return TrafficModels.Empty;
+            }
+
+            return TrafficModels.Load(path);
         }
 
         private static MappingSet LoadMappings(Options options)
@@ -626,7 +767,7 @@ namespace XPConnect.Host
         }
 
         /// <summary>Recorded answers first (when --facilities is given), then airports built from X-Plane's files.</summary>
-        private static FacilitySourceChain? ServeFacilities(Options options)
+        private static FacilitySourceChain? ServeFacilities(Options options, AirportGround? ground = null)
         {
             var sources = new List<IFacilitySource>();
             if (LoadFacilities(options) is { } replay)
@@ -638,7 +779,7 @@ namespace XPConnect.Host
             {
                 var airports = new XPlaneAirports(install, PacketConsole.Info);
                 airports.Start();
-                sources.Add(new XPlaneFacilitySource(airports));
+                sources.Add(new XPlaneFacilitySource(airports, ground));
                 PacketConsole.Info($"Airports: from X-Plane at {install.Root}");
             }
             else

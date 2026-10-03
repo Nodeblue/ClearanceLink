@@ -15,7 +15,10 @@ public sealed class XPlaneSimServer(
     JsonlRecorder recorder,
     SimVarResolver resolver,
     IXPlaneData xplane,
-    IFacilitySource? facilities = null)
+    IFacilitySource? facilities = null,
+    TrafficRegistry? traffic = null,
+    IGroundElevation? ground = null,
+    IReadOnlyList<(string Title, string Livery)>? liveries = null)
 {
     /// <summary>How often periodic data (SECOND, frame periods) is checked; about one sim frame.</summary>
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(33);
@@ -65,7 +68,7 @@ public sealed class XPlaneSimServer(
             }
         }
 
-        var session = new SimConnectSession(id, identity, resolver, xplane, SendAsync, PacketConsole.Info, facilities);
+        var session = new SimConnectSession(id, identity, resolver, xplane, SendAsync, PacketConsole.Info, facilities, traffic: traffic, ground: ground, liveries: liveries);
         lock (_sessions)
         {
             _sessions.Add(session);
@@ -79,7 +82,15 @@ public sealed class XPlaneSimServer(
                 while (await PacketFramer.ReadAsync(client, Direction.ClientToServer, stop.Token).ConfigureAwait(false) is { } packet)
                 {
                     PacketConsole.Print(recorder.Record(packet, id));
-                    await session.HandleAsync(packet).ConfigureAwait(false);
+                    try
+                    {
+                        await session.HandleAsync(packet).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not (IOException or OperationCanceledException or ObjectDisposedException))
+                    {
+                        // Rule 2: a request we cannot handle never drops the connection.
+                        PacketConsole.Info($"Client #{id}: {packet.Name} failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or InvalidDataException)
@@ -94,6 +105,11 @@ public sealed class XPlaneSimServer(
         lock (_sessions)
         {
             _sessions.Remove(session);
+        }
+
+        if (traffic?.RemoveConnection(id) is > 0 and var removed)
+        {
+            PacketConsole.Info($"Client #{id}: removed its {removed} AI objects");
         }
 
         var stats = session.Stats;
