@@ -373,6 +373,28 @@ void LevelsBogiesModelledTilted() {
     CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);  // level
 }
 
+void SkipsLinksThatTurnFurtherThanTheBogie() {
+    // A strut link keyed to the deflection that turns 40 degrees but is level unloaded, then a 777-style bogie.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 0 40 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
+}
+
+void LeavesBogiesModelledLevelAtZero() {
+    // A bogie modelled level that only tilts as it loads: nothing to level, drawn at 0.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 0 -20 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.bogieDataref.empty() && model.bogieLevel == 0);
+    CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);
+}
+
 void SkipsLinksKeyedToDeflection() {
     // A torque link keyed to the same deflection (0 to 5 degrees) before the bogie must not be taken for it.
     std::istringstream obj(
@@ -430,6 +452,8 @@ int main() {
     LevelsWorldTrafficBogies();
     LevelsBogiesModelledTilted();
     SkipsLinksKeyedToDeflection();
+    SkipsLinksThatTurnFurtherThanTheBogie();
+    LeavesBogiesModelledLevelAtZero();
     KeepsOneBogieLevelAcrossFiles();
     ReadsAnimationsKeyedHighToLow();
     FindsModelObjFiles();
