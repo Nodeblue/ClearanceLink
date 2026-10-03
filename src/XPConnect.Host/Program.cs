@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using XPConnect.Airports;
 using XPConnect.Host;
 using XPConnect.Host.Status;
+using XPConnect.Host.Support;
 using XPConnect.Host.Traffic;
 using XPConnect.Host.Transport;
 using XPConnect.Protocol;
@@ -21,6 +22,12 @@ namespace XPConnect.Host
             Usage:
               xpconnect
                   (no arguments, e.g. double-clicked) Switch BeyondATC to XPConnect if needed, then serve.
+              xpconnect settings [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
+                  Show or change saved settings (%LOCALAPPDATA%\XPConnect\settings.json). Folders set here are used
+                  whenever --batc or --xplane-root is not given; "auto" goes back to finding them automatically.
+              xpconnect support
+                  Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
+                  of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
               xpconnect plugin install|remove|status [--xplane-root <dir>]
                   Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
@@ -86,6 +93,8 @@ namespace XPConnect.Host
                     "facility-dump" => DumpFacility(options),
                     "airport" => BuildAirport(options),
                     "batc" => Batc(options),
+                    "settings" => SettingsCommand(options),
+                    "support" => SupportCommand(),
                     "plugin" => Plugin(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
@@ -103,6 +112,7 @@ namespace XPConnect.Host
         private static async Task<int> RunServerAsync(string mode, Options options)
         {
             PacketConsole.Verbose = !options.Has("quiet");
+            StartSessionLog(mode);
             var listen = Endpoint.Parse(options.Get("listen") ?? (mode == "serve" ? "tcp:5112" : "pipe"));
             var outPath = options.Get("out")
                 ?? Path.Combine(RecordingsFolder(), $"{DateTime.Now:yyyyMMdd-HHmmss}-{mode}.jsonl");
@@ -157,6 +167,134 @@ namespace XPConnect.Host
             await File.WriteAllTextAsync(summaryPath, inventory.ToMarkdown($"Call inventory: {Path.GetFileName(outPath)}"));
             PacketConsole.Info($"Stopped. {inventory.Count} packets. Summary: {Path.GetFullPath(summaryPath)}");
             signals.ForEach(s => s.Dispose());
+            SessionLog.Stop();
+            return 0;
+        }
+
+        /// <summary>Opens this session's log file (unless turned off in settings) and clears out old logs and recordings.</summary>
+        private static void StartSessionLog(string mode)
+        {
+            var settings = AppSettings.Load(AppFolders.Default.Settings);
+            if (settings.SessionLog)
+            {
+                SessionLog.Start(AppFolders.Default.Logs, mode, Version, DateTime.Now);
+            }
+
+            var pruned = SessionLog.Prune(AppFolders.Default.Logs, "*.log", settings.KeepDays, DateTime.Now)
+                + SessionLog.Prune(AppFolders.Default.Recordings, "*.jsonl", settings.KeepDays, DateTime.Now)
+                + SessionLog.Prune(AppFolders.Default.Recordings, "*.md", settings.KeepDays, DateTime.Now)
+                + SessionLog.Prune(AppFolders.Default.SupportFiles, "*.zip", settings.KeepDays, DateTime.Now);
+            PacketConsole.Info($"session log: {SessionLog.Path ?? "off"}" + (pruned > 0 ? $"; removed {pruned} files older than {settings.KeepDays} days" : ""));
+        }
+
+        /// <summary>--batc when given, else the folder saved in settings when it still holds BeyondATC, else found automatically.</summary>
+        private static string? BatcFolder(Options options)
+        {
+            if (options.Get("batc") is { } given)
+            {
+                return BatcRedirect.FindInstallFolder(given);
+            }
+
+            var saved = AppSettings.Load(AppFolders.Default.Settings).BatcFolder;
+            return (saved is null ? null : BatcRedirect.FindInstallFolder(saved)) ?? BatcRedirect.FindInstallFolder();
+        }
+
+        /// <summary>--xplane-root when given, else the folder saved in settings when it is still X-Plane, else found automatically.</summary>
+        private static XPlaneInstall? FindXPlane(Options options)
+        {
+            if (options.Get("xplane-root") is { } given)
+            {
+                return XPlaneInstall.Find(given);
+            }
+
+            var saved = AppSettings.Load(AppFolders.Default.Settings).XPlaneFolder;
+            return (saved is null ? null : XPlaneInstall.Find(saved)) ?? XPlaneInstall.Find();
+        }
+
+        private static int SettingsCommand(Options options)
+        {
+            var file = AppFolders.Default.Settings;
+            var settings = AppSettings.Load(file);
+            var args = options.Positional;
+            if (args.Count % 2 != 0)
+            {
+                return Fail($"settings {args[^1]} needs a value");
+            }
+
+            for (var i = 0; i < args.Count; i += 2)
+            {
+                var (key, value) = (args[i], args[i + 1]);
+                var auto = value.Equals("auto", StringComparison.OrdinalIgnoreCase);
+                switch (key)
+                {
+                    case "batc-folder":
+                        if (!auto && BatcRedirect.FindInstallFolder(value) is null)
+                        {
+                            return Fail($"BeyondATC.exe not found in {value}");
+                        }
+
+                        settings.BatcFolder = auto ? null : BatcRedirect.FindInstallFolder(value);
+                        break;
+                    case "xplane-folder":
+                        if (!auto && XPlaneInstall.Find(value) is null)
+                        {
+                            return Fail($"{value} does not look like an X-Plane 12 folder (no Resources or Custom Scenery)");
+                        }
+
+                        settings.XPlaneFolder = auto ? null : Path.GetFullPath(value);
+                        break;
+                    case "session-log":
+                        settings.SessionLog = value switch
+                        {
+                            "on" => true,
+                            "off" => false,
+                            _ => throw new ArgumentException("session-log takes on or off"),
+                        };
+                        break;
+                    case "keep-days":
+                        settings.KeepDays = int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var days) && days > 0
+                            ? days
+                            : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
+                        break;
+                    default:
+                        return Fail($"Unknown setting '{key}'. Use batc-folder, xplane-folder, session-log or keep-days.");
+                }
+            }
+
+            if (args.Count > 0)
+            {
+                settings.Save(file);
+            }
+
+            var none = new Options();
+            Console.WriteLine($"Settings: {file}");
+            Console.WriteLine($"  BeyondATC folder  {BatcFolder(none) ?? "not found"}{(settings.BatcFolder is null ? " (found automatically)" : "")}");
+            Console.WriteLine($"  X-Plane folder    {FindXPlane(none)?.Root ?? "not found"}{(settings.XPlaneFolder is null ? " (found automatically)" : "")}");
+            Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
+            Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
+            return 0;
+        }
+
+        private static int SupportCommand()
+        {
+            var none = new Options();
+            var sources = new SupportSources(Version, AppFolders.Default, BatcFolder(none), FindXPlane(none)?.Root,
+                SupportSources.DefaultBatcLogFolder, Redactor.ForCurrentUser());
+            var zip = SupportBundle.Create(sources, DateTime.Now);
+            Console.WriteLine($"Support file: {zip}");
+            Console.WriteLine("Your Windows user name has been blanked out. Please send this file to Nodeblue with a few words on what went wrong.");
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{zip}\"")?.Dispose();
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // The path is printed above.
+                }
+            }
+
             return 0;
         }
 
@@ -254,10 +392,10 @@ namespace XPConnect.Host
         {
             Console.WriteLine($"XPConnect {Version} - BeyondATC for X-Plane 12");
             Console.WriteLine();
-            if (BatcRedirect.FindInstallFolder() is not { } folder)
+            if (BatcFolder(new Options()) is not { } folder)
             {
                 Console.WriteLine("BeyondATC was not found (looked for BeyondATC.exe in its install folder and in C:\\BeyondATC).");
-                Console.WriteLine("If it is installed somewhere else, run once:  XPConnect batc on --batc \"<BeyondATC folder>\"");
+                Console.WriteLine("If it is installed somewhere else, run once:  XPConnect settings batc-folder \"<BeyondATC folder>\"");
                 Console.WriteLine();
             }
             else if (!new BatcRedirect(folder).IsOn)
@@ -273,7 +411,7 @@ namespace XPConnect.Host
                 Console.WriteLine();
             }
 
-            OfferPluginInstall();
+            OfferPluginInstall(new Options());
 
             Console.WriteLine("Start X-Plane 12 and load your aircraft, then start BeyondATC. Leave this window open while you fly;");
             Console.WriteLine("close it (or press Ctrl+C) when you are done. The status page opens in your browser.");
@@ -310,9 +448,9 @@ namespace XPConnect.Host
         }
 
         /// <summary>Double-click start: install or update the traffic plugin when this package carries one.</summary>
-        private static void OfferPluginInstall()
+        private static void OfferPluginInstall(Options options)
         {
-            if (XPlaneInstall.Find() is not { } xplane)
+            if (FindXPlane(options) is not { } xplane)
             {
                 return;
             }
@@ -350,7 +488,7 @@ namespace XPConnect.Host
         private static int Plugin(Options options)
         {
             var action = options.Positional.FirstOrDefault() ?? "status";
-            if (XPlaneInstall.Find(options.Get("xplane-root")) is not { } xplane)
+            if (FindXPlane(options) is not { } xplane)
             {
                 return Fail("X-Plane folder not found; pass --xplane-root <dir>");
             }
@@ -381,13 +519,11 @@ namespace XPConnect.Host
 
         /// <summary>recordings/local in a source checkout; otherwise %LOCALAPPDATA%\XPConnect\recordings.</summary>
         private static string RecordingsFolder() =>
-            Directory.Exists("recordings")
-                ? Path.Combine("recordings", "local")
-                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XPConnect", "recordings");
+            Directory.Exists("recordings") ? Path.Combine("recordings", "local") : AppFolders.Default.Recordings;
         private static int Batc(Options options)
         {
             var action = options.Positional.FirstOrDefault() ?? "status";
-            var folder = BatcRedirect.FindInstallFolder(options.Get("batc"));
+            var folder = BatcFolder(options);
             if (folder is null)
             {
                 return Fail(options.Get("batc") is { } given
@@ -510,7 +646,7 @@ namespace XPConnect.Host
                 sources.Add(replay);
             }
 
-            if (XPlaneInstall.Find(options.Get("xplane-root")) is { } install)
+            if (FindXPlane(options) is { } install)
             {
                 var airports = new XPlaneAirports(install, PacketConsole.Info);
                 airports.Start();
@@ -528,7 +664,7 @@ namespace XPConnect.Host
         private static int BuildAirport(Options options)
         {
             var icao = options.Positional.FirstOrDefault() ?? throw new ArgumentException("airport needs an ICAO code");
-            var install = XPlaneInstall.Find(options.Get("xplane-root"))
+            var install = FindXPlane(options)
                 ?? throw new ArgumentException("X-Plane folder not found; pass --xplane-root <dir>");
             var airport = new XPlaneAirports(install, Console.Error.WriteLine).Find(icao);
             if (airport is null)
