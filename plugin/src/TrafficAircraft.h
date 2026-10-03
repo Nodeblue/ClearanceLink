@@ -77,6 +77,9 @@ private:
     std::optional<float> slope_;
     // Propeller and wheel angles the plugin turns each frame (XPMP2 does not turn them from rpm itself).
     float engineAngle_ = 0, tireAngle_ = 0;
+    // Nose wheel steering: the drawn heading last frame and the turn rate measured from it, smoothed (deg/s).
+    std::optional<float> lastHeading_;
+    float yawRate_ = 0;
 };
 
 }  // namespace xpc

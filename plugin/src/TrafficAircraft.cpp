@@ -264,6 +264,17 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
     tireAngle_ = AdvanceAngle(tireAngle_, tireRpm, elapsed, 2000.0f);
     engineAngle_ = AdvanceAngle(engineAngle_, engineRpm, elapsed, 1500.0f);
     SetTireRotAngle(tireAngle_);
+
+    // Steer the nose wheel along the turn, from the turn rate of the drawn heading (smoothed over about a third of a
+    // second) and the wheelbase measured from the model's own wheels (15 m when it could not be read).
+    if (elapsed > 0 && lastHeading_) {
+        const float yaw = HeadingDelta(*lastHeading_, p.heading) / elapsed;
+        yawRate_ += (yaw - yawRate_) * std::min(1.0f, elapsed * 3.0f);
+    }
+    lastHeading_ = p.heading;
+    const Wheels* steerWheels = ModelWheels();
+    const float wheelbase = steerWheels ? std::fabs(steerWheels->mainZ - steerWheels->noseZ) : 15.0f;
+    SetNoseWheelAngle(p.onGround ? SteeringAngleDeg(yawRate_, p.groundSpeedKt, wheelbase) : 0.0f);
     SetEngineRotAngle(engineAngle_);
     SetPropRotAngle(engineAngle_);
 }

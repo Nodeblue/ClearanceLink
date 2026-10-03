@@ -113,7 +113,7 @@ public sealed class FsltlTests
     [InlineData("ASOBO_GT_Anim_Code", "SpoilerL", "(A:SPOILERS HANDLE POSITION, percent)", AnimationRoles.SpoilerRatio)]
     [InlineData("ASOBO_GT_Anim_Code", "Reverser", "(A:TURB ENG JET THRUST:1, pounds)", AnimationRoles.ReverserRatio)]
     [InlineData("FSLTL_Wheel_Roll_Main", "Wheels", "", AnimationRoles.TireRotation)]
-    [InlineData("FSLTL_Steering", "Wheels", "", null)]
+    [InlineData("FSLTL_Steering", "Wheels", "", AnimationRoles.NoseWheelAngle)]
     [InlineData("FSLTL_Elevator_Droop", "Wheels", "", null)]
     public void Templates_pick_the_xpmp2_dataref(string template, string component, string code, string? dataref) =>
         Assert.Equal(dataref, AnimationRoles.Classify(template, component, code).Dataref);
@@ -150,7 +150,7 @@ public sealed class FsltlTests
             _ => null,
         });
 
-        Assert.Null(role.Dataref);
+        Assert.Equal(AnimationRoles.NoseWheelAngle, role.Dataref);
         Assert.Equal((frame, of), (role.PoseFrame!.Value, role.PoseLength));
     }
 

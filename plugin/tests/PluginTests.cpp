@@ -283,6 +283,16 @@ xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0
     return p;
 }
 
+void SteersTheNoseWheelAlongTheTurn() {
+    // 15 m wheelbase, 10 kt (5.14 m/s), turning right at 10 deg/s: atan(15 x 0.1745 / 5.14) = 27 deg right.
+    CHECK(std::fabs(xpc::SteeringAngleDeg(10, 10, 15) - 27.0f) < 0.5f);
+    CHECK(std::fabs(xpc::SteeringAngleDeg(-10, 10, 15) + 27.0f) < 0.5f);  // left turn
+    CHECK(xpc::SteeringAngleDeg(10, 0.2f, 15) == 0);                       // parked: straight
+    CHECK(xpc::SteeringAngleDeg(90, 2, 30) == 70);                          // capped
+    CHECK(std::fabs(xpc::HeadingDelta(350, 10) - 20) < 1e-4f);
+    CHECK(std::fabs(xpc::HeadingDelta(10, 350) + 20) < 1e-4f);
+}
+
 void TurnsPropellersAndWheels() {
     CHECK(std::fabs(xpc::AdvanceAngle(350, 10, 0.5f, 1000) - 20) < 1e-3);    // 10 rpm = 60 deg/s, wraps past 360
     CHECK(std::fabs(xpc::AdvanceAngle(0, 1000, 0.1f, 1500) - 150) < 1e-3);   // capped at 1500 deg/s
@@ -506,6 +516,7 @@ int main() {
     FindsModelObjFiles();
     BlendsBetweenUpdates();
     TurnsPropellersAndWheels();
+    SteersTheNoseWheelAlongTheTurn();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
