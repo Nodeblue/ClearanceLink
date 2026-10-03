@@ -126,6 +126,33 @@ public sealed class FsltlTests
     public void Animations_missing_from_the_xml_are_judged_by_name(string name, string? dataref) =>
         Assert.Equal(dataref, AnimationRoles.FromName(name).Dataref);
 
+    [Theory]
+    [InlineData("prop0_blurred", AnimationRoles.EnginePart.Blur)]
+    [InlineData("N1_blur_left", AnimationRoles.EnginePart.Blur)]
+    [InlineData("prop1_still", AnimationRoles.EnginePart.Still)]
+    [InlineData("N1_still_right", AnimationRoles.EnginePart.Still)]
+    [InlineData("l_tire_blurred_key", null)]
+    [InlineData("main_gear_l", null)]
+    public void Engine_blur_discs_and_still_blades_are_found_by_name(string name, AnimationRoles.EnginePart? part) =>
+        Assert.Equal(part, AnimationRoles.EnginePartFromName(name));
+
+    [Theory]
+    [InlineData(null, null, null, 500f, 1000f)]  // FSLTL_Steering defaults: P2 50, OFFSET 0, ANIM_LENGTH 1000
+    [InlineData("5", "50", "200", 100f, 200f)]   // FSLTL's TFS A332: half way along its keys
+    public void Steering_is_posed_straight_ahead(string? p2, string? offset, string? length, float frame, float of)
+    {
+        var role = AnimationRoles.Classify("FSLTL_Steering", "Wheels", "", name => name switch
+        {
+            "LEGACY_PARAM_2" => p2,
+            "OFFSET" => offset,
+            "ANIM_LENGTH" => length,
+            _ => null,
+        });
+
+        Assert.Null(role.Dataref);
+        Assert.Equal((frame, of), (role.PoseFrame!.Value, role.PoseLength));
+    }
+
     [Fact]
     public void Simplify_drops_keys_on_a_straight_line()
     {

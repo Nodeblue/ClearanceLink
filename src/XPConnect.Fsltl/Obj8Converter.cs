@@ -26,7 +26,8 @@ public static class Obj8Converter
     private static readonly Matrix4x4 ToXPlane = Matrix4x4.CreateRotationY(MathF.PI);
 
     /// <param name="lods">The glTF files, most detailed first; at most two are used (the first and the last).</param>
-    public static Obj8Result Convert(IReadOnlyList<GltfModel> lods, IReadOnlyDictionary<string, AnimationRole> roles)
+    /// <param name="engineParts">Node names of engine blur discs and still blades (<see cref="AnimationRoles.EngineParts"/>).</param>
+    public static Obj8Result Convert(IReadOnlyList<GltfModel> lods, IReadOnlyDictionary<string, AnimationRole> roles, IReadOnlyDictionary<string, AnimationRoles.EnginePart>? engineParts = null)
     {
         var warnings = new List<string>();
         var used = lods.Count > 1 && lods[^1].Path != lods[0].Path ? new[] { lods[0], lods[^1] } : new[] { lods[0] };
@@ -43,7 +44,7 @@ public static class Obj8Converter
             var builder = new ObjBuilder();
             for (var l = 0; l < used.Length; l++)
             {
-                var scene = new SceneWalker(used[l], roles, baseColor, emissive, builder, warnings);
+                var scene = new SceneWalker(used[l], roles, engineParts ?? new Dictionary<string, AnimationRoles.EnginePart>(), baseColor, emissive, builder, warnings);
                 if (!used[l].Roots.Any(scene.HasGeometry)) continue;  // e.g. windows that the low LOD paints on
                 builder.Command($"ATTR_LOD {Num(ranges[l].Item1)} {Num(ranges[l].Item2)}");
                 builder.ResetState();
@@ -104,7 +105,11 @@ public static class Obj8Converter
     }
 
     /// <summary>A node's animated channels after the model XML decided what drives them.</summary>
-    private sealed record Driven(GltfChannel Channel, AnimationRole Role, float Length);
+    /// <summary>A channel and its animation's time range: MSFS plays an animation over its own first to last key.</summary>
+    private sealed record Driven(GltfChannel Channel, AnimationRole Role, float Start, float End, int Order)
+    {
+        public float Length => End - Start;
+    }
 
     private sealed class SceneWalker
     {
@@ -115,10 +120,12 @@ public static class Obj8Converter
         private readonly List<string> _warnings;
         private readonly Dictionary<int, List<Driven>> _channels = [];
         private readonly Dictionary<int, bool> _hasGeometry = [];
+        private readonly IReadOnlyDictionary<string, AnimationRoles.EnginePart> _engineParts;
 
-        public SceneWalker(GltfModel model, IReadOnlyDictionary<string, AnimationRole> roles, string baseColor, string? emissive, ObjBuilder output, List<string> warnings)
+        public SceneWalker(GltfModel model, IReadOnlyDictionary<string, AnimationRole> roles, IReadOnlyDictionary<string, AnimationRoles.EnginePart> engineParts, string baseColor, string? emissive, ObjBuilder output, List<string> warnings)
         {
             _model = model;
+            _engineParts = engineParts;
             _baseColor = baseColor;
             _emissive = emissive;
             _out = output;
@@ -126,13 +133,18 @@ public static class Obj8Converter
             foreach (var animation in model.Animations)
             {
                 var (role, key) = RoleFor(animation.Name, roles);
-                // Blender splits one MSFS animation per node ("<name>_node30_anim_..."); its length is the longest part.
-                var length = model.Animations.Where(a => key is null ? a == animation : RoleFor(a.Name, roles).Key == key)
-                    .SelectMany(a => a.Channels).Select(c => c.MaxTime).DefaultIfEmpty(0).Max();
+                // Blender splits one MSFS animation per node ("<name>_node30_anim_..."); its range covers every part.
+                // MSFS stretches ANIM_LENGTH over that range, which need not start at 0 (FSLTL's TFS A332 steering
+                // is keyed from frame 100 to 200).
+                var times = model.Animations.Where(a => key is null ? a == animation : RoleFor(a.Name, roles).Key == key)
+                    .SelectMany(a => a.Channels).Where(c => c.Times.Length > 0).ToList();
+                var start = times.Count == 0 ? 0 : times.Min(c => c.Times[0]);
+                var end = times.Count == 0 ? 1 : times.Max(c => c.MaxTime);
+                if (end <= start) end = start + 1;
                 foreach (var channel in animation.Channels)
                 {
                     if (!_channels.TryGetValue(channel.Node, out var list)) _channels[channel.Node] = list = [];
-                    list.Add(new Driven(channel, role, length <= 0 ? 1 : length));
+                    list.Add(new Driven(channel, role, start, end, model.Animations.IndexOf(animation)));
                 }
             }
         }
@@ -157,8 +169,10 @@ public static class Obj8Converter
             if (!HasGeometry(index)) return;
             var node = _model.Nodes[index];
             var channels = _channels.GetValueOrDefault(index) ?? [];
+            // Two animations on one part (FSLTL's TFS A332 nose leg has gear and steering): the later one in the file
+            // wins, as it is applied last.
             Driven? Pick(string path) =>
-                channels.Where(c => c.Channel.Path == path).OrderBy(c => c.Role.Dataref is null ? 1 : 0).FirstOrDefault();
+                channels.Where(c => c.Channel.Path == path).OrderByDescending(c => c.Order).FirstOrDefault();
             var translation = Pick("translation");
             var rotation = Pick("rotation");
             var scale = Pick("scale");
@@ -168,7 +182,8 @@ public static class Obj8Converter
             var r = rotation is null ? node.Rotation : rotation.Channel.Quat(Pose(rotation));
             var s = scale is null ? node.Scale : scale.Channel.Vec3(Pose(scale));
             var hide = scale is { Role.Dataref: not null } ? HiddenRanges(scale) : [];
-            var moves = translation is { Role.Dataref: not null } || rotation is { Role.Dataref: not null } || hide.Count > 0;
+            var engine = EngineVisibility(index, node);
+            var moves = translation is { Role.Dataref: not null } || rotation is { Role.Dataref: not null } || hide.Count > 0 || engine is not null;
 
             if (!moves)
             {
@@ -207,13 +222,29 @@ public static class Obj8Converter
             }
 
             foreach (var (from, to) in hide) _out.Command($"ANIM_hide {Num(from)} {Num(to)} {scale!.Role.Dataref}");
+            // Propeller and fan blur discs show only while the engine turns; the still blades only while it does not.
+            if (engine == AnimationRoles.EnginePart.Blur) _out.Command($"ANIM_hide -1 {Num(AnimationRoles.EngineTurningRpm)} {AnimationRoles.EngineRpm}");
+            if (engine == AnimationRoles.EnginePart.Still) _out.Command($"ANIM_hide {Num(AnimationRoles.EngineTurningRpm)} 1000000 {AnimationRoles.EngineRpm}");
             var inner = Matrix4x4.CreateScale((hide.Count > 0 ? Vector3.One : s) * parentScale);
             Geometry(node, inner);
             foreach (var c in node.Children) Emit(c, inner);
             _out.Command("ANIM_end");
         }
 
-        private static float Pose(Driven d) => d.Role.PoseRatio * d.Length;
+        private static float Pose(Driven d) =>
+            d.Start + d.Length * Math.Clamp(d.Role.PoseFrame is { } frame ? frame / d.Role.PoseLength : d.Role.PoseRatio, 0, 1);
+
+        /// <summary>Whether a node is an engine blur disc or still blades: from the model XML's engine templates, else from names.</summary>
+        private AnimationRoles.EnginePart? EngineVisibility(int index, GltfNode node)
+        {
+            if (_engineParts.TryGetValue(node.Name, out var listed)) return listed;
+            foreach (var d in _channels.GetValueOrDefault(index) ?? [])
+            {
+                if (AnimationRoles.EnginePartFromName(_model.Animations[d.Order].Name) is { } byAnimation) return byAnimation;
+            }
+
+            return AnimationRoles.EnginePartFromName(node.Name);
+        }
 
         /// <summary>Drops keys that lie on the straight line between their neighbours (MSFS exports a key per frame).</summary>
         internal static List<(float Value, float[] Data)> Simplify(List<(float Value, float[] Data)> keys)
@@ -248,7 +279,7 @@ public static class Obj8Converter
             float? last = null;
             for (var k = 0; k < count; k++)
             {
-                var value = d.Role.Value(Math.Clamp(d.Channel.Times[k] / d.Length, 0, 1));
+                var value = d.Role.Value(Math.Clamp((d.Channel.Times[k] - d.Start) / d.Length, 0, 1));
                 if (last is null && value > start)
                 {
                     last = start;
