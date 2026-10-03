@@ -21,9 +21,11 @@ namespace XPConnect.Host
 
             Usage:
               xpconnect
-                  (no arguments, e.g. double-clicked) Switch BeyondATC to XPConnect if needed, then serve.
-              xpconnect settings [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
-                  Show or change saved settings (%LOCALAPPDATA%\XPConnect\settings.json). Folders set here are used
+                  (no arguments, e.g. double-clicked) Check BeyondATC's set-up for the chosen connection, then serve.
+              xpconnect settings [connection automatic|always-on] [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
+                  Show or change saved settings (%LOCALAPPDATA%\XPConnect\settings.json). connection automatic (default):
+                  serve answers on MSFS's default connection while MSFS is closed, nothing changed in BeyondATC;
+                  always-on: BeyondATC's SimConnect.cfg files point at XPConnect's TCP port. Folders set here are used
                   whenever --batc or --xplane-root is not given; "auto" goes back to finding them automatically.
               xpconnect support
                   Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
@@ -35,8 +37,9 @@ namespace XPConnect.Host
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
                     [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--no-traffic] [--status-port <port> | --no-status] [--open-status]
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
-                  Stand in for MSFS 2024 and answer BATC from X-Plane. Defaults: --listen tcp:5112 (what the
-                  SimConnect.cfg redirect points at), --xplane http://127.0.0.1:8086, --mapping ./mapping.
+                  Stand in for MSFS 2024 and answer BATC from X-Plane. Without --listen: MSFS's default pipe while MSFS
+                  is closed plus tcp:5112 (connection automatic), or tcp:5112 only (always-on). Defaults:
+                  --xplane http://127.0.0.1:8086, --mapping ./mapping.
                   Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
                   --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
                   process BATC checks for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status; --open-status opens it in the browser.
@@ -132,10 +135,13 @@ namespace XPConnect.Host
             var inventory = new CallInventory();
             var throttleMs = int.Parse(options.Get("throttle-ms") ?? "1000", System.Globalization.CultureInfo.InvariantCulture);
             var throttle = new RecordThrottle(TimeSpan.FromMilliseconds(throttleMs));
+            using var msfs = new MsfsGate(MsfsGate.RealMsfsRunning, PacketConsole.Info);
             using (var recorder = new JsonlRecorder(outPath, throttle: throttle))
             {
                 recorder.Recorded += inventory.Add;
-                await using var listener = Transports.Listen(listen);
+                await using var listener = mode == "serve" && options.Get("listen") is null
+                    ? DefaultServeListener(msfs)
+                    : Transports.Listen(listen);
                 PacketConsole.Info($"Recording to {Path.GetFullPath(outPath)} (Ctrl+C to stop)");
                 try
                 {
@@ -147,7 +153,7 @@ namespace XPConnect.Host
                     }
                     else if (mode == "serve")
                     {
-                        await ServeAsync(options, listener, recorder, cts.Token);
+                        await ServeAsync(options, listener, recorder, msfs, cts.Token);
                     }
                     else
                     {
@@ -243,6 +249,19 @@ namespace XPConnect.Host
 
                         settings.XPlaneFolder = auto ? null : Path.GetFullPath(value);
                         break;
+                    case "connection":
+                        settings.Connection = value switch
+                        {
+                            "automatic" => ConnectionMode.Automatic,
+                            "always-on" => ConnectionMode.AlwaysOn,
+                            _ => throw new ArgumentException("connection takes automatic or always-on"),
+                        };
+                        if (ApplyConnection(settings, BatcFolder(options)) is { } problem)
+                        {
+                            return Fail(problem);
+                        }
+
+                        break;
                     case "session-log":
                         settings.SessionLog = value switch
                         {
@@ -257,7 +276,7 @@ namespace XPConnect.Host
                             : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
                         break;
                     default:
-                        return Fail($"Unknown setting '{key}'. Use batc-folder, xplane-folder, session-log or keep-days.");
+                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log or keep-days.");
                 }
             }
 
@@ -270,9 +289,29 @@ namespace XPConnect.Host
             Console.WriteLine($"Settings: {file}");
             Console.WriteLine($"  BeyondATC folder  {BatcFolder(none) ?? "not found"}{(settings.BatcFolder is null ? " (found automatically)" : "")}");
             Console.WriteLine($"  X-Plane folder    {FindXPlane(none)?.Root ?? "not found"}{(settings.XPlaneFolder is null ? " (found automatically)" : "")}");
+            Console.WriteLine($"  Connection        {(settings.Connection == ConnectionMode.Automatic ? "automatic (MSFS's default connection; close MSFS before flying X-Plane)" : "always on (BeyondATC's config files point at XPConnect)")}");
             Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
             return 0;
+        }
+
+        /// <summary>
+        /// Always on writes BeyondATC's two config files; automatic removes XPConnect's (a user's own are put back).
+        /// Returns a problem to show, or null.
+        /// </summary>
+        private static string? ApplyConnection(AppSettings settings, string? batcFolder)
+        {
+            if (batcFolder is null)
+            {
+                return settings.Connection == ConnectionMode.AlwaysOn
+                    ? "BeyondATC not found; set its folder first: settings batc-folder \"<BeyondATC folder>\""
+                    : null;
+            }
+
+            var redirect = new BatcRedirect(batcFolder);
+            var done = settings.Connection == ConnectionMode.AlwaysOn ? redirect.SwitchOn() : redirect.SwitchOff();
+            done.ToList().ForEach(l => Console.WriteLine("  " + l));
+            return null;
         }
 
         private static int SupportCommand()
@@ -298,7 +337,32 @@ namespace XPConnect.Host
             return 0;
         }
 
-        private static async Task ServeAsync(Options options, IListener listener, JsonlRecorder recorder, CancellationToken ct)
+        /// <summary>
+        /// Where serve listens when --listen is not given. Automatic: MSFS's default pipe while MSFS is closed, plus
+        /// XPConnect's TCP port for a BeyondATC still set up with config files. Always on: the TCP port only.
+        /// </summary>
+        private static IListener DefaultServeListener(MsfsGate msfs)
+        {
+            var tcp = Endpoint.Parse($"tcp:{BatcRedirect.DefaultPort}");
+            if (AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn)
+            {
+                return Transports.Listen(tcp);
+            }
+
+            var listeners = new List<IListener> { new GatedPipeListener(Endpoint.Parse("pipe"), msfs) };
+            try
+            {
+                listeners.Add(Transports.Listen(tcp));
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                PacketConsole.Info($"listen: {tcp} not available ({ex.Message}); default connection only");
+            }
+
+            return new MultiListener(listeners, PacketConsole.Info);
+        }
+
+        private static async Task ServeAsync(Options options, IListener listener, JsonlRecorder recorder, MsfsGate msfs, CancellationToken ct)
         {
             var mappings = LoadMappings(options);
             using var xplane = new XPlaneWebApiClient(XPlaneUri(options), PacketConsole.Info);
@@ -308,12 +372,17 @@ namespace XPConnect.Host
             var facilities = ServeFacilities(options, ground);
             using var stub = new StubLauncher();
             var stubLine = "not started (--no-stub)";
+            msfs.Check();
             if (!options.Has("no-stub"))
             {
-                stubLine = stub.Start(options.Get("stub"));
+                stubLine = msfs.IsRunning ? "stub: not started while MSFS runs" : stub.Start(options.Get("stub"));
                 PacketConsole.Info(stubLine);
+
+                // Step aside for the real MSFS: its process name is the stand-in's.
+                msfs.Changed += running => PacketConsole.Info(running ? stub.Stop() : stub.Restart());
             }
 
+            var msfsTask = msfs.RunAsync(ct);
             var xplaneTask = xplane.RunAsync(ct);
             await using var plugin = StartPluginLink();
 
@@ -321,8 +390,9 @@ namespace XPConnect.Host
             var bridge = plugin is null || liveries is null ? null : new TrafficBridge(traffic, plugin, LoadTrafficModels(options), ground, PacketConsole.Info);
             var bridgeTask = bridge?.RunAsync(ct) ?? Task.CompletedTask;
             var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities, traffic, (IGroundElevation?)bridge ?? ground, liveries);
-            var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(xplane.IsConnected, xplane.XPlaneVersion, XPlaneUri(options).ToString()), listener.Endpoint.ToString())
+            var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(xplane.IsConnected, xplane.XPlaneVersion, XPlaneUri(options).ToString()), listener.Description)
             {
+                MsfsRunning = () => msfs.IsRunning,
                 Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
                 Recording = Path.GetFullPath(recorder.Path),
                 Traffic = () => traffic.Objects,
@@ -341,6 +411,7 @@ namespace XPConnect.Host
             finally
             {
                 await xplaneTask;
+                await msfsTask;
                 await bridgeTask;
             }
         }
@@ -398,16 +469,34 @@ namespace XPConnect.Host
                 Console.WriteLine("If it is installed somewhere else, run once:  XPConnect settings batc-folder \"<BeyondATC folder>\"");
                 Console.WriteLine();
             }
-            else if (!new BatcRedirect(folder).IsOn)
+            else
             {
-                Console.WriteLine($"BeyondATC ({folder}) is set up for MSFS. Switch it to X-Plane through XPConnect? [Y/n]");
-                var answer = Console.IsInputRedirected ? "y" : Console.ReadLine();
-                if (answer is null || answer.Trim().Length == 0 || answer.Trim().StartsWith('y') || answer.Trim().StartsWith('Y'))
+                var settings = AppSettings.Load(AppFolders.Default.Settings);
+                var redirect = new BatcRedirect(folder);
+                if (settings.Connection == ConnectionMode.AlwaysOn && !redirect.IsOn)
                 {
-                    new BatcRedirect(folder).SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
-                    Console.WriteLine("  To fly MSFS with BeyondATC again, run 'Use BeyondATC with MSFS' (XPConnect batc off).");
+                    redirect.SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    Console.WriteLine();
                 }
+                else if (settings.Connection == ConnectionMode.Automatic && redirect.IsOn)
+                {
+                    // Set up by an older XPConnect: BeyondATC keeps working through the TCP port, but can't reach MSFS
+                    // while XPConnect is closed.
+                    Console.WriteLine("BeyondATC still has config files from an older XPConnect, which stop it working with MSFS.");
+                    Console.WriteLine("XPConnect no longer needs them. Remove them? [Y/n]");
+                    var answer = Console.IsInputRedirected ? "n" : Console.ReadLine();
+                    if (answer is null || answer.Trim().Length == 0 || answer.Trim().StartsWith('y') || answer.Trim().StartsWith('Y'))
+                    {
+                        redirect.SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    }
 
+                    Console.WriteLine();
+                }
+            }
+
+            if (MsfsGate.RealMsfsRunning())
+            {
+                Console.WriteLine("Microsoft Flight Simulator is running. Close it so BeyondATC can connect to X-Plane.");
                 Console.WriteLine();
             }
 
