@@ -624,7 +624,7 @@ namespace XPConnect.Host
         private static int Fsltl(Options options)
         {
             var action = options.Positional.FirstOrDefault() ?? "status";
-            if (XPlaneInstall.Find(options.Get("xplane-root")) is not { } xplane)
+            if (FindXPlane(options) is not { } xplane)
             {
                 return Fail("X-Plane folder not found; pass --xplane-root <dir>");
             }
@@ -774,7 +774,7 @@ namespace XPConnect.Host
             }
 
             var models = TrafficModels.Load(path);
-            if (XPlaneInstall.Find(options.Get("xplane-root")) is { } xplane)
+            if (FindXPlane(options) is { } xplane)
             {
                 var imported = Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL");
                 models.UseImported(FsltlImporter.LoadCatalogue(imported).Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline)));
