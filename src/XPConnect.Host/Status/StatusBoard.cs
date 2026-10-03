@@ -65,8 +65,9 @@ public sealed class StatusBoard(
             .Select(a => new AirportStatus(a.Icao, a.Source, a.Packets, Math.Round(a.Milliseconds), a.At))
             .ToList();
         var xp = xplane();
+        var msfs = MsfsRunning?.Invoke() ?? false;
         return new StatusSnapshot(
-            Overall(xp, live, MsfsRunning?.Invoke() ?? false),
+            Overall(xp, live, msfs),
             Version,
             _started,
             now,
@@ -76,6 +77,7 @@ public sealed class StatusBoard(
             airports,
             Stub,
             Recording,
+            msfs,
             Plugin?.Invoke() is { } plugin ? new PluginSummary(plugin.Version, plugin.Models, plugin.Aircraft, plugin.CslFolders) : null,
             Traffic?.Invoke().Select(o => new TrafficStatus(
                 o.ObjectId,
@@ -152,6 +154,7 @@ public sealed record StatusSnapshot(
     IReadOnlyList<AirportStatus> Airports,
     string? Stub,
     string? Recording,
+    bool MsfsRunning = false,
     PluginSummary? Plugin = null,
     IReadOnlyList<TrafficStatus>? Traffic = null);
 
