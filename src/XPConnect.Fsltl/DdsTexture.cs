@@ -109,7 +109,7 @@ public sealed class DdsTexture
                 var pixels = new BcDecoder().DecodeRaw(Mips[level], w, h, CompressionFormat.Bc7);
                 var encoder = new BcEncoder(CompressionFormat.Bc3);
                 encoder.OutputOptions.GenerateMipMaps = true;
-                encoder.OutputOptions.Quality = CompressionQuality.Fast;
+                encoder.OutputOptions.Quality = CompressionQuality.Balanced;
                 var bytes = new byte[pixels.Length * 4];
                 for (var i = 0; i < pixels.Length; i++)
                 {

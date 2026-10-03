@@ -161,7 +161,8 @@ public static class FsltlImporter
 
     /// <summary>The ten FSLTL_Asobo_* aircraft are Microsoft's own MSFS models, not FSLTL's to give; they stay on Bluebell.</summary>
     public static bool IsMicrosoftModel(FsltlLivery livery) =>
-        IsMicrosoftFolder(Path.GetFileName(livery.Folder)) || livery.ModelXml.Contains("Asobo", StringComparison.OrdinalIgnoreCase);
+        IsMicrosoftFolder(Path.GetFileName(livery.Folder))
+        || IsMicrosoftFolder(Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(livery.ModelXml))) ?? "");
 
     public static bool IsMicrosoftFolder(string folderName) => folderName.Contains("Asobo", StringComparison.OrdinalIgnoreCase);
 
