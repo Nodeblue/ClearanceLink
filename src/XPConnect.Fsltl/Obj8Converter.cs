@@ -235,16 +235,32 @@ public static class Obj8Converter
             return kept;
         }
 
+        /// <summary>
+        /// The channel's keys as rising dataref values, covering the animation's whole range: X-Plane extrapolates past
+        /// the first and last key, while MSFS holds them. A part whose keys end early (FSLTL's TFS A332 gear has
+        /// channels ending at frame 80 of 120) would otherwise keep swinging to the end of the range.
+        /// </summary>
         private static IEnumerable<(float Value, int Key)> Keys(Driven d)
         {
+            var count = d.Channel.Times.Length;
+            if (count == 0) yield break;
+            float start = d.Role.Value(0), end = d.Role.Value(1);
             float? last = null;
-            for (var k = 0; k < d.Channel.Times.Length; k++)
+            for (var k = 0; k < count; k++)
             {
                 var value = d.Role.Value(Math.Clamp(d.Channel.Times[k] / d.Length, 0, 1));
+                if (last is null && value > start)
+                {
+                    last = start;
+                    yield return (start, k);
+                }
+
                 if (last is { } previous && value <= previous) continue;  // X-Plane needs rising key values.
                 last = value;
                 yield return (value, k);
             }
+
+            if (last < end) yield return (end, count - 1);
         }
 
         /// <summary>
