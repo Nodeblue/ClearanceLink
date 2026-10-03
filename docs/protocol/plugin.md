@@ -30,10 +30,13 @@ Plugin 0.3.0+ also fits each CSL model to the ground from its own 3D files, so n
 first time a model is drawn, it reads the model's `.obj` files (found from its `OBJ8` lines in `xsb_aircraft.txt`,
 `plugin/src/GroundFit.cpp`), in the background, and takes the lowest point of the front quarter near the centre line
 as the nose wheel and the lowest point of the middle half as the main wheels (OBJ8: nose towards -z). On the ground it
-adds the pitch that puts both on level ground, and raises or lowers the model so its lower wheel stays where XPMP2's
-vertical offset puts it (this also keeps the main wheels down while BATC rotates for take-off). Models needing more
+adds the pitch that puts both on level ground, and sets the model's height from its wheels so the lower one touches
+(this also keeps the main wheels down while BATC rotates for take-off). Since plugin 0.3.2 that height replaces XPMP2's
+vertical offset, which comes from the package's `VERT_OFFSET` when it has one and left Bluebell main wheels 10 to 50 cm
+up at YBBN. Models needing more
 than 3° are left level. The X-Plane log gets one line per model:
-`XPConnect: ground fit <csl id>: nose wheel 0.05 m above mains, pitch -0.19 deg, raise 0.00 m` or
+`XPConnect: ground fit <csl id>: nose wheel 0.05 m above mains, pitch -0.19 deg, wheels 2.10 m below the model origin
+(CSL offset 2.30 m)` or
 `XPConnect: ground fit <csl id>: none (<reason>), drawn level`. XPConnect's `ground_pitch` and `ground_offset_ft`
 then only adjust types that still sit wrong.
 
@@ -41,8 +44,9 @@ BATC writes each moving AI aircraft about 55 times a second (one every 16.7 ms i
 XPConnect sends the latest state 10 times a second, and a parked aircraft whose state has not changed only every 2 s.
 Plugin 0.3.1+ draws each aircraft one update interval behind and blends between its last two `pos` lines (position,
 height, heading the short way round, pitch, bank, gear, flaps), so turns, climbs and the flare are smooth; a new `pos`
-blends on from where the aircraft is drawn, so nothing jumps. If updates stop, it moves on along the last heading at
-`gsKt` for at most 1 s. Positions more than 1 km apart are drawn at once.
+blends on from where the aircraft is drawn, so nothing jumps. If updates stop, it moves on as it moved between the last
+two updates, for at most 1 s (0.3.2+; 0.3.1 used `gsKt`, which is BATC's airspeed and not always 0 for a stopped
+aircraft, so parked aircraft slid forward and back). Positions more than 1 km apart are drawn at once.
 
 Terrain probes are kept cheap: on the ground an aircraft is probed again only when it has moved 25 cm or turned 1°,
 or every 5 s when parked; in the air every 0.25 s (for the `ground` report).

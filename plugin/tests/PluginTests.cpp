@@ -126,15 +126,16 @@ void FitsNoseAndMainWheels() {
     CHECK(wheels->noseZ == -14 && wheels->mainZ == 1);
     const float pitch = wheels->LevelPitchDeg();
     CHECK(pitch < -0.37f && pitch > -0.39f);  // nose wheel 0.1 m high over 15 m: nose down a little
-    // Pitched and raised, both wheels sit where the mains were.
+    // Pitched and at that height above the ground, both wheels touch it.
     const double a = pitch * 3.14159265358979 / 180;
-    const float raise = wheels->RaiseM(pitch);
-    const double nose = -1.9 * std::cos(a) + 14 * std::sin(a) + raise;
-    const double main = -2.0 * std::cos(a) - 1 * std::sin(a) + raise;
-    CHECK(std::fabs(nose + 2.0) < 1e-4 && std::fabs(main + 2.0) < 1e-4);
+    const float height = wheels->GroundHeightM(pitch);
+    const double nose = -1.9 * std::cos(a) + 14 * std::sin(a) + height;
+    const double main = -2.0 * std::cos(a) - 1 * std::sin(a) + height;
+    CHECK(std::fabs(nose) < 1e-4 && std::fabs(main) < 1e-4);
+    CHECK(height > 1.99f && height < 2.0f);
     // Rotating for take-off lifts the nose; the model rises so the main wheels stay on the ground.
-    CHECK(wheels->RaiseM(8) > 0.1f);
-    CHECK(std::fabs(xpc::Wheels{-14, -2, 1, -2}.RaiseM(0)) < 1e-6f);
+    CHECK(wheels->GroundHeightM(8) > height + 0.1f);
+    CHECK(std::fabs(xpc::Wheels{-14, -2, 1, -2}.GroundHeightM(0) - 2) < 1e-6f);
 }
 
 void LeavesOddModelsLevel() {
@@ -212,12 +213,15 @@ void BlendsBetweenUpdates() {
 }
 
 void MovesOnWhenUpdatesStop() {
-    auto a = At(0, 0, 0, 0, 100), b = At(0.0001, 0, 0, 0, 100);
-    // 0.5 s after the blend ended, 0.5 s at 100 kt further north; never more than 1 s ahead.
+    auto a = At(0, 0, 0, 0, 100), b = At(0.00005, 0, 0, 0, 100);  // 5.6 m in 0.1 s
+    // 0.5 s after the blend ended, moved on as far as 5 updates; never more than 1 s ahead.
     auto later = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 10.7f);
-    CHECK(std::fabs((later.lat - 0.0001) * 111132.92 - 25.72) < 0.05);
+    CHECK(std::fabs(later.lat - 0.00005 * 6) < 1e-7);  // float times
     auto stale = xpc::DrawnPosition(a, 10.0f, b, 10.1f, 60.0f);
-    CHECK(std::fabs((stale.lat - 0.0001) * 111132.92 - 51.44) < 0.05);
+    CHECK(std::fabs(stale.lat - 0.00005 * 11) < 1e-7);
+    // A parked aircraft stays put, whatever speed BATC gives it (it is not always 0).
+    auto parked = At(0, 0, 0, 0, 12);
+    CHECK(xpc::DrawnPosition(parked, 10.0f, parked, 12.0f, 13.5f).lat == 0);
     // A jump of more than a kilometre is drawn at once, not slid across.
     auto far = At(0.1, 0, 0, 0);
     CHECK(xpc::DrawnPosition(a, 10.0f, far, 10.1f, 10.11f).lat == 0.1);

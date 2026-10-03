@@ -22,9 +22,10 @@ struct Wheels {
 
     // Pitch (degrees, nose up positive) that puts both wheels on level ground.
     float LevelPitchDeg() const;
-    // Metres to raise the model drawn at `pitchDeg` so its lower wheel is as high as it was unpitched, which is where
-    // XPMP2's vertical offset puts the wheels.
-    float RaiseM(float pitchDeg) const;
+    // Height (metres) of the model's origin above level ground so that, drawn at `pitchDeg`, its lower wheel touches.
+    // Used instead of XPMP2's vertical offset, which comes from the package's VERT_OFFSET when it has one and is not
+    // always where the wheels are (Bluebell at YBBN, 2026-10-01 and 2026-10-03: main wheels 10 to 50 cm up).
+    float GroundHeightM(float pitchDeg) const;
 };
 
 // Finds the wheels among a model's vertices. Empty when the model does not look like a tricycle-gear aircraft or

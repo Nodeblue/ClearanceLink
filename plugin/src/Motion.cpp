@@ -7,7 +7,8 @@ namespace xpc {
 namespace {
 
 constexpr double Pi = 3.14159265358979323846;
-constexpr double MetersPerKnotSecond = 0.514444;
+// Less movement than this between two updates is a parked aircraft: it is not moved on.
+constexpr double MinMoveMeters = 0.01;
 // Update intervals are clamped to this range: shorter is jitter, longer means the aircraft was parked or updates
 // paused, and it should then catch up quickly rather than crawl.
 constexpr float MinInterval = 0.02f;
@@ -27,14 +28,6 @@ double DistanceMeters(const Pos& a, const Pos& b) {
 }
 
 }  // namespace
-
-void MoveAlong(double& lat, double& lon, double headingDeg, double meters) {
-    const double heading = headingDeg * Pi / 180.0;
-    const double metersPerDegLat = 111132.92;
-    const double metersPerDegLon = 111412.84 * std::cos(lat * Pi / 180.0);
-    lat += meters * std::cos(heading) / metersPerDegLat;
-    if (metersPerDegLon > 1) lon += meters * std::sin(heading) / metersPerDegLon;
-}
 
 Pos Blend(const Pos& a, const Pos& b, float f) {
     Pos p = b;
@@ -60,9 +53,16 @@ Pos DrawnPosition(const Pos& prev, float prevTime, const Pos& last, float lastTi
     const float since = std::max(0.0f, now - lastTime);
     if (since < interval && DistanceMeters(prev, last) <= MaxBlendMeters) return Blend(prev, last, since / interval);
 
+    // Move on as it was moving between the last two updates. Not at gsKt: BATC's speed for a stopped aircraft is not
+    // always 0, which slid parked aircraft forward and back again with each update (VH-XZA at YBBN, 2026-10-03).
     Pos p = last;
     const float ahead = std::min(since - interval, maxAhead);
-    if (ahead > 0) MoveAlong(p.lat, p.lon, p.heading, p.groundSpeedKt * MetersPerKnotSecond * ahead);
+    const double meters = DistanceMeters(prev, last);
+    if (ahead > 0 && meters > MinMoveMeters && meters <= MaxBlendMeters) {
+        const double scale = ahead / interval;
+        p.lat += (last.lat - prev.lat) * scale;
+        p.lon += (last.lon - prev.lon) * scale;
+    }
     return p;
 }
 

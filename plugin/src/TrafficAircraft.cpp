@@ -87,8 +87,9 @@ const Wheels* TrafficAircraft::ModelWheels() {
         char text[256];
         if (result.wheels) {
             const auto& w = *result.wheels;
-            std::snprintf(text, sizeof(text), "XPConnect: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, raise %.2f m\n",
-                          fit_->name.c_str(), w.noseY - w.mainY, w.LevelPitchDeg(), w.RaiseM(w.LevelPitchDeg()));
+            std::snprintf(text, sizeof(text),
+                          "XPConnect: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, wheels %.2f m below the model origin (CSL offset %.2f m)\n",
+                          fit_->name.c_str(), w.noseY - w.mainY, w.LevelPitchDeg(), w.GroundHeightM(w.LevelPitchDeg()), GetVertOfs());
         } else {
             std::snprintf(text, sizeof(text), "XPConnect: ground fit %s: none (%s), drawn level\n", fit_->name.c_str(), result.why.c_str());
         }
@@ -192,12 +193,13 @@ void TrafficAircraft::UpdatePosition(float, int) {
     SetRoll(p.bank);
 
     if (ProbeGround(p.onGround, now) && p.onGround) {
-        // Pitch the model so its nose and main wheels both touch, and raise or lower it for that pitch, from where
-        // its wheels are in its .obj files. XPConnect's per-type pitch and height adjust on top of that.
+        // Pitch the model so its nose and main wheels both touch, and put its wheels on the ground, from where they
+        // are in its .obj files; without that, level at XPMP2's vertical offset. XPConnect's per-type pitch and
+        // height adjust on top of that.
         const Wheels* wheels = ModelWheels();
         const float pitch = p.pitch + (wheels ? wheels->LevelPitchDeg() : 0.0f);
-        const float raise = wheels ? wheels->RaiseM(pitch) : 0.0f;
-        drawInfo.y = probeY_ + GetVertOfs() + raise + float(groundOffsetFt_ / FeetPerMeter);
+        const float height = wheels ? wheels->GroundHeightM(pitch) : GetVertOfs();
+        drawInfo.y = probeY_ + height + float(groundOffsetFt_ / FeetPerMeter);
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
         SetPitch(pitch + slope_.value_or(0.0f));
     }
