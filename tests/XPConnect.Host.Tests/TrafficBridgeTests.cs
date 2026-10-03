@@ -89,6 +89,29 @@ public sealed class TrafficBridgeTests
     }
 
     [Fact]
+    public void A_plugin_that_fits_models_gets_the_per_type_pitch_as_a_fallback_not_in_each_position()
+    {
+        var models = TrafficModels.Parse("ground_pitch: {default: 0, B738: -1}");
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXZE", new InitPosition(-27.39, 153.12, 13, 0, 0, 13, true, 0));
+
+        var old = new FakePlugin { Status = Connected() };
+        new TrafficBridge(registry, old, models, null, _ => { }, time).Sync();
+        Assert.Null(old.Trims.Single().Pitch);
+        Assert.Equal(-1, old.Updates.Single().State.Pitch);
+
+        var fitting = new FakePlugin { Status = Connected() with { Version = "0.4.0" } };
+        new TrafficBridge(registry, fitting, models, null, _ => { }, time).Sync();
+        Assert.Equal(-1, fitting.Trims.Single().Pitch);
+        Assert.Equal(0, fitting.Updates.Single().State.Pitch);
+
+        Assert.False(TrafficBridge.PluginFitsModels(null));
+        Assert.False(TrafficBridge.PluginFitsModels(Connected() with { Version = "0.3.3" }));
+        Assert.True(TrafficBridge.PluginFitsModels(Connected() with { Version = "0.10.1" }));
+    }
+
+    [Fact]
     public void Adds_again_once_a_plugin_that_was_away_reports_back()
     {
         var time = new ManualTime();
@@ -255,7 +278,13 @@ public sealed class TrafficBridgeTests
 
         public void Remove(uint id) => Removes.Add(id);
 
-        public void SetGroundOffset(uint id, double feet) => Offsets.Add((id, feet));
+        public List<(uint Id, double? Pitch)> Trims { get; } = [];
+
+        public void SetGroundOffset(uint id, double feet, double? pitch = null)
+        {
+            Offsets.Add((id, feet));
+            Trims.Add((id, pitch));
+        }
 
         public bool TryGetGroundFeet(uint id, out double feet) => Ground.TryGetValue(id, out feet);
     }

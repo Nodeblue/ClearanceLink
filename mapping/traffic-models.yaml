@@ -134,8 +134,8 @@ asobo:
 # Pitch (degrees, nose up positive) for parked and slow-taxiing aircraft, by ICAO type. Some CSL models sit with the
 # nose wheel off the ground when drawn level; a little nose-down puts it back. Tune per type from screenshots.
 # Live tests at YBBN (Bluebell): 2026-10-01 E-Jets at -1.5 with -1 ft sank a little, 737s at -0.75 had a small
-# nose-wheel gap. Reading the wheels from the models' .obj files did not work (plugin 0.3.x, 2026-10-03; see
-# docs/protocol/plugin.md), so these stay hand-tuned.
+# nose-wheel gap. Plugin 0.4.0 and later fit each model to its own wheels and use these only for models they cannot fit
+# (docs/protocol/plugin.md); older plugins use them for every model.
 ground_pitch:
   default: 0
   E170: -1.0

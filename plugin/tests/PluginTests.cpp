@@ -46,6 +46,10 @@ void ParsesOffset() {
     CHECK(offset.groundFt == -1.5f);
     std::string error;
     CHECK(!xpc::Parse("offset 9 900", &error) && error.find("bad offset") != std::string::npos);
+    CHECK(!offset.groundPitch);
+    auto trimmed = std::get<xpc::Offset>(*xpc::Parse("offset 9 0.00 -1.50"));
+    CHECK(trimmed.groundPitch && *trimmed.groundPitch == -1.5f);
+    CHECK(!xpc::Parse("offset 9 0 45", &error));
 }
 
 void ParsesAddWithLabelAndUnknowns() {
@@ -247,7 +251,7 @@ void FindsModelObjFiles() {
     const auto packages = xpc::FindCslPackages({(root / "Bluebell").u8string()});
     CHECK(packages.size() == 2);
     const auto e190 = (root / "Bluebell" / "BB_E190").u8string();
-    CHECK(packages.at("BB_E190") == e190);
+    CHECK(packages.find("BB_E190")->second == e190);
     auto files = xpc::ModelObjFiles(e190, 2, packages);
     CHECK(files.size() == 2);
     CHECK(fs::u8path(files[0]) == fs::u8path(e190) / "E190" / "E190.obj");
@@ -300,6 +304,39 @@ void MovesOnWhenUpdatesStop() {
     CHECK(xpc::DrawnPosition(a, 10.0f, far, 10.1f, 10.11f).lat == 0.1);
 }
 
+void FindsObjFilesInSplitPackages() {
+    // Bluebell's __Bluebell_Airbus spans BB_Airbus and BB_Airbus1: one xsb_aircraft.txt, the .obj files spread out.
+    namespace fs = std::filesystem;
+    const auto root = fs::temp_directory_path() / "xpconnect-plugin-split";
+    fs::remove_all(root);
+    for (const char* part : {"BB_Airbus", "BB_Airbus1"}) {
+        fs::create_directories(root / part / "A320");
+        std::ofstream(root / part / "xsb_aircraft.txt")
+            << "EXPORT_NAME __Bluebell_Airbus\nOBJ8_AIRCRAFT A320_QFA\nOBJ8 SOLID YES __Bluebell_Airbus/A320/A320_QFA.obj\n";
+    }
+    std::ofstream(root / "BB_Airbus1" / "A320" / "A320_QFA.obj") << "I\n800\nOBJ\n";
+    const auto packages = xpc::FindCslPackages({root.u8string()});
+    CHECK(packages.count("__Bluebell_Airbus") == 2);
+    const auto files = xpc::ModelObjFiles((root / "BB_Airbus").u8string(), 2, packages);
+    CHECK(files.size() == 1 && fs::u8path(files[0]) == root / "BB_Airbus1" / "A320" / "A320_QFA.obj");
+    fs::remove_all(root);
+}
+
+void LevelsTiltingBogies() {
+    // A 777-style bogie: tilted 20 degrees nose-down unloaded, level at 0.67 m of tyre deflection.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 0 0 1 3 -80 0 1 libxplanemp/controls/gear_ratio\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\n"
+        "ANIM_end\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(std::fabs(model.tireDeflectionM - 0.6667f) < 0.001f);
+    CHECK(model.gear.size() == 2 && std::fabs(model.gear[0].y - model.gear[1].y) < 1e-4f);  // level
+    CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", 0.5f) == 0.5f);
+    CHECK(xpc::PoseValue("libxplanemp/controls/flap_ratio", 0.5f) == 0);
+}
+
 }  // namespace
 
 int main() {
@@ -314,6 +351,8 @@ int main() {
     LeavesOddModelsLevel();
     PosesGearDown();
     ReadsOnlyTrianglePoints();
+    FindsObjFilesInSplitPackages();
+    LevelsTiltingBogies();
     FindsModelObjFiles();
     BlendsBetweenUpdates();
     MovesOnWhenUpdatesStop();

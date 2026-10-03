@@ -74,11 +74,15 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
         return del;
     }
     if (type == "offset") {
-        auto w = Words(rest, 3, nullptr);
+        auto w = Words(rest, 4, nullptr);
         Offset offset;
-        double feet = 0;
-        if (w.size() != 2 || !Id(w[0], offset.id) || !Number(w[1], feet) || std::fabs(feet) > 50)
+        double feet = 0, pitch = 0;
+        if (w.size() < 2 || w.size() > 3 || !Id(w[0], offset.id) || !Number(w[1], feet) || std::fabs(feet) > 50)
             return fail("bad offset: " + line);
+        if (w.size() == 3) {
+            if (!Number(w[2], pitch) || std::fabs(pitch) > 10) return fail("bad offset: " + line);
+            offset.groundPitch = static_cast<float>(pitch);
+        }
         offset.groundFt = static_cast<float>(feet);
         return offset;
     }

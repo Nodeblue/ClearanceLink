@@ -101,7 +101,7 @@ bool GetLine(std::istream& in, std::string& line) {
 
 std::filesystem::path Path(const std::string& text) { return std::filesystem::u8path(text); }
 
-void FindPackages(const std::filesystem::path& folder, int depth, std::map<std::string, std::string>& packages) {
+void FindPackages(const std::filesystem::path& folder, int depth, CslPackages& packages) {
     std::error_code error;
     const auto xsb = folder / "xsb_aircraft.txt";
     if (std::filesystem::is_regular_file(xsb, error)) {
@@ -131,8 +131,10 @@ float Wheels::GroundHeightM(float pitchDeg) const {
     return float(-std::min(pitched(noseY, noseZ), pitched(mainY, mainZ)));
 }
 
-float PoseValue(const std::string& dataref) {
-    return dataref.find("gear_ratio") != std::string::npos || dataref.find("gear_door") != std::string::npos ? 1.0f : 0.0f;
+float PoseValue(const std::string& dataref, float tireDeflectionM) {
+    if (dataref.find("gear_ratio") != std::string::npos || dataref.find("gear_door") != std::string::npos) return 1.0f;
+    if (dataref.find("tire_vertical_deflection_mtr") != std::string::npos) return tireDeflectionM;
+    return 0.0f;
 }
 
 std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why) {
@@ -177,7 +179,54 @@ std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why) {
     return wheels;
 }
 
+namespace {
+
+// The tyre deflection at which a rotation keyed to it is 0 degrees: where a tilting bogie is level. Keys are
+// (deflection, degrees). Empty when it never crosses 0.
+std::optional<double> LevelAt(const std::vector<std::pair<double, double>>& keys) {
+    for (size_t i = 1; i < keys.size(); ++i) {
+        const auto [v1, r1] = keys[i - 1];
+        const auto [v2, r2] = keys[i];
+        const bool crossesZero = (r1 <= 0 && r2 >= 0) || (r1 >= 0 && r2 <= 0);
+        if (r1 == r2 || !crossesZero) continue;
+        return v1 + (0 - r1) / (r2 - r1) * (v2 - v1);
+    }
+    return std::nullopt;
+}
+
+// Finds the tyre deflection that levels the model's bogies, from its first rotation keyed to the deflection.
+std::optional<double> BogieLevelDeflection(const std::vector<std::string>& lines) {
+    constexpr const char* Deflection = "tire_vertical_deflection_mtr";
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const auto tokens = Tokens(lines[i]);
+        if (tokens.empty()) continue;
+        if (tokens[0] == "ANIM_rotate" && tokens.size() >= 9 && tokens[8].find(Deflection) != std::string::npos) {
+            return LevelAt({{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}});
+        }
+        if (tokens[0] == "ANIM_rotate_begin" && tokens.size() >= 5 && tokens[4].find(Deflection) != std::string::npos) {
+            std::vector<std::pair<double, double>> keys;
+            for (size_t k = i + 1; k < lines.size(); ++k) {
+                const auto key = Tokens(lines[k]);
+                if (key.empty() || key[0] != "ANIM_rotate_key") break;
+                keys.emplace_back(Number(key, 1), Number(key, 2));
+            }
+            return LevelAt(keys);
+        }
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
 void ReadPosedObj(std::istream& obj, PosedModel& model) {
+    std::vector<std::string> lines;
+    for (std::string line; GetLine(obj, line);) {
+        if (line.size() >= 3) lines.push_back(std::move(line));
+    }
+    if (auto level = BogieLevelDeflection(lines)) model.tireDeflectionM = float(*level);
+    const float deflection = model.tireDeflectionM;
+    auto pose = [deflection](const std::string& ref) { return PoseValue(ref, deflection); };
+
     std::vector<Vertex> vt;
     std::vector<int> idx;
     struct Frame {
@@ -203,8 +252,7 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
         if (ref != "none" && isGear(ref) && (by.x != 0 || by.y != 0 || by.z != 0)) stack.back().gear = true;
     };
 
-    for (std::string line; GetLine(obj, line);) {
-        if (line.size() < 3) continue;
+    for (const auto& line : lines) {
         const auto tokens = Tokens(line);
         if (tokens.empty()) continue;
         const auto& cmd = tokens[0];
@@ -217,11 +265,11 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
         } else if (cmd == "ANIM_end") {
             if (stack.size() > 1) stack.pop_back();
         } else if (cmd == "ANIM_rotate" && tokens.size() >= 9) {
-            const double v = PoseValue(tokens[8]);
+            const double v = pose(tokens[8]);
             const double deg = Interpolate({{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}}, v);
             rotate(Number(tokens, 1), Number(tokens, 2), Number(tokens, 3), deg, tokens[8]);
         } else if (cmd == "ANIM_trans" && tokens.size() >= 10) {
-            const double v = PoseValue(tokens[9]);
+            const double v = pose(tokens[9]);
             const double v1 = Number(tokens, 7), v2 = Number(tokens, 8);
             Vertex by;
             by.x = float(Interpolate({{v1, Number(tokens, 1)}, {v2, Number(tokens, 4)}}, v));
@@ -237,14 +285,14 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
         } else if (cmd == "ANIM_rotate_key") {
             rotateKeys.emplace_back(Number(tokens, 1), Number(tokens, 2));
         } else if (cmd == "ANIM_rotate_end") {
-            rotate(axis[0], axis[1], axis[2], Interpolate(rotateKeys, PoseValue(keyedRef)), keyedRef);
+            rotate(axis[0], axis[1], axis[2], Interpolate(rotateKeys, pose(keyedRef)), keyedRef);
         } else if (cmd == "ANIM_trans_begin" && tokens.size() >= 2) {
             keyedRef = tokens[1];
             transKeys.clear();
         } else if (cmd == "ANIM_trans_key") {
             transKeys.emplace_back(Number(tokens, 1), Vertex{float(Number(tokens, 2)), float(Number(tokens, 3)), float(Number(tokens, 4))});
         } else if (cmd == "ANIM_trans_end") {
-            const double v = PoseValue(keyedRef);
+            const double v = pose(keyedRef);
             auto axisKeys = [&](int k) {
                 std::vector<std::pair<double, double>> keys;
                 for (const auto& [at, p] : transKeys) keys.emplace_back(at, k == 0 ? p.x : k == 1 ? p.y : p.z);
@@ -252,7 +300,7 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
             };
             translate({float(Interpolate(axisKeys(0), v)), float(Interpolate(axisKeys(1), v)), float(Interpolate(axisKeys(2), v))}, keyedRef);
         } else if ((cmd == "ANIM_hide" || cmd == "ANIM_show") && tokens.size() >= 4) {
-            const double v = PoseValue(tokens[3]);
+            const double v = pose(tokens[3]);
             const double lo = std::min(Number(tokens, 1), Number(tokens, 2)), hi = std::max(Number(tokens, 1), Number(tokens, 2));
             if (v >= lo && v <= hi) stack.back().visible = cmd == "ANIM_show";
         } else if (cmd == "TRIS" && tokens.size() >= 3) {
@@ -270,14 +318,13 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
     }
 }
 
-std::map<std::string, std::string> FindCslPackages(const std::vector<std::string>& folders) {
-    std::map<std::string, std::string> packages;
+CslPackages FindCslPackages(const std::vector<std::string>& folders) {
+    CslPackages packages;
     for (const auto& folder : folders) FindPackages(Path(folder), 5, packages);
     return packages;
 }
 
-std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line,
-                                       const std::map<std::string, std::string>& packages) {
+std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line, const CslPackages& packages) {
     std::vector<std::string> files;
     std::ifstream xsb(Path(xsbFolder) / "xsb_aircraft.txt");
     std::string text;
@@ -295,11 +342,17 @@ std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line,
         const auto& packagePath = tokens[3];
         const auto split = packagePath.find_first_of(":/\\");
         if (split == std::string::npos || split == 0) continue;
-        const auto package = packages.find(packagePath.substr(0, split));
-        if (package == packages.end()) continue;
         std::string relative = packagePath.substr(split + 1);
         std::replace_if(relative.begin(), relative.end(), [](char c) { return c == ':' || c == '\\'; }, '/');
-        files.push_back((Path(package->second) / Path(relative)).u8string());
+        const auto [first, last] = packages.equal_range(packagePath.substr(0, split));
+        for (auto package = first; package != last; ++package) {
+            const auto file = Path(package->second) / Path(relative);
+            std::error_code error;
+            if (std::next(package) == last || std::filesystem::is_regular_file(file, error)) {
+                files.push_back(file.u8string());
+                break;
+            }
+        }
     }
     return files;
 }

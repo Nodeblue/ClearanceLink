@@ -32,13 +32,14 @@ std::string Requested(const Add& add) { return add.icaoType + ' ' + add.icaoAirl
 
 struct FitResult {
     std::optional<Wheels> wheels;
+    float tireDeflectionM = 0;
     std::string why;
 };
 
-std::map<std::string, std::string> g_packages;
+CslPackages g_packages;
 
 FitResult ReadWheels(const std::vector<std::string>& files) {
-    if (files.empty()) return {std::nullopt, "no .obj file found"};
+    if (files.empty()) return {std::nullopt, 0.0f, "no .obj file found"};
     PosedModel model;
     for (const auto& file : files) {
         std::ifstream obj(std::filesystem::u8path(file));
@@ -46,6 +47,7 @@ FitResult ReadWheels(const std::vector<std::string>& files) {
     }
     FitResult result;
     result.wheels = FindWheels(model, &result.why);
+    result.tireDeflectionM = model.tireDeflectionM;
     return result;
 }
 
@@ -56,6 +58,7 @@ struct ModelFit {
     std::string name;
     std::future<FitResult> reading;
     std::optional<Wheels> wheels;
+    float tireDeflectionM = 0;
     bool done = false;
 };
 
@@ -63,7 +66,7 @@ namespace {
 std::map<std::string, std::shared_ptr<ModelFit>> g_fits;
 }
 
-void TrafficAircraft::SetCslPackages(std::map<std::string, std::string> packages) { g_packages = std::move(packages); }
+void TrafficAircraft::SetCslPackages(CslPackages packages) { g_packages = std::move(packages); }
 
 void TrafficAircraft::ForgetModelFits() { g_fits.clear(); }
 
@@ -83,6 +86,7 @@ const Wheels* TrafficAircraft::ModelWheels() {
     if (!fit_->done && fit_->reading.valid() && fit_->reading.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         const auto result = fit_->reading.get();
         fit_->wheels = result.wheels;
+        fit_->tireDeflectionM = result.tireDeflectionM;
         fit_->done = true;
         char text[256];
         if (result.wheels) {
@@ -193,14 +197,27 @@ void TrafficAircraft::UpdatePosition(float, int) {
     SetRoll(p.bank);
 
     if (ProbeGround(p.onGround, now) && p.onGround) {
-        // The wheel positions read from the model's .obj files are only logged: with Bluebell they put the nose wheel
-        // 0.36 m above the mains of a 737-800 (its gear is posed by animation), and most models could not be read at
-        // all (YBBN, 2026-10-03). Height is XPMP2's vertical offset; XPConnect's per-type pitch and height adjust it.
-        ModelWheels();
-        drawInfo.y = probeY_ + GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
+        // Park the model on its own wheels: pitched so nose and main wheels both touch, at the height that puts them
+        // on the ground, both read from its .obj files with the gear down. Models that could not be read get
+        // XPConnect's per-type pitch and height on XPMP2's vertical offset. Above taxi speed `pos` carries BATC's
+        // pitch (take-off rotation, flare) and the wheels still set the height, so the main gear stays down.
+        const Wheels* wheels = ModelWheels();
+        float pitch = p.pitch;
+        float height = 0;
+        if (wheels) {
+            // Drawn with the tyre deflection it was measured with: levels tilting bogies, 0 for everything else.
+            SetTireDeflection(fit_->tireDeflectionM);
+            pitch += wheels->LevelPitchDeg();
+            height = wheels->GroundHeightM(pitch);
+        } else {
+            pitch += groundPitch_.value_or(0.0f);
+            height = GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
+        }
+        drawInfo.y = probeY_ + height;
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
-        SetPitch(p.pitch + slope_.value_or(0.0f));
+        SetPitch(pitch + slope_.value_or(0.0f));
     }
+    if (!p.onGround) SetTireDeflection(0);  // unloaded in the air: bogies tilt
     SetOnGrnd(p.onGround);
 
     SetGearRatio(p.gear);
