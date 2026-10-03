@@ -935,7 +935,7 @@ namespace XPConnect.Host
                 }
 
                 var key = arg[2..];
-                options._named[key] = key is "quiet" or "no-stub" or "no-status" or "open-status" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
+                options._named[key] = key is "quiet" or "no-stub" or "no-status" or "open-status" or "force" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
             }
 
             return options;
