@@ -104,10 +104,10 @@ public sealed class TrafficBridge(
                 readded = true;
                 if (drawn.LastAdd is null)
                 {
-                    log($"traffic: drawing {o.TailNumber} '{o.Title}' as {drawn.Model.IcaoType} {drawn.Model.IcaoAirline ?? "-"} (plugin id {drawn.PluginId})");
+                    log($"traffic: drawing {o.TailNumber} '{o.Title}' as {drawn.Model.IcaoType} {drawn.Model.IcaoAirline ?? "-"}{(drawn.Model.Livery is { } livery ? $" livery {livery}" : "")} (plugin id {drawn.PluginId})");
                 }
 
-                plugin.Add(drawn.PluginId, drawn.Model.IcaoType, drawn.Model.IcaoAirline, null, o.TailNumber);
+                plugin.Add(drawn.PluginId, drawn.Model.IcaoType, drawn.Model.IcaoAirline, drawn.Model.Livery, o.TailNumber);
                 var type = drawn.Model.IcaoType;
                 plugin.SetGroundOffset(drawn.PluginId, models.GroundOffsetFeet(type), pluginFits ? models.GroundPitch(type) : null);
                 drawn.LastAdd = now;
