@@ -23,6 +23,9 @@ public:
     static void SetCslPackages(CslPackages packages);
     // Drops the cached wheel positions (waits for reads still running).
     static void ForgetModelFits();
+    // Adds the bogie datarefs some models use besides XPMP2's own (World Traffic's main gear deflection). Call after
+    // XPMPMultiplayerInit and before any aircraft exists; returns false when XPMP2 refused.
+    static bool AddModelDatarefs();
 
     // Throws XPMP2::XPMP2Error when no CSL model can be matched (for example none installed).
     explicit TrafficAircraft(const Add& add);
@@ -48,6 +51,8 @@ private:
     std::optional<float> GroundSlopeDeg(float centreY);
     // The model's nose and main wheels once read from its .obj files (in the background, once per model).
     const Wheels* ModelWheels();
+    // Sets the model's bogie dataref: the level the fit found on the ground, 0 (unloaded, tilted) otherwise.
+    void SetBogies(bool onGround);
 
     const XPMP2::CSLModel* fitModel_ = nullptr;
     std::shared_ptr<ModelFit> fit_;

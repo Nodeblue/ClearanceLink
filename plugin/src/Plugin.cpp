@@ -200,6 +200,7 @@ PLUGIN_API int XPluginEnable() {
         Log(std::string("XPMP2 init failed: ") + error);
         return 0;
     }
+    if (!xpc::TrafficAircraft::AddModelDatarefs()) Log("XPMP2 refused the World Traffic gear dataref; those models' bogies stay tilted");
     LoadCsl();
     if (!g_menu) {
         const int root = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "XPConnect", nullptr, 0);

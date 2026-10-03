@@ -30,14 +30,17 @@ Plugin 0.4.0+ parks each CSL model on its own wheels. The first time a model is 
 files in the background (found from its `OBJ8` lines in `xsb_aircraft.txt`; a package can span several folders with
 the same `EXPORT_NAME`, as Bluebell's `__Bluebell_Airbus` does over `BB_Airbus`, `BB_Airbus1` and `BB_Airbus2`), and
 poses it with the gear down (`plugin/src/GroundFit.cpp`, `ReadPosedObj`): every `ANIM_` transform applied in the
-OBJ8 order (the last command applies to a point first), `gear_ratio` and gear-door datarefs at 1, the main tyre
-deflection at the value that levels a tilting bogie (777, A340, A380; 0 for other models), everything else at 0, and
+OBJ8 order (the last command applies to a point first), `gear_ratio` and gear-door datarefs at 1, the bogie dataref
+at the value that levels a tilting bogie (777, A340, A380; 0 for other models), everything else at 0, and
 parts hidden by `ANIM_hide`/`ANIM_show` left out. Bluebell keeps its gear retracted in the file and lowers it by
 animation (B738 and E190 read on Ben's PC, 2026-10-03), so the raw `VT` points are not where the wheels are drawn.
 The nose wheel is the lowest point the `gear_ratio` animations move in the front 35% of the model, the main wheels
 the lowest one behind that. On the ground the plugin adds the pitch that puts both on level ground, sets the height
 from the wheels so the lower one touches (this also keeps the main gear down while BATC rotates for take-off), and
-draws the model with the tyre deflection it measured. Models it cannot fit (no gear animation, such as fixed-gear
+draws the model with the bogie value it measured. The bogie dataref is XPMP2's
+`libxplanemp/gear/tire_vertical_deflection_mtr`, or World Traffic's `cjs/world_traffic/main_gear_deflection`, which
+Bluebell's virtual-airline repaints use (95 models; B772_PAY drawn at touchdown tilt at YBBN, 2026-10-03). The plugin
+adds that one to XPMP2 with `XPMPAddModelDataRef`; the other World Traffic gear datarefs stay at 0. Models it cannot fit (no gear animation, such as fixed-gear
 Cessnas and helicopters, or a fit beyond 3°) use XPConnect's per-type pitch and height on XPMP2's vertical offset.
 
 Checked against Ben's Bluebell library (2,027 models): the measured wheels agree with each model's own `VERT_OFFSET`
