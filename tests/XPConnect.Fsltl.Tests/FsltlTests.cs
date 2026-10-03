@@ -157,9 +157,9 @@ public sealed class FsltlTests
         Assert.Equal(2, result.Textures);
         var xsb = File.ReadAllText(Path.Combine(output, "xsb_aircraft.txt"));
         Assert.StartsWith("EXPORT_NAME XPConnect_FSLTL", xsb);
-        Assert.Contains("OBJ8_AIRCRAFT FSLTL_A20N_BAW_Speedbird\nOBJ8 SOLID YES XPConnect_FSLTL/objects/FSLTL_A20N_model_CFM_0.obj FSLTL_A20N_BAW_Speedbird_TEXTURE_BAW_LIVERY_T.dds\nLIVERY A20N BAW FSLTL_A20N_BAW_Speedbird\n", xsb);
+        Assert.Contains("OBJ8_AIRCRAFT FSLTL_A20N_BAW_Speedbird\nOBJ8 SOLID YES XPConnect_FSLTL/objects/FSLTL_A20N_A320_0.obj FSLTL_A20N_BAW_Speedbird_TEXTURE_BAW_LIVERY_T.dds\nLIVERY A20N BAW FSLTL_A20N_BAW_Speedbird\n", xsb);
         Assert.Contains("LIVERY A20N - FSLTL_A20N\n", xsb);
-        var obj = File.ReadAllText(Path.Combine(output, "objects", "FSLTL_A20N_model_CFM_0.obj"));
+        var obj = File.ReadAllText(Path.Combine(output, "objects", "FSLTL_A20N_A320_0.obj"));
         Assert.Contains("TEXTURE FSLTL_A20N_TEXTURE_LIVERY_T.dds\n", obj);
         Assert.Equal(4, DdsTexture.Load(Path.Combine(output, "objects", "FSLTL_A20N_TEXTURE_LIVERY_T.dds")).Width);
         var catalogue = FsltlImporter.LoadCatalogue(output);
