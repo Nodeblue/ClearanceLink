@@ -165,7 +165,9 @@ public sealed class TrafficBridge(
             o.AltitudeFeet,
             o.HeadingTrue,
             o.OnGround && o.GroundSpeedKnots < RotateKnots ? groundPitch : -o.PitchDegrees,
-            -o.BankDegrees,
+            // Wings level while on the ground: BATC keeps writing a bank on the take-off roll (live test 2026-10-03, YBBN:
+            // a departure drawn leaning left down the runway), which tips a model on its wheels.
+            o.OnGround ? 0 : -o.BankDegrees,
             o.GroundSpeedKnots,
             o.OnGround,
             Gear(o, groundFeet),

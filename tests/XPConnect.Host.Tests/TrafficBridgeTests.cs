@@ -177,6 +177,16 @@ public sealed class TrafficBridgeTests
     }
 
     [Fact]
+    public void Wings_are_level_on_the_ground_whatever_bank_batc_writes()
+    {
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var rolling = registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXGE", new InitPosition(-27.39, 153.12, 13, 0, 6, 13, true, 120));
+
+        Assert.Equal(0, TrafficBridge.State(rolling).Bank);
+    }
+
+    [Fact]
     public void Gear_without_any_gear_data_is_down_on_the_ground_and_low_near_an_airport()
     {
         var time = new ManualTime();
