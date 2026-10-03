@@ -10,10 +10,27 @@ using XPConnect.Recorder;
 using XPConnect.Server;
 using XPConnect.XPlane;
 
-return await Cli.RunAsync(args);
-
 namespace XPConnect.Host
 {
+    public static class Program
+    {
+        /// <summary>
+        /// No arguments (double-clicked) on Windows, or "panel": the XPConnect window. Anything else: the command line.
+        /// STA because the window needs it on Windows.
+        /// </summary>
+        [STAThread]
+        public static int Main(string[] args)
+        {
+            if ((args.Length == 0 && OperatingSystem.IsWindows()) || args is ["panel"])
+            {
+                return Panel.PanelApp.Run();
+            }
+
+            Panel.ConsoleAttach.ToParent();
+            return Cli.RunAsync(args).GetAwaiter().GetResult();
+        }
+    }
+
     public static class Cli
     {
         private const string Usage = """
@@ -21,7 +38,11 @@ namespace XPConnect.Host
 
             Usage:
               xpconnect
-                  (no arguments, e.g. double-clicked) Check BeyondATC's set-up for the chosen connection, then serve.
+                  (no arguments, e.g. double-clicked) Open the XPConnect window (Windows), which serves while it is open.
+              xpconnect panel
+                  Open the XPConnect window on any system.
+              xpconnect start
+                  The same in this console window instead: check BeyondATC's set-up, then serve.
               xpconnect settings [connection automatic|always-on] [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
                   Show or change saved settings (%LOCALAPPDATA%\XPConnect\settings.json). connection automatic (default):
                   serve answers on MSFS's default connection while MSFS is closed, nothing changed in BeyondATC;
@@ -65,9 +86,9 @@ namespace XPConnect.Host
 
         public static async Task<int> RunAsync(string[] args)
         {
-            if (args.Length == 0)
+            if (args.Length == 0 || args is ["start"])
             {
-                // Double-clicked: set BATC up if needed, then serve with the defaults.
+                // Set BATC up if needed, then serve with the defaults in this console.
                 return await StartAsync();
             }
 
@@ -112,7 +133,11 @@ namespace XPConnect.Host
             }
         }
 
-        private static async Task<int> RunServerAsync(string mode, Options options)
+        /// <summary>
+        /// Runs record, fake or serve until cancelled (Ctrl+C, or <paramref name="stop"/>). onBoard receives serve's
+        /// status board once it exists (the window reads it).
+        /// </summary>
+        internal static async Task<int> RunServerAsync(string mode, Options options, Action<StatusBoard>? onBoard = null, CancellationToken stop = default)
         {
             PacketConsole.Verbose = !options.Has("quiet");
             StartSessionLog(mode);
@@ -120,7 +145,7 @@ namespace XPConnect.Host
             var outPath = options.Get("out")
                 ?? Path.Combine(RecordingsFolder(), $"{DateTime.Now:yyyyMMdd-HHmmss}-{mode}.jsonl");
 
-            using var cts = new CancellationTokenSource();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(stop);
 
             // Ctrl+C, Ctrl+Break, closing the console window (SIGHUP on Windows) and kill all stop cleanly,
             // so the summary is always written.
@@ -153,7 +178,7 @@ namespace XPConnect.Host
                     }
                     else if (mode == "serve")
                     {
-                        await ServeAsync(options, listener, recorder, msfs, cts.Token);
+                        await ServeAsync(options, listener, recorder, msfs, onBoard, cts.Token);
                     }
                     else
                     {
@@ -170,7 +195,7 @@ namespace XPConnect.Host
 
             inventory.SampledOut = throttle.Skipped;
             var summaryPath = Path.ChangeExtension(outPath, ".md");
-            await File.WriteAllTextAsync(summaryPath, inventory.ToMarkdown($"Call inventory: {Path.GetFileName(outPath)}"));
+            await File.WriteAllTextAsync(summaryPath, inventory.ToMarkdown($"Call inventory: {Path.GetFileName(outPath)}"), CancellationToken.None);
             PacketConsole.Info($"Stopped. {inventory.Count} packets. Summary: {Path.GetFullPath(summaryPath)}");
             signals.ForEach(s => s.Dispose());
             SessionLog.Stop();
@@ -194,7 +219,7 @@ namespace XPConnect.Host
         }
 
         /// <summary>--batc when given, else the folder saved in settings when it still holds BeyondATC, else found automatically.</summary>
-        private static string? BatcFolder(Options options)
+        internal static string? BatcFolder(Options options)
         {
             if (options.Get("batc") is { } given)
             {
@@ -206,7 +231,7 @@ namespace XPConnect.Host
         }
 
         /// <summary>--xplane-root when given, else the folder saved in settings when it is still X-Plane, else found automatically.</summary>
-        private static XPlaneInstall? FindXPlane(Options options)
+        internal static XPlaneInstall? FindXPlane(Options options)
         {
             if (options.Get("xplane-root") is { } given)
             {
@@ -299,7 +324,7 @@ namespace XPConnect.Host
         /// Always on writes BeyondATC's two config files; automatic removes XPConnect's (a user's own are put back).
         /// Returns a problem to show, or null.
         /// </summary>
-        private static string? ApplyConnection(AppSettings settings, string? batcFolder)
+        internal static string? ApplyConnection(AppSettings settings, string? batcFolder)
         {
             if (batcFolder is null)
             {
@@ -316,25 +341,39 @@ namespace XPConnect.Host
 
         private static int SupportCommand()
         {
+            var zip = CreateSupportFile();
+            Console.WriteLine($"Support file: {zip}");
+            Console.WriteLine("Your Windows user name has been blanked out. Please send this file to Nodeblue with a few words on what went wrong.");
+            ShowInExplorer(zip);
+            return 0;
+        }
+
+        /// <summary>Builds the support zip from the current settings and returns its path.</summary>
+        internal static string CreateSupportFile()
+        {
             var none = new Options();
             var sources = new SupportSources(Version, AppFolders.Default, BatcFolder(none), FindXPlane(none)?.Root,
                 SupportSources.DefaultBatcLogFolder, Redactor.ForCurrentUser());
-            var zip = SupportBundle.Create(sources, DateTime.Now);
-            Console.WriteLine($"Support file: {zip}");
-            Console.WriteLine("Your Windows user name has been blanked out. Please send this file to Nodeblue with a few words on what went wrong.");
-            if (OperatingSystem.IsWindows())
+            return SupportBundle.Create(sources, DateTime.Now);
+        }
+
+        /// <summary>Opens Explorer with the file selected (or the folder shown); does nothing elsewhere.</summary>
+        internal static void ShowInExplorer(string path)
+        {
+            if (!OperatingSystem.IsWindows())
             {
-                try
-                {
-                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{zip}\"")?.Dispose();
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    // The path is printed above.
-                }
+                return;
             }
 
-            return 0;
+            try
+            {
+                var args = File.Exists(path) ? $"/select,\"{path}\"" : $"\"{path}\"";
+                System.Diagnostics.Process.Start("explorer.exe", args)?.Dispose();
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // The caller shows the path too.
+            }
         }
 
         /// <summary>
@@ -362,7 +401,7 @@ namespace XPConnect.Host
             return new MultiListener(listeners, PacketConsole.Info);
         }
 
-        private static async Task ServeAsync(Options options, IListener listener, JsonlRecorder recorder, MsfsGate msfs, CancellationToken ct)
+        private static async Task ServeAsync(Options options, IListener listener, JsonlRecorder recorder, MsfsGate msfs, Action<StatusBoard>? onBoard, CancellationToken ct)
         {
             var mappings = LoadMappings(options);
             using var xplane = new XPlaneWebApiClient(XPlaneUri(options), PacketConsole.Info);
@@ -398,6 +437,7 @@ namespace XPConnect.Host
                 Traffic = () => traffic.Objects,
             };
             board.Plugin = () => plugin?.Status;
+            onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
             {
@@ -455,7 +495,7 @@ namespace XPConnect.Host
             return missing.Count == 0 ? 0 : 3;
         }
 
-        private static string Version =>
+        internal static string Version =>
             typeof(Cli).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
                 .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "dev";
 
@@ -508,7 +548,7 @@ namespace XPConnect.Host
             return await RunServerAsync("serve", Options.Parse(["--quiet", "--open-status"]));
         }
 
-        private static void OpenInBrowser(string url)
+        internal static void OpenInBrowser(string url)
         {
             try
             {
