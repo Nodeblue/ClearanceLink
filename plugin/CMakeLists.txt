@@ -3,7 +3,7 @@
 # Linux (compile check): cmake -S plugin -B build/plugin && cmake --build build/plugin
 # Output: build/plugin/XPConnect/64/<win|lin|mac>.xpl plus XPConnect/Resources (XPMP2's support files).
 cmake_minimum_required(VERSION 3.16)
-project(XPConnectPlugin VERSION 0.4.1 LANGUAGES C CXX)
+project(XPConnectPlugin VERSION 0.4.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,17 @@ FetchContent_Declare(XPMP2
 FetchContent_GetProperties(XPMP2)
 if(NOT xpmp2_POPULATED)
     FetchContent_Populate(XPMP2)
+endif()
+# Patch: CSL packages split over several folders under one EXPORT_NAME (Bluebell's BB_Boeing1..3, BB_Airbus..2) load
+# all their models; XPMP2 3.7.0 looks for every .obj in the first folder only and drops about 750 Bluebell models.
+set(XPMP2_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/xpmp2-split-packages.patch")
+execute_process(COMMAND git apply --reverse --check "${XPMP2_PATCH}"
+    WORKING_DIRECTORY "${xpmp2_SOURCE_DIR}" RESULT_VARIABLE XPMP2_PATCHED OUTPUT_QUIET ERROR_QUIET)
+if(NOT XPMP2_PATCHED EQUAL 0)
+    execute_process(COMMAND git apply "${XPMP2_PATCH}" WORKING_DIRECTORY "${xpmp2_SOURCE_DIR}" RESULT_VARIABLE XPMP2_PATCH_RESULT)
+    if(NOT XPMP2_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR "Could not apply ${XPMP2_PATCH} to XPMP2")
+    endif()
 endif()
 set(XPlaneSDK_DIR "${xpmp2_SOURCE_DIR}/lib/SDK" CACHE PATH "X-Plane SDK" FORCE)
 list(APPEND CMAKE_MODULE_PATH "${xpmp2_SOURCE_DIR}/cmake")
