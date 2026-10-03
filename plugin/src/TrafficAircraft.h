@@ -32,6 +32,9 @@ public:
     ~TrafficAircraft() override;
 
     void Apply(const Pos& pos, float now);
+    // When XPConnect last sent this aircraft's add or position (X-Plane elapsed seconds).
+    void Heard(float now) { lastHeard_ = now; }
+    float LastHeard() const { return lastHeard_; }
     void ChangeTo(const Add& add);
     // XPConnect's per-type height (feet) and, from XPConnect versions that send it, parked pitch: used for models whose
     // wheels could not be read. Without a pitch, XPConnect puts its per-type pitch in each `pos` itself.
@@ -68,6 +71,7 @@ private:
     Pos prev_{}, state_{};  // the last two updates from XPConnect, blended between (Motion.h)
     float prevTime_ = 0, stateTime_ = 0;
     bool hasState_ = false;
+    float lastHeard_ = 0;
     XPLMProbeRef probe_ = nullptr;
     std::optional<double> groundFt_;
     // Last terrain probe: where (local x, z), when, what it found and the slope along the heading then.

@@ -20,8 +20,8 @@ newer than the other.
 | `add <id> <icaoType> <icaoAirline> <livery> <label...>` | Create aircraft `id` (1..16777215). `icaoAirline` and `livery` are `-` when unknown. `label` (rest of the line) is shown next to the aircraft, for example the registration. Re-sending `add` for an existing id changes its model. |
 | `pos <id> <lat> <lon> <altFt> <hdgTrue> <pitch> <bank> <gsKt> <onGround> <gear> <flaps> <spoilers> <thrust> <lights>` | Latest state. `altFt` is MSL; when `onGround` is `1` the plugin puts the wheels on X-Plane's terrain and ignores `altFt`. `gear`, `flaps`, `spoilers`, `thrust` are 0..1. `lights` is a bit mask: 1 nav, 2 beacon, 4 strobe, 8 landing, 16 taxi. |
 | `offset <id> <feet> [<pitch>]` | Per-type height (feet, + raises) and parked pitch (degrees, nose up +) for aircraft `id`, from `ground_offset_ft` and `ground_pitch` in `mapping/traffic-models.yaml`, sent after each `add`. Plugin 0.4.0+ uses them only for models it cannot fit to their own wheels, and XPConnect then sends the pitch here rather than in each `pos`; to older plugins XPConnect sends `<feet>` only (0.2.0+) and puts the pitch in `pos`. |
-| `del <id>` | Remove aircraft `id`. |
-| `clear` | Remove all aircraft. |
+| `del <id>` | Remove aircraft `id`. XPConnect sends it on 3 syncs in a row, as UDP can drop it; plugin 0.4.1+ also removes an aircraft that has had no `add` or `pos` for 15 s. |
+| `clear` | Remove all aircraft. XPConnect sends it when it starts, so a plugin still drawing a previous run's aircraft drops them. |
 
 On the ground the plugin also pitches each aircraft to the slope of the terrain under it (probed 8 m ahead and
 behind, at most 4°), added to the `pitch` XPConnect sends (plugin 0.2.0+).
@@ -40,7 +40,9 @@ from the wheels so the lower one touches (this also keeps the main gear down whi
 draws the model with the bogie value it measured. The bogie dataref is XPMP2's
 `libxplanemp/gear/tire_vertical_deflection_mtr`, or World Traffic's `cjs/world_traffic/main_gear_deflection`, which
 Bluebell's virtual-airline repaints use (95 models; B772_PAY drawn at touchdown tilt at YBBN, 2026-10-03). The plugin
-adds that one to XPMP2 with `XPMPAddModelDataRef`; the other World Traffic gear datarefs stay at 0. Models it cannot fit (no gear animation, such as fixed-gear
+adds that one to XPMP2 with `XPMPAddModelDataRef`; the other World Traffic gear datarefs stay at 0. The bogie is the
+rotation keyed to either dataref that is tilted furthest when unloaded and reaches level at some value (smaller ones,
+under 5°, are links and struts), searched over all of a model's files before any is posed. Models it cannot fit (no gear animation, such as fixed-gear
 Cessnas and helicopters, or a fit beyond 3°) use XPConnect's per-type pitch and height on XPMP2's vertical offset.
 
 Checked against Ben's Bluebell library (2,027 models): the measured wheels agree with each model's own `VERT_OFFSET`

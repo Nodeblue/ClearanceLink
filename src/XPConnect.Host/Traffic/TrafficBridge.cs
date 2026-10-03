@@ -54,7 +54,13 @@ public sealed class TrafficBridge(
 
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly ConcurrentDictionary<uint, Drawn> _drawn = new();
+    // Plugin ids removed recently, and how many more syncs to send their `del` on: UDP can drop it, and an aircraft
+    // the plugin never hears `del` for would stay drawn where it was.
+    private readonly Dictionary<uint, int> _removed = [];
     private int _nextPluginId;
+
+    /// <summary>How many syncs a removed aircraft's `del` is sent on.</summary>
+    public const int RemoveRepeats = 3;
 
     /// <summary>The plugin's id (1..16777215) for an AI object; BATC's object ids are larger than the plugin allows.</summary>
     public uint? PluginId(uint objectId) => _drawn.TryGetValue(objectId, out var d) ? d.PluginId : null;
@@ -63,11 +69,19 @@ public sealed class TrafficBridge(
     {
         var now = _time.GetUtcNow();
         var aircraft = registry.Objects.Where(o => o.Kind == TrafficKind.Aircraft).ToDictionary(o => o.ObjectId);
+        foreach (var (pluginId, left) in _removed.ToArray())
+        {
+            plugin.Remove(pluginId);
+            if (left <= 1) _removed.Remove(pluginId);
+            else _removed[pluginId] = left - 1;
+        }
+
         foreach (var (objectId, drawn) in _drawn)
         {
             if (!aircraft.ContainsKey(objectId) && _drawn.TryRemove(objectId, out _))
             {
                 plugin.Remove(drawn.PluginId);
+                _removed[drawn.PluginId] = RemoveRepeats - 1;
             }
         }
 

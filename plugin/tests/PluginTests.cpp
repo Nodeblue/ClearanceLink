@@ -357,6 +357,44 @@ void LevelsWorldTrafficBogies() {
     CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", model.bogieDataref, model.bogieLevel) == 0);
 }
 
+void SkipsLinksKeyedToDeflection() {
+    // A torque link keyed to the same deflection (0 to 5 degrees) before the bogie must not be taken for it.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 0 5 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nANIM_end\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
+    CHECK(std::fabs(model.bogieTiltDeg + 20) < 0.001f);
+    CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);  // level
+}
+
+void KeepsOneBogieLevelAcrossFiles() {
+    // A model split over files: the bogie in the first, a small part keyed to World Traffic's dataref in the second.
+    std::istringstream gear(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
+    std::istringstream other(
+        "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
+        "ANIM_begin\nANIM_rotate 1 0 0 -6 0 0 1 cjs/world_traffic/main_gear_deflection\nTRIS 0 2\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ScanBogies(other, model);
+    xpc::ScanBogies(gear, model);
+    CHECK(model.bogieDataref == xpc::TireDeflectionDataref);
+    CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
+}
+
+void ReadsAnimationsKeyedHighToLow() {
+    // A single ANIM_trans may run from v1 = 1 down to v2 = 0: at 0 (flaps up) the part is at its v2 offset.
+    std::istringstream obj(
+        "I\n800\nOBJ\n\nVT 0 0 0 0 1 0 0 0\nIDX 0\n"
+        "ANIM_begin\nANIM_trans 0 -1 0 0 0 0 1 0 libxplanemp/controls/flap_ratio\nTRIS 0 1\nANIM_end\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.all.size() == 1 && std::fabs(model.all[0].y) < 1e-6f);
+}
+
 }  // namespace
 
 int main() {
@@ -374,6 +412,9 @@ int main() {
     FindsObjFilesInSplitPackages();
     LevelsTiltingBogies();
     LevelsWorldTrafficBogies();
+    SkipsLinksKeyedToDeflection();
+    KeepsOneBogieLevelAcrossFiles();
+    ReadsAnimationsKeyedHighToLow();
     FindsModelObjFiles();
     BlendsBetweenUpdates();
     MovesOnWhenUpdatesStop();

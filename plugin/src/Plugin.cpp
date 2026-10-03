@@ -23,6 +23,9 @@
 namespace {
 
 constexpr float HelloTimeoutSeconds = 10.0f;
+// XPConnect re-sends each aircraft's add every 10 s and its position at least every 2 s. One that hears neither for
+// this long was removed by a `del` that UDP dropped, and is removed here instead of staying drawn where it was.
+constexpr float AircraftTimeoutSeconds = 15.0f;
 constexpr float GroundReportSeconds = 0.25f;
 constexpr float StatusReportSeconds = 1.0f;
 
@@ -93,8 +96,10 @@ void Handle(const xpc::Message& message, float now) {
             auto existing = g_aircraft.find(add->id);
             if (existing != g_aircraft.end()) {
                 existing->second->ChangeTo(*add);
+                existing->second->Heard(now);
             } else {
-                g_aircraft[add->id] = std::make_unique<xpc::TrafficAircraft>(*add);
+                auto& aircraft = g_aircraft[add->id] = std::make_unique<xpc::TrafficAircraft>(*add);
+                aircraft->Heard(now);
                 if (!g_tcas) {
                     const char* error = XPMPMultiplayerEnable();
                     g_tcas = !(error && *error);
@@ -107,7 +112,10 @@ void Handle(const xpc::Message& message, float now) {
         }
     } else if (auto pos = std::get_if<xpc::Pos>(&message)) {
         auto found = g_aircraft.find(pos->id);
-        if (found != g_aircraft.end()) found->second->Apply(*pos, now);
+        if (found != g_aircraft.end()) {
+            found->second->Apply(*pos, now);
+            found->second->Heard(now);
+        }
     } else if (auto offset = std::get_if<xpc::Offset>(&message)) {
         auto found = g_aircraft.find(offset->id);
         if (found != g_aircraft.end()) found->second->SetGroundTrim(offset->groundFt, offset->groundPitch);
@@ -136,6 +144,15 @@ float FlightLoop(float, float, int, void*) {
         Log("XPConnect stopped sending; removing its traffic");
         RemoveAll();
         g_lastHello = -1;
+    }
+
+    for (auto it = g_aircraft.begin(); it != g_aircraft.end();) {
+        if (now - it->second->LastHeard() > AircraftTimeoutSeconds) {
+            LogOnce("removing aircraft XPConnect stopped updating (a lost del)");
+            it = g_aircraft.erase(it);
+        } else {
+            ++it;
+        }
     }
 
     if (now - g_lastGround >= GroundReportSeconds && !g_aircraft.empty()) {

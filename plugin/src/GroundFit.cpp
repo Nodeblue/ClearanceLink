@@ -20,6 +20,8 @@ constexpr float NoseHalfWidthM = 1.5f;
 constexpr float GearNoseShare = 0.35f;
 // A fit needing more pitch than this is not a wheel gap but a model we read wrongly.
 constexpr float MaxFitPitchDeg = 3.0f;
+// A rotation keyed to tyre deflection that tilts less than this unloaded is a link or strut part, not the bogie.
+constexpr double MinBogieTiltDeg = 5.0;
 
 // A 3x4 affine transform (rotation and translation), applied as OBJ8 animations are: each ANIM_ command multiplies
 // onto the current transform, so the last command is applied to a point first.
@@ -68,9 +70,11 @@ struct Affine {
     }
 };
 
-// Piecewise-linear lookup of `value` in (key, result) pairs, held at the ends.
-double Interpolate(const std::vector<std::pair<double, double>>& keys, double value) {
+// Piecewise-linear lookup of `value` in (key, result) pairs, held at the ends. Keys may come in either order: OBJ8
+// lets a single ANIM_rotate or ANIM_trans run from v1 = 1 to v2 = 0.
+double Interpolate(std::vector<std::pair<double, double>> keys, double value) {
     if (keys.empty()) return 0;
+    std::stable_sort(keys.begin(), keys.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     if (keys.size() == 1 || value <= keys.front().first) return keys.front().second;
     for (size_t i = 1; i < keys.size(); ++i) {
         if (value <= keys[i].first) {
@@ -202,8 +206,17 @@ std::string BogieDataref(const std::string& dataref) {
     return {};
 }
 
-// Finds the dataref and value that level the model's bogies, from its first rotation keyed to a deflection dataref.
-std::optional<std::pair<std::string, double>> BogieLevel(const std::vector<std::string>& lines) {
+struct BogieTilt {
+    std::string dataref;
+    double level = 0;   // dataref value that levels it
+    double tiltDeg = 0; // its angle unloaded (dataref 0)
+};
+
+// Finds the rotation keyed to a deflection dataref that levels the model's bogies: of those that reach 0 degrees at
+// some deflection, the one tilted furthest when unloaded. Others keyed to the same dataref (torque links, strut
+// linkages) move only a few degrees and are level when unloaded already.
+std::optional<BogieTilt> FindBogieTilt(const std::vector<std::string>& lines) {
+    std::optional<BogieTilt> best;
     for (size_t i = 0; i < lines.size(); ++i) {
         const auto tokens = Tokens(lines[i]);
         if (tokens.empty()) continue;
@@ -211,35 +224,76 @@ std::optional<std::pair<std::string, double>> BogieLevel(const std::vector<std::
         const bool keyed = tokens[0] == "ANIM_rotate_begin" && tokens.size() >= 5;
         const std::string dataref = single ? BogieDataref(tokens[8]) : keyed ? BogieDataref(tokens[4]) : std::string();
         if (dataref.empty()) continue;
-        std::optional<double> level;
+        std::vector<std::pair<double, double>> keys;
         if (single) {
-            level = LevelAt({{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}});
+            keys = {{Number(tokens, 6), Number(tokens, 4)}, {Number(tokens, 7), Number(tokens, 5)}};
         } else {
-            std::vector<std::pair<double, double>> keys;
             for (size_t k = i + 1; k < lines.size(); ++k) {
                 const auto key = Tokens(lines[k]);
                 if (key.empty() || key[0] != "ANIM_rotate_key") break;
                 keys.emplace_back(Number(key, 1), Number(key, 2));
             }
-            level = LevelAt(keys);
         }
-        if (!level) return std::nullopt;
-        return std::make_pair(dataref, *level);
+        std::stable_sort(keys.begin(), keys.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        const double tilt = Interpolate(keys, 0);
+        const auto level = LevelAt(keys);
+        if (!level || std::fabs(tilt) < MinBogieTiltDeg) continue;
+        if (!best || std::fabs(tilt) > std::fabs(best->tiltDeg)) best = BogieTilt{dataref, *level, tilt};
     }
-    return std::nullopt;
+    return best;
 }
 
-}  // namespace
-
-void ReadPosedObj(std::istream& obj, PosedModel& model) {
+std::vector<std::string> ReadLines(std::istream& obj) {
     std::vector<std::string> lines;
     for (std::string line; GetLine(obj, line);) {
         if (line.size() >= 3) lines.push_back(std::move(line));
     }
-    if (auto level = BogieLevel(lines)) {
-        model.bogieDataref = level->first;
-        model.bogieLevel = float(level->second);
+    return lines;
+}
+
+void Pose(const std::vector<std::string>& lines, PosedModel& model);
+
+}  // namespace
+
+void ScanBogies(std::istream& obj, PosedModel& model) {
+    model.bogiesScanned = true;
+    const auto tilt = FindBogieTilt(ReadLines(obj));
+    if (tilt && std::fabs(tilt->tiltDeg) > std::fabs(model.bogieTiltDeg)) {
+        model.bogieDataref = tilt->dataref;
+        model.bogieLevel = float(tilt->level);
+        model.bogieTiltDeg = float(tilt->tiltDeg);
     }
+}
+
+void ReadPosedObj(std::istream& obj, PosedModel& model) {
+    const auto lines = ReadLines(obj);
+    if (!model.bogiesScanned) {
+        if (const auto tilt = FindBogieTilt(lines)) {
+            model.bogieDataref = tilt->dataref;
+            model.bogieLevel = float(tilt->level);
+            model.bogieTiltDeg = float(tilt->tiltDeg);
+        }
+        model.bogiesScanned = true;
+    }
+    Pose(lines, model);
+}
+
+PosedModel PoseObjFiles(const std::vector<std::string>& files) {
+    PosedModel model;
+    for (const auto& file : files) {
+        std::ifstream obj(std::filesystem::u8path(file));
+        ScanBogies(obj, model);
+    }
+    for (const auto& file : files) {
+        std::ifstream obj(std::filesystem::u8path(file));
+        ReadPosedObj(obj, model);
+    }
+    return model;
+}
+
+namespace {
+
+void Pose(const std::vector<std::string>& lines, PosedModel& model) {
     auto pose = [&model](const std::string& ref) { return PoseValue(ref, model.bogieDataref, model.bogieLevel); };
 
     std::vector<Vertex> vt;
@@ -332,6 +386,8 @@ void ReadPosedObj(std::istream& obj, PosedModel& model) {
         }
     }
 }
+
+}  // namespace
 
 CslPackages FindCslPackages(const std::vector<std::string>& folders) {
     CslPackages packages;

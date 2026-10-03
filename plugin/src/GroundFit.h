@@ -38,6 +38,8 @@ struct PosedModel {
     // cjs/world_traffic/main_gear_deflection (B772_PAY at YBBN, 2026-10-03: bogies drawn tilted at 0).
     std::string bogieDataref;
     float bogieLevel = 0;
+    float bogieTiltDeg = 0;      // the bogie's angle unloaded, for the log
+    bool bogiesScanned = false;  // bogie level already found (ScanBogies over all of a model's files)
 };
 
 // Finds the wheels among a model's points. With gear points, the nose wheel is the lowest gear point in the front
@@ -50,7 +52,15 @@ std::optional<Wheels> FindWheels(const PosedModel& model, std::string* why = nul
 // and gear door datarefs at 1 and all others (tyre deflection, steering, flaps...) at 0, and parts that ANIM_hide /
 // ANIM_show then hide left out. Bluebell and most CSL models keep their gear retracted in the file and lower it by
 // animation (B738 and E190 at YBBN, 2026-10-03), so the raw VT points are not where the wheels are drawn.
+// A model whose bogies were not scanned yet takes them from this file alone.
 void ReadPosedObj(std::istream& obj, PosedModel& model);
+
+// Finds the bogie tilt in one of a model's .obj files, keeping the most tilted across files: a model split over
+// several files is posed with one bogie level, whichever file its gear is in.
+void ScanBogies(std::istream& obj, PosedModel& model);
+
+// A model's .obj files posed with the gear down: bogies scanned in all of them first, then each file posed.
+PosedModel PoseObjFiles(const std::vector<std::string>& files);
 
 // The datarefs a model may tilt its main bogies with, by how much they are loaded.
 constexpr const char* TireDeflectionDataref = "libxplanemp/gear/tire_vertical_deflection_mtr";
