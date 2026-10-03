@@ -145,7 +145,10 @@ public static class Obj8Converter
                 if (name.StartsWith(key + "_node", StringComparison.OrdinalIgnoreCase)) return (role, key);
             }
 
-            return (AnimationRole.Still, null);
+            // Not in the model XML (an included behaviour file drives it): judge by name; parts split per node share a key.
+            var byName = AnimationRoles.FromName(name);
+            var node = name.IndexOf("_node", StringComparison.OrdinalIgnoreCase);
+            return byName.Dataref is null ? (AnimationRole.Still, null) : (byName, node > 0 ? name[..node] : name);
         }
 
         /// <summary>Writes node <paramref name="index"/> and its children; <paramref name="frame"/> maps the node's parent space to the current ANIM space.</summary>
@@ -178,11 +181,14 @@ public static class Obj8Converter
             }
 
             _out.Command("ANIM_begin");
-            StaticTransform(frame);
+            // OBJ8 cannot scale, so a scaled parent (FSLTL's SF34 scales a parent of its gear) is pushed
+            // inside: it scales this node's moves and its geometry instead.
+            var parentScale = StaticTransform(frame);
+            t *= parentScale;
             if (translation is { Role.Dataref: { } tref })
             {
                 _out.Command($"ANIM_trans_begin {tref}");
-                var moves3 = Keys(translation).Select(k => (k.Value, Data: new[] { translation.Channel.Vec3At(k.Key).X, translation.Channel.Vec3At(k.Key).Y, translation.Channel.Vec3At(k.Key).Z })).ToList();
+                var moves3 = Keys(translation).Select(k => (k.Value, Data: new[] { translation.Channel.Vec3At(k.Key).X * parentScale.X, translation.Channel.Vec3At(k.Key).Y * parentScale.Y, translation.Channel.Vec3At(k.Key).Z * parentScale.Z })).ToList();
                 foreach (var (value, data) in Simplify(moves3)) _out.Command($"ANIM_trans_key {Num(value)} {Num(data[0])} {Num(data[1])} {Num(data[2])}");
                 _out.Command("ANIM_trans_end");
             }
@@ -201,7 +207,7 @@ public static class Obj8Converter
             }
 
             foreach (var (from, to) in hide) _out.Command($"ANIM_hide {Num(from)} {Num(to)} {scale!.Role.Dataref}");
-            var inner = Matrix4x4.CreateScale(hide.Count > 0 ? Vector3.One : s);
+            var inner = Matrix4x4.CreateScale((hide.Count > 0 ? Vector3.One : s) * parentScale);
             Geometry(node, inner);
             foreach (var c in node.Children) Emit(c, inner);
             _out.Command("ANIM_end");
@@ -322,17 +328,25 @@ public static class Obj8Converter
             return ranges;
         }
 
-        private void StaticTransform(Matrix4x4 frame)
+        /// <summary>Writes the rotation and translation of <paramref name="frame"/>; returns its scale, which OBJ8 cannot express.</summary>
+        private Vector3 StaticTransform(Matrix4x4 frame)
         {
-            if (frame.IsIdentity) return;
-            if (!Matrix4x4.Decompose(frame, out var scale, out var rotation, out var translation)) return;
-            if (MathF.Abs(scale.X - 1) > 0.01f || MathF.Abs(scale.Y - 1) > 0.01f || MathF.Abs(scale.Z - 1) > 0.01f)
+            if (frame.IsIdentity) return Vector3.One;
+            if (!Matrix4x4.Decompose(frame, out var scale, out var rotation, out var translation))
             {
-                _warnings.Add("scaled parent of an animated part: scale ignored");
+                _warnings.Add("parent transform of an animated part cannot be decomposed; ignored");
+                return Vector3.One;
+            }
+
+            // A scale that is not the same on every axis does not commute with the part's own rotation: approximate.
+            if (MathF.Abs(scale.X - scale.Y) > 0.01f * MathF.Abs(scale.X) || MathF.Abs(scale.X - scale.Z) > 0.01f * MathF.Abs(scale.X))
+            {
+                _warnings.Add("unevenly scaled parent of an animated part: approximated");
             }
 
             if (translation != Vector3.Zero) _out.Command($"ANIM_trans {Vec(translation)} {Vec(translation)} 0 0 none");
             StaticRotation(rotation);
+            return scale;
         }
 
         private void StaticRotation(Quaternion q)

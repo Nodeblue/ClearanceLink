@@ -65,5 +65,17 @@ public static class AnimationRoles
         return AnimationRole.Still;
     }
 
+    /// <summary>
+    /// The role of an animation the model XML does not mention (driven from an included behaviour file), from its name:
+    /// FSLTL's E190 calls its gear "main_gear_l". Gear doors move with the gear, so they get the gear dataref too.
+    /// </summary>
+    public static AnimationRole FromName(string name)
+    {
+        bool Has(string word) => name.Contains(word, StringComparison.OrdinalIgnoreCase);
+        if (Has("tire") || Has("tyre") || Has("wheel_rot") || Has("WHEEL_ROTATION")) return new AnimationRole("wheel", TireRotation, Scale: 360);
+        if (Has("gear") && !Has("steer")) return new AnimationRole("gear", GearRatio);
+        return AnimationRole.Still;
+    }
+
     private static string? Child(XElement e, string name) => e.Elements().FirstOrDefault(c => c.Name.LocalName == name)?.Value;
 }

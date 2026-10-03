@@ -74,6 +74,7 @@ public sealed class FsltlTests
         using var package = new FakePackage();
         var model = GltfModel.Load(FsltlCatalog.Load(package.Root)[0].ModelFiles[0]);
 
+        model.Animations.Clear(); // still: no gear animation
         var part = Assert.Single(Obj8Converter.Convert([model], new Dictionary<string, AnimationRole>()).Parts);
 
         // Node at (1, 2, 3); a half turn about Y maps (x, y, z) to (-x, y, -z).
@@ -116,6 +117,14 @@ public sealed class FsltlTests
     [InlineData("FSLTL_Elevator_Droop", "Wheels", "", null)]
     public void Templates_pick_the_xpmp2_dataref(string template, string component, string code, string? dataref) =>
         Assert.Equal(dataref, AnimationRoles.Classify(template, component, code).Dataref);
+
+    [Theory]
+    [InlineData("main_gear_l", AnimationRoles.GearRatio)]
+    [InlineData("l_tire_anim", AnimationRoles.TireRotation)]
+    [InlineData("nose_gear_steering", null)]
+    [InlineData("N1_still_left", null)]
+    public void Animations_missing_from_the_xml_are_judged_by_name(string name, string? dataref) =>
+        Assert.Equal(dataref, AnimationRoles.FromName(name).Dataref);
 
     [Fact]
     public void Simplify_drops_keys_on_a_straight_line()

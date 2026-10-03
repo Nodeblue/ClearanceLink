@@ -105,7 +105,11 @@ public static class FsltlImporter
                 var (texture, lit) = defaults[i];
                 var text = part.Text.Replace("{TEXTURE}", texture?.Name ?? "missing.dds", StringComparison.Ordinal)
                     .Replace("{TEXTURE_LIT}", lit?.Name ?? "missing.dds", StringComparison.Ordinal);
-                File.WriteAllText(Path.Combine(objects, ObjName(modelName, i)), text);
+                var objPath = Path.Combine(objects, ObjName(modelName, i));
+                File.WriteAllText(objPath, text);
+                // XPMP2 writes a copy per livery texture ("<obj name>.<texture>.xpmp2.obj") and would keep using a stale one.
+                var copies = Path.GetFileNameWithoutExtension(objPath) + ".*.xpmp2.obj";
+                foreach (var copy in Directory.EnumerateFiles(objects, copies)) File.Delete(copy);
             }
 
             foreach (var livery in model)
