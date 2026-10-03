@@ -130,6 +130,7 @@ public sealed class FsltlTests
     [InlineData("prop0_blurred", AnimationRoles.EnginePart.Blur)]
     [InlineData("N1_blur_left", AnimationRoles.EnginePart.Blur)]
     [InlineData("prop1_still", AnimationRoles.EnginePart.Still)]
+    [InlineData("prop0_slow", AnimationRoles.EnginePart.Blur)]
     [InlineData("N1_still_right", AnimationRoles.EnginePart.Still)]
     [InlineData("l_tire_blurred_key", null)]
     [InlineData("main_gear_l", null)]

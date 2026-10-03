@@ -75,6 +75,8 @@ private:
     float probeX_ = 0, probeZ_ = 0, probeTime_ = -1000, probeY_ = 0;
     float probeHeading_ = 0;
     std::optional<float> slope_;
+    // Propeller and wheel angles the plugin turns each frame (XPMP2 does not turn them from rpm itself).
+    float engineAngle_ = 0, tireAngle_ = 0;
 };
 
 }  // namespace xpc

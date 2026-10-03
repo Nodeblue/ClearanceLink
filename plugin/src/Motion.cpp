@@ -39,6 +39,13 @@ double DistanceMeters(const Pos& a, const Pos& b) {
 
 }  // namespace
 
+float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond) {
+    const float degPerSecond = std::min(std::fabs(rpm) * 6.0f, maxDegPerSecond);
+    float next = std::fmod(deg + degPerSecond * std::max(seconds, 0.0f), 360.0f);
+    if (next < 0) next += 360.0f;
+    return next;
+}
+
 Pos Blend(const Pos& a, const Pos& b, float f) {
     Pos p = b;
     p.lat = Lerp(a.lat, b.lat, f);

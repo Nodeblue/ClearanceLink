@@ -9,6 +9,11 @@ namespace xpc {
 // and the other values come from `b`.
 Pos Blend(const Pos& a, const Pos& b, float f);
 
+// Turns `deg` on by `rpm` over `seconds`, at most `maxDegPerSecond`, wrapped to [0, 360). XPMP2 only draws the
+// rotation angle it is given, so the plugin turns propellers and wheels itself. Capping the drawn speed keeps a
+// propeller looking like it turns instead of strobing (1,000 rpm is 100 degrees a frame at 60 fps).
+float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond);
+
 // One aircraft's updates from XPConnect and where to draw it between them. It is drawn one update interval behind,
 // blending from where it was drawn when the latest update came to that update, so turns, climbs and pitch changes are
 // smooth. Once that runs out (updates stopped), it moves on at the speed measured between the last two updates

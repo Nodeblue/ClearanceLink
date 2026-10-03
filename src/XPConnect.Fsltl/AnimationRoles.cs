@@ -78,8 +78,9 @@ public static class AnimationRoles
     {
         bool Has(string word) => name.Contains(word, StringComparison.OrdinalIgnoreCase);
         if (Has("tire") || Has("tyre") || Has("wheel")) return null;
-        if (Has("blur")) return EnginePart.Blur;
-        if ((Has("prop") || Has("fan") || Has("N1_")) && (Has("still") || Has("static") || Has("slow"))) return EnginePart.Still;
+        // "slow" is the part-speed disc between still blades and full blur (TFS's Dash 8 prop0_slow).
+        if (Has("blur") || ((Has("prop") || Has("fan")) && Has("slow"))) return EnginePart.Blur;
+        if ((Has("prop") || Has("fan") || Has("N1_")) && (Has("still") || Has("static"))) return EnginePart.Still;
         return null;
     }
 

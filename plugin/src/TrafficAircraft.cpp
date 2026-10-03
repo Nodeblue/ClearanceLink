@@ -212,7 +212,7 @@ bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     return true;
 }
 
-void TrafficAircraft::UpdatePosition(float, int) {
+void TrafficAircraft::UpdatePosition(float elapsed, int) {
     if (!track_.HasState()) return;
 
     const float now = XPLMGetElapsedTime();
@@ -257,8 +257,15 @@ void TrafficAircraft::UpdatePosition(float, int) {
     SetLightsStrobe(p.lights & LightStrobe);
     SetLightsLanding(p.lights & LightLanding);
     SetLightsTaxi(p.lights & LightTaxi);
-    SetTireRotRpm(p.onGround ? p.groundSpeedKt * 4.5f : 0.0f);
-    SetEngineRotRpm(p.thrust > 0.01f || p.groundSpeedKt > 1 ? 1000.0f + 4000.0f * p.thrust : 0.0f);
+    const float tireRpm = p.onGround ? p.groundSpeedKt * 4.5f : 0.0f;
+    const float engineRpm = p.thrust > 0.01f || p.groundSpeedKt > 1 ? 1000.0f + 4000.0f * p.thrust : 0.0f;
+    SetTireRotRpm(tireRpm);
+    SetEngineRotRpm(engineRpm);
+    tireAngle_ = AdvanceAngle(tireAngle_, tireRpm, elapsed, 2000.0f);
+    engineAngle_ = AdvanceAngle(engineAngle_, engineRpm, elapsed, 1500.0f);
+    SetTireRotAngle(tireAngle_);
+    SetEngineRotAngle(engineAngle_);
+    SetPropRotAngle(engineAngle_);
 }
 
 }  // namespace xpc
