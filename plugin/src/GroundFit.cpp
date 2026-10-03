@@ -55,13 +55,11 @@ float Wheels::LevelPitchDeg() const {
     return float(std::atan2(double(noseY) - mainY, double(mainZ) - noseZ) * -180.0 / Pi);
 }
 
-float Wheels::RaiseM(float pitchDeg) const {
+float Wheels::GroundHeightM(float pitchDeg) const {
     const double a = pitchDeg * Pi / 180.0;
     // Nose up turns the -z (forward) end up: y' = y cos(a) - z sin(a).
     auto pitched = [a](float y, float z) { return y * std::cos(a) - z * std::sin(a); };
-    const double before = std::min(noseY, mainY);
-    const double after = std::min(pitched(noseY, noseZ), pitched(mainY, mainZ));
-    return float(before - after);
+    return float(-std::min(pitched(noseY, noseZ), pitched(mainY, mainZ)));
 }
 
 std::optional<Wheels> FindWheels(const std::vector<Vertex>& vertices, std::string* why) {
