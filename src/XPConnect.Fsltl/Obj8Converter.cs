@@ -173,7 +173,8 @@ public static class Obj8Converter
             // wins, as it is applied last.
             Driven? Pick(string path) =>
                 channels.Where(c => c.Channel.Path == path).OrderByDescending(c => c.Order).FirstOrDefault();
-            var translation = Pick("translation");
+            // Steering only turns the wheel; a steering translation channel is posed straight like any still one.
+            var translation = Pick("translation") is { Role.Kind: "steering" } steer ? steer with { Role = AnimationRole.Still with { PoseFrame = steer.Role.PoseFrame, PoseLength = steer.Role.PoseLength } } : Pick("translation");
             var rotation = Pick("rotation");
             var scale = Pick("scale");
 
@@ -216,7 +217,11 @@ public static class Obj8Converter
                 _out.Command($"ANIM_trans {Vec(t)} {Vec(t)} 0 0 none");
             }
 
-            if (rotation is { Role.Dataref: { } rref })
+            if (rotation is { Role.Kind: "steering", Role.Dataref: { } sref })
+            {
+                SteeringRotation(rotation, sref);
+            }
+            else if (rotation is { Role.Dataref: { } rref })
             {
                 KeyedRotation(rotation, rref, node.Name);
             }
@@ -299,6 +304,56 @@ public static class Obj8Converter
         /// OBJ8 rotations turn about one fixed axis. glTF keys are full quaternions, so each key is written as a turn
         /// about the axis of the largest change from the first key, followed by the first key's rotation.
         /// </summary>
+        /// <summary>
+        /// Nose wheel steering: XPMP2's nws_ratio is the wheel's angle in degrees (positive turning right), so the
+        /// part turns about its steering axis by exactly that, from straight ahead (the template's centre frame).
+        /// Which way the keys turn it for a right turn comes from MSFS: frames above the centre are a positive yaw rate.
+        /// </summary>
+        private void SteeringRotation(Driven d, string dataref)
+        {
+            var channel = d.Channel;
+            var poseTime = Pose(d);
+            var straight = channel.Quat(poseTime);
+            var inverse = Quaternion.Conjugate(straight);
+            var axis = Vector3.Zero;
+            var largest = 0f;
+            var right = 0f;
+            for (var k = 0; k < channel.Times.Length; k++)
+            {
+                var q = Quaternion.Normalize(channel.QuatAt(k) * inverse);
+                if (q.W < 0) q = -q;
+                var v = new Vector3(q.X, q.Y, q.Z);
+                if (v.Length() > largest)
+                {
+                    largest = v.Length();
+                    axis = Vector3.Normalize(v) * (channel.Times[k] > poseTime ? 1 : -1);
+                }
+            }
+
+            if (largest < 1e-4f)
+            {
+                StaticRotation(straight);
+                return;
+            }
+
+            // With `axis` pointing so that frames after the centre turn positively about it, a right turn (positive
+            // nws_ratio) is a positive turn about `axis`.
+            for (var k = 0; k < channel.Times.Length && right == 0; k++)
+            {
+                if (channel.Times[k] <= poseTime) continue;
+                var q = Quaternion.Normalize(channel.QuatAt(k) * inverse);
+                right = MathF.Sign(Vector3.Dot(new Vector3(q.X, q.Y, q.Z), axis) * MathF.Sign(q.W == 0 ? 1 : q.W));
+            }
+
+            if (right < 0) axis = -axis;
+            const float Lock = 90;
+            _out.Command($"ANIM_rotate_begin {Vec(axis)} {dataref}");
+            _out.Command($"ANIM_rotate_key {Num(-Lock)} {Num(-Lock)}");
+            _out.Command($"ANIM_rotate_key {Num(Lock)} {Num(Lock)}");
+            _out.Command("ANIM_rotate_end");
+            StaticRotation(straight);
+        }
+
         private void KeyedRotation(Driven d, string dataref, string nodeName)
         {
             var channel = d.Channel;

@@ -46,6 +46,22 @@ float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond) {
     return next;
 }
 
+float SteeringAngleDeg(float yawDegPerSecond, float speedKt, float wheelbaseM, float maxDeg) {
+    constexpr float MetersPerSecondPerKnot = 0.514444f;
+    const float speed = speedKt * MetersPerSecondPerKnot;
+    if (speed < 0.5f || wheelbaseM <= 0) return 0;
+    const float yaw = yawDegPerSecond * 3.14159265f / 180.0f;
+    const float deg = std::atan(wheelbaseM * yaw / speed) * 180.0f / 3.14159265f;
+    return std::clamp(deg, -maxDeg, maxDeg);
+}
+
+float HeadingDelta(float from, float to) {
+    float d = std::fmod(to - from, 360.0f);
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return d;
+}
+
 Pos Blend(const Pos& a, const Pos& b, float f) {
     Pos p = b;
     p.lat = Lerp(a.lat, b.lat, f);

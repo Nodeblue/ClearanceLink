@@ -33,6 +33,9 @@ public static class AnimationRoles
     public const string TireRotation = "libxplanemp/gear/tire_rotation_angle_deg";
     public const string EngineAngle = "libxplanemp/engines/engine_rotation_angle_deg1";
 
+    /// <summary>XPMP2's nose wheel angle, in degrees despite its name.</summary>
+    public const string NoseWheelAngle = "libxplanemp/controls/nws_ratio";
+
     /// <summary>An engine part that MSFS shows or hides by engine speed (FSLTL_Engine_Blur / FSLTL_Engine_Static).</summary>
     public enum EnginePart
     {
@@ -98,8 +101,8 @@ public static class AnimationRoles
         if (Has(template, "Wheel_Roll") || Has(template, "WHEEL_ROTATION")) return new AnimationRole("wheel", TireRotation, Scale: 360);
         // FSLTL_Steering's frame is (yaw rate * P1 + P2) * 10 + OFFSET, so straight ahead is frame P2 * 10 + OFFSET;
         // FSLTL_Alt_Steering's is |yaw rate * SHARP + START|, straight at START.
-        if (template.Equals("FSLTL_Alt_Steering", StringComparison.OrdinalIgnoreCase)) return new AnimationRole("steering", null, PoseFrame: MathF.Abs(Param("STEER_START", 0)), PoseLength: Param("ANIM_LENGTH", 100));
-        if (Has(template, "Steering")) return new AnimationRole("steering", null, PoseFrame: Param("LEGACY_PARAM_2", 50) * 10 + Param("OFFSET", 0), PoseLength: Param("ANIM_LENGTH", 1000));
+        if (template.Equals("FSLTL_Alt_Steering", StringComparison.OrdinalIgnoreCase)) return new AnimationRole("steering", NoseWheelAngle, PoseFrame: MathF.Abs(Param("STEER_START", 0)), PoseLength: Param("ANIM_LENGTH", 100));
+        if (Has(template, "Steering")) return new AnimationRole("steering", NoseWheelAngle, PoseFrame: Param("LEGACY_PARAM_2", 50) * 10 + Param("OFFSET", 0), PoseLength: Param("ANIM_LENGTH", 1000));
         // Parked with the beacon off: FSLTL_Elevator_Droop is at its end (perc_down), FSLTL_Elevator_Up at its start.
         if (template.Equals("FSLTL_Elevator_Droop", StringComparison.OrdinalIgnoreCase)) return new AnimationRole("elevator", null, PoseRatio: 1);
         if (Has(component, "Slat") || Has(code, "LEADING EDGE FLAPS")) return new AnimationRole("slats", SlatRatio);

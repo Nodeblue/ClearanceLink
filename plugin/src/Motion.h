@@ -14,6 +14,15 @@ Pos Blend(const Pos& a, const Pos& b, float f);
 // propeller looking like it turns instead of strobing (1,000 rpm is 100 degrees a frame at 60 fps).
 float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond);
 
+// The nose wheel angle (degrees, positive turning right) for a taxiing aircraft turning at `yawDegPerSecond`
+// (positive right) at `speedKt`, with `wheelbaseM` between nose and main wheels: the angle that makes the nose wheel
+// roll along the turn, atan(wheelbase x yaw rate / speed), up to `maxDeg`. Straight ahead when slow or airborne. MSFS
+// steers FSLTL models from the yaw rate in the same way; XPMP2 draws only the angle it is given.
+float SteeringAngleDeg(float yawDegPerSecond, float speedKt, float wheelbaseM, float maxDeg = 70.0f);
+
+// Heading change from `from` to `to` in degrees, the short way round (-180..180).
+float HeadingDelta(float from, float to);
+
 // One aircraft's updates from XPConnect and where to draw it between them. It is drawn one update interval behind,
 // blending from where it was drawn when the latest update came to that update, so turns, climbs and pitch changes are
 // smooth. Once that runs out (updates stopped), it moves on at the speed measured between the last two updates
