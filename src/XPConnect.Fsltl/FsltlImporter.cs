@@ -60,11 +60,13 @@ public static class FsltlImporter
         var catalogue = new List<CatalogueEntry>();
         var models = 0;
         var skipped = 0;
+        var modelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var model in liveries.GroupBy(l => l.ModelId, StringComparer.OrdinalIgnoreCase))
         {
             var first = model.First();
             var modelName = ModelName(airplanes, model.Key);
+            for (var n = 2; !modelNames.Add(modelName); n++) modelName = $"{ModelName(airplanes, model.Key)}_{n}";
             Obj8Result converted;
             try
             {
@@ -194,10 +196,11 @@ public static class FsltlImporter
         return Safe(name) + ".dds";
     }
 
-    private static string ModelName(string airplanes, string xml)
+    /// <summary>The aircraft folder plus the model XML's name: one model folder can hold several XMLs (e.g. engine variants).</summary>
+    public static string ModelName(string airplanes, string xml)
     {
-        var relative = Path.GetRelativePath(airplanes, Path.GetDirectoryName(xml)!);
-        return Safe(relative);
+        var folder = Path.GetRelativePath(airplanes, Path.GetDirectoryName(xml)!).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        return Safe(folder + "_" + Path.GetFileNameWithoutExtension(xml));
     }
 
     private static string ObjName(string modelName, int part) => $"{modelName}_{part}.obj";
