@@ -38,7 +38,7 @@ struct PosedModel {
     // cjs/world_traffic/main_gear_deflection (B772_PAY at YBBN, 2026-10-03: bogies drawn tilted at 0).
     std::string bogieDataref;
     float bogieLevel = 0;
-    float bogieTiltDeg = 0;      // the bogie's angle unloaded, for the log
+    float bogieTiltDeg = 0;      // the bogie wheels' tilt unloaded (front against rear), for the log
     float bogieRangeDeg = 0;     // how far its rotation turns: the bogie is the one that turns furthest
     bool bogiesScanned = false;  // bogie level already found (ScanBogies over all of a model's files)
 };

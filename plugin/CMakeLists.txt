@@ -31,7 +31,7 @@ execute_process(COMMAND git apply --reverse --check "${XPMP2_PATCH}"
 if(NOT XPMP2_PATCHED EQUAL 0)
     execute_process(COMMAND git apply "${XPMP2_PATCH}" WORKING_DIRECTORY "${xpmp2_SOURCE_DIR}" RESULT_VARIABLE XPMP2_PATCH_RESULT)
     if(NOT XPMP2_PATCH_RESULT EQUAL 0)
-        message(FATAL_ERROR "Could not apply ${XPMP2_PATCH} to XPMP2")
+        message(FATAL_ERROR "Could not apply ${XPMP2_PATCH} to XPMP2 (delete ${xpmp2_SOURCE_DIR} after changing the patch)")
     endif()
 endif()
 set(XPlaneSDK_DIR "${xpmp2_SOURCE_DIR}/lib/SDK" CACHE PATH "X-Plane SDK" FORCE)

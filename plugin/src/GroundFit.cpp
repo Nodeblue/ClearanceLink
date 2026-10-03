@@ -20,8 +20,8 @@ constexpr float NoseHalfWidthM = 1.5f;
 constexpr float GearNoseShare = 0.35f;
 // A fit needing more pitch than this is not a wheel gap but a model we read wrongly.
 constexpr float MaxFitPitchDeg = 3.0f;
-// A rotation keyed to tyre deflection that tilts less than this unloaded is a link or strut part, not the bogie.
-constexpr double MinBogieTiltDeg = 5.0;
+// A rotation keyed to tyre deflection that turns less than this over its range is a link or strut part, not the bogie.
+constexpr double MinBogieRangeDeg = 5.0;
 
 // A 3x4 affine transform (rotation and translation), applied as OBJ8 animations are: each ANIM_ command multiplies
 // onto the current transform, so the last command is applied to a point first.
@@ -220,7 +220,7 @@ Obj ReadObj(std::istream& in) {
 // Poses the file with gear datarefs at 1, `dataref` at `value` and everything else at 0, adding its drawn points to
 // `model`. With `bogieCommand`, the points that rotation moves also go to `bogie`.
 void Pose(const Obj& obj, const std::string& dataref, float value, PosedModel& model, long bogieCommand = -1,
-          std::vector<Vertex>* bogie = nullptr) {
+          std::vector<Vertex>* bogie = nullptr, bool bogieOnly = false) {
     auto pose = [&](const std::string& ref) { return PoseValue(ref, dataref, value); };
 
     struct Frame {
@@ -298,7 +298,7 @@ void Pose(const Obj& obj, const std::string& dataref, float value, PosedModel& m
             if (v >= lo && v <= hi) stack.back().visible = cmd == "ANIM_show";
         } else if (cmd == "TRIS" && tokens.size() >= 3) {
             const Frame& frame = stack.back();
-            if (!frame.visible) continue;
+            if (!frame.visible || (bogieOnly && !frame.bogie)) continue;
             const long first = std::atol(tokens[1].c_str()), count = std::atol(tokens[2].c_str());
             for (long i = first; i < first + count && i >= 0 && size_t(i) < obj.idx.size(); ++i) {
                 const int n = obj.idx[size_t(i)];
@@ -320,10 +320,10 @@ struct BogieRotation {
     double rangeDeg = 0;    // how far it turns over that range
 };
 
-// The rotation keyed to a deflection dataref that turns furthest: the bogie. Others keyed to the same dataref (torque
-// links, strut linkages) turn only a few degrees.
-std::optional<BogieRotation> FindBogieRotation(const Obj& obj) {
-    std::optional<BogieRotation> best;
+// The rotations keyed to a deflection dataref that turn at least a few degrees, furthest first: the bogie is usually
+// the first, but a strut or link can turn further, so each is tried in turn.
+std::vector<BogieRotation> FindBogieRotations(const Obj& obj) {
+    std::vector<BogieRotation> found;
     for (size_t c = 0; c < obj.commands.size(); ++c) {
         const auto& tokens = obj.commands[c];
         const bool single = tokens[0] == "ANIM_rotate" && tokens.size() >= 9;
@@ -347,10 +347,11 @@ std::optional<BogieRotation> FindBogieRotation(const Obj& obj) {
             maxDeg = std::max(maxDeg, deg);
         }
         const double range = maxDeg - minDeg;
-        if (hi <= lo || range < MinBogieTiltDeg) continue;
-        if (!best || range > best->rangeDeg) best = BogieRotation{long(c), dataref, lo, hi, range};
+        if (hi <= lo || range < MinBogieRangeDeg) continue;
+        found.push_back(BogieRotation{long(c), dataref, lo, hi, range});
     }
-    return best;
+    std::stable_sort(found.begin(), found.end(), [](const auto& x, const auto& y) { return x.rangeDeg > y.rangeDeg; });
+    return found;
 }
 
 // Tilt (degrees, nose down negative) of a bogie's points: the lowest point of its front half against its rear half.
@@ -380,27 +381,29 @@ std::optional<BogieLevelResult> FindBogieLevel(const Obj& obj, const BogieRotati
     auto tiltAt = [&](double value) {
         PosedModel scratch;
         std::vector<Vertex> bogie;
-        Pose(obj, rotation.dataref, float(value), scratch, rotation.command, &bogie);
+        Pose(obj, rotation.dataref, float(value), scratch, rotation.command, &bogie, true);
         return TiltDeg(bogie);
     };
+    constexpr double LevelDeg = 0.01;
     const auto unloaded = tiltAt(rotation.lo);
     if (!unloaded) return std::nullopt;
+    // Already level unloaded: a part that is not a tilting bogie (or one modelled level), so not this rotation.
+    if (std::fabs(*unloaded) < LevelDeg) return std::nullopt;
     constexpr int Samples = 20;
     double prevValue = rotation.lo, prevTilt = *unloaded;
-    std::optional<double> bestValue;
-    double bestTilt = std::fabs(*unloaded);
     for (int i = 1; i <= Samples; ++i) {
         const double value = rotation.lo + (rotation.hi - rotation.lo) * i / Samples;
         const auto tilt = tiltAt(value);
         if (!tilt) return std::nullopt;
-        if ((prevTilt <= 0 && *tilt >= 0) || (prevTilt >= 0 && *tilt <= 0)) {
+        if (std::fabs(*tilt) < LevelDeg) return BogieLevelResult{value, *unloaded};
+        if ((prevTilt < 0) != (*tilt < 0)) {
             // Level between the two samples: halve the interval down to a millionth of the range.
             double a = prevValue, ta = prevTilt, b = value;
             for (int k = 0; k < 16; ++k) {
                 const double m = (a + b) / 2;
                 const auto tm = tiltAt(m);
                 if (!tm) break;
-                if ((ta <= 0) == (*tm <= 0)) {
+                if ((ta < 0) == (*tm < 0)) {
                     a = m;
                     ta = *tm;
                 } else {
@@ -409,59 +412,49 @@ std::optional<BogieLevelResult> FindBogieLevel(const Obj& obj, const BogieRotati
             }
             return BogieLevelResult{(a + b) / 2, *unloaded};
         }
-        if (std::fabs(*tilt) < bestTilt) {
-            bestTilt = std::fabs(*tilt);
-            bestValue = value;
-        }
         prevValue = value;
         prevTilt = *tilt;
     }
-    // Never quite level: the value where it is closest, if that is within a degree.
-    if (bestValue && bestTilt < 1.0) return BogieLevelResult{*bestValue, *unloaded};
+    return std::nullopt;  // never level over its range: not the bogie
+}
+
+// The first rotation, furthest-turning first, that tilts unloaded and comes level within its range: the bogie.
+std::optional<std::pair<BogieRotation, BogieLevelResult>> FindBogie(const Obj& obj) {
+    for (const auto& rotation : FindBogieRotations(obj)) {
+        if (auto level = FindBogieLevel(obj, rotation)) return std::make_pair(rotation, *level);
+    }
     return std::nullopt;
+}
+
+void ScanBogies(const Obj& obj, PosedModel& model) {
+    model.bogiesScanned = true;
+    const auto bogie = FindBogie(obj);
+    if (!bogie || bogie->first.rangeDeg <= model.bogieRangeDeg) return;
+    model.bogieDataref = bogie->first.dataref;
+    model.bogieLevel = float(bogie->second.level);
+    model.bogieTiltDeg = float(bogie->second.tiltDeg);
+    model.bogieRangeDeg = float(bogie->first.rangeDeg);
 }
 
 }  // namespace
 
-void ScanBogies(std::istream& in, PosedModel& model) {
-    model.bogiesScanned = true;
-    const Obj obj = ReadObj(in);
-    const auto rotation = FindBogieRotation(obj);
-    if (!rotation || rotation->rangeDeg <= model.bogieRangeDeg) return;
-    if (const auto level = FindBogieLevel(obj, *rotation)) {
-        model.bogieDataref = rotation->dataref;
-        model.bogieLevel = float(level->level);
-        model.bogieTiltDeg = float(level->tiltDeg);
-        model.bogieRangeDeg = float(rotation->rangeDeg);
-    }
-}
+void ScanBogies(std::istream& in, PosedModel& model) { ScanBogies(ReadObj(in), model); }
 
 void ReadPosedObj(std::istream& in, PosedModel& model) {
     const Obj obj = ReadObj(in);
-    if (!model.bogiesScanned) {
-        model.bogiesScanned = true;
-        if (const auto rotation = FindBogieRotation(obj)) {
-            if (const auto level = FindBogieLevel(obj, *rotation)) {
-                model.bogieDataref = rotation->dataref;
-                model.bogieLevel = float(level->level);
-                model.bogieTiltDeg = float(level->tiltDeg);
-                model.bogieRangeDeg = float(rotation->rangeDeg);
-            }
-        }
-    }
+    if (!model.bogiesScanned) ScanBogies(obj, model);
     Pose(obj, model.bogieDataref, model.bogieLevel, model);
 }
 
 PosedModel PoseObjFiles(const std::vector<std::string>& files) {
+    std::vector<Obj> objs;
+    for (const auto& file : files) {
+        std::ifstream in(std::filesystem::u8path(file));
+        objs.push_back(ReadObj(in));
+    }
     PosedModel model;
-    for (const auto& file : files) {
-        std::ifstream obj(std::filesystem::u8path(file));
-        ScanBogies(obj, model);
-    }
-    for (const auto& file : files) {
-        std::ifstream obj(std::filesystem::u8path(file));
-        ReadPosedObj(obj, model);
-    }
+    for (const auto& obj : objs) ScanBogies(obj, model);
+    for (const auto& obj : objs) Pose(obj, model.bogieDataref, model.bogieLevel, model);
     return model;
 }
 

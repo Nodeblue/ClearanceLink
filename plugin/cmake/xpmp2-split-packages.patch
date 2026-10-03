@@ -1,5 +1,5 @@
 diff --git a/src/CSLModels.cpp b/src/CSLModels.cpp
-index 6fd1e11..3e78cb7 100755
+index 6fd1e11..16de556 100755
 --- a/src/CSLModels.cpp
 +++ b/src/CSLModels.cpp
 @@ -59,6 +59,12 @@ namespace XPMP2 {
@@ -33,17 +33,46 @@ index 6fd1e11..3e78cb7 100755
      // We do check here already if that target really exists
      if (!ExistsFile(TOPOSIX(path))) {
          LOG_MSG(logERR, ERR_OBJ_FILE_NOT_FOUND, lnNr,
-@@ -663,6 +680,9 @@ const char* CSLModelsReadPkgId (const std::string& path)
+@@ -644,6 +661,7 @@ const char* CSLModelsReadPkgId (const std::string& path)
+     
+     // read the file line by line
+ //    LOG_MSG(logINFO, INFO_XSBACTXT_READ, xsbName.c_str());
++    int splitNames = 0, newNames = 0;   // XPConnect patch
+     while (fAc)
+     {
+         // read a line, trim it (remove whitespace at both ends)
+@@ -663,10 +681,19 @@ const char* CSLModelsReadPkgId (const std::string& path)
              // Found a package id -> save an entry for a package
              auto p = glob.mapCSLPkgs.insert(std::make_pair(tokens[1], path + XPLMGetDirectorySeparator()[0]));
              if (!p.second) {                // not inserted, ie. package name existed already?
-+                // XPConnect patch: remember the folder so files missing in the first one are looked for here
-+                gSplitPkgFolders.emplace(tokens[1], path + XPLMGetDirectorySeparator()[0]);
-+                gSplitPkgPaths.insert(path);
++                // XPConnect patch: another folder of the same package: look for files missing in the first one here
++                const std::string folder = path + XPLMGetDirectorySeparator()[0];
++                if (p.first->second != folder) {
++                    gSplitPkgFolders.emplace(tokens[1], folder);
++                    ++splitNames;
++                } else {
++                    ++newNames;             // the same name twice in one file
++                }
                  LOG_MSG(logWARN, WARN_DUP_PKG_NAME,
                          tokens[1].c_str(), StripXPSysDir(path).c_str(),
                          p.first->second.c_str());
-@@ -1077,6 +1097,8 @@ void CSLModelsCleanup ()
+             } else {
++                ++newNames;
+                 LOG_MSG(logDEBUG, "Added package '%s' from %s",
+                         tokens[1].c_str(), StripXPSysDir(path).c_str());
+             }
+@@ -675,6 +702,10 @@ const char* CSLModelsReadPkgId (const std::string& path)
+     
+     // Close the xsb_aircraft.txt file
+     fAc.close();
++
++    // XPConnect patch: a folder that only continues packages read from other folders lists the same models again
++    if (splitNames > 0 && newNames == 0)
++        gSplitPkgPaths.insert(path);
+     
+     // Success
+     return "";
+@@ -1077,6 +1108,8 @@ void CSLModelsCleanup ()
      glob.mapCSLModels.clear();
      // Clear out all packages
      glob.mapCSLPkgs.clear();
@@ -52,7 +81,7 @@ index 6fd1e11..3e78cb7 100755
  }
  
  
-@@ -1094,6 +1116,11 @@ const char* CSLModelsLoad (const std::string& _path,
+@@ -1094,6 +1127,11 @@ const char* CSLModelsLoad (const std::string& _path,
      // Now we can process each folder and read in the CSL models there
      for (const std::string& p: paths)
      {
