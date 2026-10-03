@@ -42,7 +42,7 @@ public ref struct PayloadReader(ReadOnlySpan<byte> data)
 
     private bool Take(int length, out ReadOnlySpan<byte> slice)
     {
-        if (_offset + length > _data.Length)
+        if (length < 0 || _offset + length > _data.Length)
         {
             Overrun = true;
             slice = default;
