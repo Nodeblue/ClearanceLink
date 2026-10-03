@@ -9,9 +9,22 @@ namespace xpc {
 // and the other values come from `b`.
 Pos Blend(const Pos& a, const Pos& b, float f);
 
-// Where to draw an aircraft `now`, from its last two updates (`prev` at `prevTime`, `last` at `lastTime`). It is drawn
-// one update interval behind, blending from `prev` to `last`, so turns, climbs and pitch changes are smooth; once that
-// runs out (updates stopped), it moves on as it moved between the two updates, for at most `maxAhead` seconds.
-Pos DrawnPosition(const Pos& prev, float prevTime, const Pos& last, float lastTime, float now, float maxAhead = 1.0f);
+// One aircraft's updates from XPConnect and where to draw it between them. It is drawn one update interval behind,
+// blending from where it was drawn when the latest update came to that update, so turns, climbs and pitch changes are
+// smooth. Once that runs out (updates stopped), it moves on at the speed measured between the last two updates
+// received, for at most a second. A move far faster than its speed (BATC placing an aircraft) is drawn at once.
+class Track {
+public:
+    void Update(const Pos& pos, float now);
+    Pos Drawn(float now) const;
+    bool HasState() const { return has_; }
+    const Pos& Latest() const { return to_; }
+
+private:
+    Pos from_{}, to_{};
+    float fromTime_ = 0, toTime_ = 0;
+    double latPerSecond_ = 0, lonPerSecond_ = 0;  // measured between the last two updates received; 0 when parked
+    bool has_ = false;
+};
 
 }  // namespace xpc

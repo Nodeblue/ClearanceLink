@@ -66,11 +66,8 @@ private:
     // Probes the terrain under the aircraft now, or reuses the last probe while it has not moved (parked) or is
     // airborne (only the reported ground height needs it). Returns false when there is no terrain under it.
     bool ProbeGround(bool onGround, float now);
-    Pos Drawn(float now) const;
 
-    Pos prev_{}, state_{};  // the last two updates from XPConnect, blended between (Motion.h)
-    float prevTime_ = 0, stateTime_ = 0;
-    bool hasState_ = false;
+    Track track_;  // XPConnect's updates, blended between (Motion.h)
     float lastHeard_ = 0;
     XPLMProbeRef probe_ = nullptr;
     std::optional<double> groundFt_;
