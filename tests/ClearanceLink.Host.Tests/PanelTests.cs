@@ -47,7 +47,7 @@ public sealed class PanelTests
     public void Every_line_fits_the_24_column_screen(PanelPage page)
     {
         var long_ = Ready with { BatcFolder = @"D:\Games\Flight Sim Add-ons\BeyondATC Install", LastAirportSource = "Global Airports (X-Plane 12 default scenery)" };
-        var update = Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://github.com/Nodeblue/XPConnect/releases/tag/v10.12.13") };
+        var update = Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://github.com/Nodeblue/ClearanceLink/releases/tag/v10.12.13") };
         foreach (var state in new[] { Ready, long_, Ready with { BatcFolder = null, Serving = false }, update })
         {
             var built = CduPages.Build(page, state);
