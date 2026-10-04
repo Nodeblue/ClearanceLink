@@ -3,7 +3,7 @@ using XPConnect.Airports;
 namespace XPConnect.Host.Traffic;
 
 /// <summary>One aircraft the showcase draws: type, airline and (imported FSLTL) livery key, and its size class.</summary>
-public sealed record ShowcaseAircraft(string Group, string IcaoType, string? IcaoAirline, string? Livery, double LengthMeters);
+public sealed record ShowcaseAircraft(string Group, string IcaoType, string? IcaoAirline, string? Livery, double LengthMeters, string? Model = null);
 
 /// <summary>Where an aircraft is drawn: position and true heading.</summary>
 public readonly record struct GroundPoint(double Latitude, double Longitude, double Heading);
@@ -34,7 +34,7 @@ public static class Showcase
     /// (title, key, type, airline), each type gets a real airline livery, a different airline each time where possible;
     /// without, the plugin picks a CSL model by type.
     /// </summary>
-    public static List<ShowcaseAircraft> Pick(IReadOnlyList<(string Title, string Key, string IcaoType, string IcaoAirline)> liveries, int perGroup)
+    public static List<ShowcaseAircraft> Pick(IReadOnlyList<(string Title, string Key, string IcaoType, string IcaoAirline, string Model)> liveries, int perGroup)
     {
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<ShowcaseAircraft>();
@@ -44,24 +44,69 @@ public static class Showcase
             foreach (var (type, length) in types)
             {
                 if (picked >= perGroup) break;
-                var candidates = liveries
-                    .Where(l => l.IcaoType.Equals(type, StringComparison.OrdinalIgnoreCase) && l.IcaoAirline.Length == 3
-                        && !l.IcaoAirline.StartsWith("ZZ", StringComparison.OrdinalIgnoreCase)
-                        && !l.Title.Contains("STUB", StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(l => used.Contains(l.IcaoAirline) ? 1 : 0)
-                    .ThenBy(l => PreferredAirlines.IndexOf(l.IcaoAirline) is var p and >= 0 ? p : int.MaxValue)
-                    .ThenBy(l => l.Key, StringComparer.Ordinal)
-                    .ToList();
+                var candidates = Ranked(liveries.Where(l => l.IcaoType.Equals(type, StringComparison.OrdinalIgnoreCase)), used);
                 if (liveries.Count > 0 && candidates.Count == 0) continue;  // FSLTL has none of this type
                 var livery = candidates.FirstOrDefault();
                 if (livery.Key is not null) used.Add(livery.IcaoAirline);
-                result.Add(new ShowcaseAircraft(group, type, livery.Key is null ? null : livery.IcaoAirline, livery.Key, length));
+                result.Add(new ShowcaseAircraft(group, type, livery.Key is null ? null : livery.IcaoAirline, livery.Key, length, livery.Model));
                 picked++;
             }
         }
 
         return result;
     }
+
+    /// <summary>
+    /// One aircraft for every imported model not in <paramref name="shown"/> (engine and winglet variants, freighters,
+    /// other model makers), grouped like <see cref="Groups"/> with types it does not list at the end, until the line-up
+    /// would pass <paramref name="maxMeters"/> at <paramref name="gap"/> metres apart.
+    /// </summary>
+    public static List<ShowcaseAircraft> PickVariants(IReadOnlyList<(string Title, string Key, string IcaoType, string IcaoAirline, string Model)> liveries,
+        IEnumerable<string?> shown, double maxMeters, double gap, int perType = 2)
+    {
+        // Models that differ only by the importer's "_2", "_3" suffix are per-livery copies of one model (TFS Dash 8s
+        // ship 24): one of each is enough.
+        static string Family(string model) => System.Text.RegularExpressions.Regex.Replace(model, "_[0-9]+$", "");
+        var shownModels = new HashSet<string>(shown.Where(m => m is not null).Select(m => Family(m!)), StringComparer.OrdinalIgnoreCase);
+        var order = Groups.SelectMany((g, gi) => g.Types.Select((t, ti) => (t.Type, g.Group, t.Length, Rank: gi * 100 + ti)))
+            .ToDictionary(t => t.Type, StringComparer.OrdinalIgnoreCase);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<ShowcaseAircraft>();
+        var length = 0.0;
+        var models = liveries.Where(l => l.Model.Length > 0 && !shownModels.Contains(Family(l.Model)))
+            .GroupBy(l => Family(l.Model), StringComparer.OrdinalIgnoreCase)
+            .Select(g => (Model: g.Key, Type: g.First().IcaoType, Liveries: g.ToList()))
+            .OrderBy(m => order.TryGetValue(m.Type, out var o) ? o.Rank : int.MaxValue)
+            .ThenBy(m => m.Type, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(m => m.Model, StringComparer.OrdinalIgnoreCase);
+        var perTypeCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (model, type, modelLiveries) in models)
+        {
+            // A few variants of each type, so the heavies still fit on the runway after the many narrow bodies.
+            if (perTypeCount.GetValueOrDefault(type) >= perType) continue;
+            perTypeCount[type] = perTypeCount.GetValueOrDefault(type) + 1;
+            var known = order.TryGetValue(type, out var o);
+            var aircraftLength = known ? o.Length : 40;
+            if (length + aircraftLength + 3 * gap > maxMeters) continue;
+            var livery = Ranked(modelLiveries, used).FirstOrDefault();
+            if (livery.Key is null) livery = modelLiveries[0];  // only placeholder liveries: still show the model
+            used.Add(livery.IcaoAirline);
+            result.Add(new ShowcaseAircraft(known ? o.Group : "Other", type, livery.IcaoAirline.Length > 0 ? livery.IcaoAirline : null, livery.Key, aircraftLength, model));
+            length += aircraftLength + gap;
+        }
+
+        return result;
+    }
+
+    /// <summary>Real airline liveries (no placeholders), airlines not yet used first, then preferred airlines.</summary>
+    private static List<(string Title, string Key, string IcaoType, string IcaoAirline, string Model)> Ranked(
+        IEnumerable<(string Title, string Key, string IcaoType, string IcaoAirline, string Model)> liveries, HashSet<string> used) =>
+        [.. liveries
+            .Where(l => l.IcaoAirline.Length == 3 && !l.IcaoAirline.StartsWith("ZZ", StringComparison.OrdinalIgnoreCase)
+                && !l.Title.Contains("STUB", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(l => used.Contains(l.IcaoAirline) ? 1 : 0)
+            .ThenBy(l => PreferredAirlines.IndexOf(l.IcaoAirline) is var p and >= 0 ? p : int.MaxValue)
+            .ThenBy(l => l.Key, StringComparer.Ordinal)];
 
     /// <summary>
     /// Places the aircraft nose to tail along a runway from <paramref name="from"/> towards <paramref name="to"/>, on
@@ -129,6 +174,9 @@ public static class Showcase
         var heading = Geo.BearingDegrees(here.Latitude, here.Longitude, ahead.Latitude, ahead.Longitude);
         return new GroundPoint(here.Latitude, here.Longitude, heading);
     }
+
+    /// <summary>Signed difference between two headings, -180..180 degrees.</summary>
+    public static double Turn(double from, double to) => ((to - from) % 360 + 540) % 360 - 180;
 
     public static double Length(IReadOnlyList<(double Latitude, double Longitude)> route)
     {

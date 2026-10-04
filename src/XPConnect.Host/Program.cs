@@ -55,10 +55,11 @@ namespace XPConnect.Host
               xpconnect plugin install|remove|status [--xplane-root <dir>]
                   Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
               xpconnect showcase [--airport YBBN] [--runway <end, e.g. 01R>] [--taxiway <name>] [--per-group 9] [--taxiers 8]
-                    [--gap 25] [--speed 15] [--xplane-root <dir>]
+                    [--gap 25] [--speed 15] [--variants-runway <end>|none] [--xplane-root <dir>]
                   Traffic check without BeyondATC (close XPConnect first; X-Plane running with the plugin): lines up
                   aircraft from small to heavy nose to tail on a runway, grouped by size, and keeps some taxiing up and
-                  down a taxiway. Uses imported FSLTL liveries when there are any. Ctrl+C removes them.
+                  down a taxiway. With imported FSLTL liveries, also lines up one aircraft per model not shown (engine
+                  variants, freighters, other makers) on the parallel runway. Ctrl+C removes them.
               xpconnect fsltl import|status [--fsltl <fsltl-traffic-base folder>] [--xplane-root <dir>] [--size 1024|2048|4096]
                     [--only <text>] [--force] [--out <dir>]
                   Convert your own FSLTL install (MSFS Community folder) into an X-Plane CSL package for the traffic
@@ -649,9 +650,25 @@ namespace XPConnect.Host
 
             var (taxiway, route) = Showcase.TaxiRoute(airport, options.Get("taxiway"));
             var imported = FsltlImporter.LoadCatalogue(Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL"))
-                .Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline)).ToList();
+                .Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline, e.Model)).ToList();
             var aircraft = Showcase.Pick(imported, int.Parse(options.Get("per-group") ?? "9", inv));
-            var lineUp = Showcase.LineUp(aircraft, from, to, double.Parse(options.Get("gap") ?? "25", inv));
+            var gap = double.Parse(options.Get("gap") ?? "25", inv);
+            var lineUp = Showcase.LineUp(aircraft, from, to, gap);
+
+            // Model variants on the parallel runway (the other runway within 10 degrees of this one), one per imported
+            // model not in the main line-up.
+            var variantsWanted = options.Get("variants-runway");
+            var parallel = airport.Runways.SelectMany(r => new[] { (r.End1, r.End2), (r.End2, r.End1) })
+                .Where(e => e.Item1 != from && e.Item1 != to)
+                .FirstOrDefault(e => variantsWanted is not null
+                    ? e.Item1.Number.Equals(variantsWanted, StringComparison.OrdinalIgnoreCase)
+                    : Math.Abs(Showcase.Turn(Geo.BearingDegrees(e.Item1.Latitude, e.Item1.Longitude, e.Item2.Latitude, e.Item2.Longitude),
+                        Geo.BearingDegrees(from.Latitude, from.Longitude, to.Latitude, to.Longitude))) < 10);
+            var variants = parallel.Item1 is null || imported.Count == 0 || options.Get("variants-runway") == "none"
+                ? []
+                : Showcase.PickVariants(imported, aircraft.Select(a => a.Model),
+                    Geo.DistanceMeters(parallel.Item1.Latitude, parallel.Item1.Longitude, parallel.Item2.Latitude, parallel.Item2.Longitude) - 300, gap);
+            var variantLineUp = parallel.Item1 is null ? [] : Showcase.LineUp(variants, parallel.Item1, parallel.Item2, gap);
             var lineUpLength = lineUp.Count == 0 ? 0 : Geo.DistanceMeters(from.Latitude, from.Longitude, lineUp[^1].Latitude, lineUp[^1].Longitude);
             var runwayLength = Geo.DistanceMeters(from.Latitude, from.Longitude, to.Latitude, to.Longitude);
             if (lineUpLength > runwayLength) Console.WriteLine($"Note: the line-up ({lineUpLength:0} m) is longer than the runway ({runwayLength:0} m); use --per-group or --gap to shorten it.");
@@ -667,6 +684,15 @@ namespace XPConnect.Host
             foreach (var g in aircraft.GroupBy(a => a.Group))
             {
                 Console.WriteLine($"  {g.Key}: {string.Join(", ", g.Select(a => a.IcaoType + (a.IcaoAirline is null ? "" : " " + a.IcaoAirline)))}");
+            }
+
+            if (variants.Count > 0)
+            {
+                Console.WriteLine($"Model variants on runway {parallel.Item1!.Number}: {variants.Count} aircraft, one per model not shown above:");
+                foreach (var g in variants.GroupBy(a => a.Group))
+                {
+                    Console.WriteLine($"  {g.Key}: {string.Join(", ", g.Select(a => $"{a.IcaoType} {a.IcaoAirline ?? "-"} ({a.Model})"))}");
+                }
             }
 
             PluginLink link;
@@ -706,6 +732,13 @@ namespace XPConnect.Host
                     link.Add(FirstId + 1000 + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"taxi {a.IcaoType}");
                     allIds.Add(FirstId + 1000 + (uint)i);
                 }
+
+                for (var i = 0; i < variants.Count; i++)
+                {
+                    var a = variants[i];
+                    link.Add(FirstId + 2000 + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"{a.IcaoType} {a.Model}");
+                    allIds.Add(FirstId + 2000 + (uint)i);
+                }
             }
 
             var parked = TrafficLights.Nav;
@@ -726,6 +759,12 @@ namespace XPConnect.Host
                         {
                             var p = lineUp[i];
                             link.Update(FirstId + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, 0, true, 1, 0, 0, 0, parked));
+                        }
+
+                        for (var i = 0; i < variantLineUp.Count; i++)
+                        {
+                            var p = variantLineUp[i];
+                            link.Update(FirstId + 2000 + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, 0, true, 1, 0, 0, 0, parked));
                         }
                     }
 

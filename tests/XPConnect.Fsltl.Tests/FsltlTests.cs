@@ -241,7 +241,7 @@ public sealed class FsltlTests
         Assert.Contains("TEXTURE FSLTL_A20N_TEXTURE_LIVERY_T.dds\n", obj);
         Assert.Equal(4, DdsTexture.Load(Path.Combine(output, "objects", "FSLTL_A20N_TEXTURE_LIVERY_T.dds")).Width);
         var catalogue = FsltlImporter.LoadCatalogue(output);
-        Assert.Contains(new CatalogueEntry("FSLTL_A20N_BAW-British Airways", "FSLTL_A20N_BAW_Speedbird", "A20N", "BAW"), catalogue);
+        Assert.Contains(new CatalogueEntry("FSLTL_A20N_BAW-British Airways", "FSLTL_A20N_BAW_Speedbird", "A20N", "BAW", "FSLTL_A20N_A320"), catalogue);
     }
 
     [Fact]
