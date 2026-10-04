@@ -34,6 +34,20 @@ public sealed class AptDatParserTests
         """;
 
     [Fact]
+    public void A_row_with_a_word_where_a_number_belongs_is_skipped_not_fatal()
+    {
+        // Hand-edited custom scenery: one damaged runway row and one damaged gate row must not lose the airport.
+        var text = Sample.Replace("1300 -27.40200000 153.09800000 90.00 tie_down props GA 1", "1300 -27.40200000 east 90.00 tie_down props GA 1\n100 wide 1 0 0.25 1 2 1 05 -27.41 153.10 0 0 3 5 1 1 23 -27.39 153.105 0 0 3 0 0 0", StringComparison.Ordinal);
+
+        var airport = Assert.Single(AptDatParser.Parse(new StringReader(text)));
+
+        Assert.Equal("YTST", airport.Icao);
+        Assert.Single(airport.Runways);
+        Assert.Single(airport.StartLocations);
+        Assert.Equal(3, airport.TaxiNodes.Count);
+    }
+
+    [Fact]
     public void Reads_header_metadata_and_runways()
     {
         var airport = Assert.Single(AptDatParser.Parse(new StringReader(Sample)));

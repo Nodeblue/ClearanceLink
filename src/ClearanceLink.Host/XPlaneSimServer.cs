@@ -86,7 +86,7 @@ public sealed class XPlaneSimServer(
                     {
                         await session.HandleAsync(packet).ConfigureAwait(false);
                     }
-                    catch (Exception ex) when (ex is not (IOException or OperationCanceledException or ObjectDisposedException))
+                    catch (Exception ex) when (ex is not (IOException or ObjectDisposedException) && !(ex is OperationCanceledException && stop.IsCancellationRequested))
                     {
                         // Rule 2: a request we cannot handle never drops the connection.
                         PacketConsole.Info($"Client #{id}: {packet.Name} failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
@@ -97,19 +97,22 @@ public sealed class XPlaneSimServer(
             {
                 PacketConsole.Info($"Client #{id}: {ex.Message}");
             }
+            finally
+            {
+                // Whatever ended the session, it leaves the status page and the traffic registry (ghost AI aircraft
+                // would stay drawn in X-Plane otherwise).
+                await stop.CancelAsync().ConfigureAwait(false);
+                await ticker.ConfigureAwait(false);
+                lock (_sessions)
+                {
+                    _sessions.Remove(session);
+                }
 
-            await stop.CancelAsync().ConfigureAwait(false);
-            await ticker.ConfigureAwait(false);
-        }
-
-        lock (_sessions)
-        {
-            _sessions.Remove(session);
-        }
-
-        if (traffic?.RemoveConnection(id) is > 0 and var removed)
-        {
-            PacketConsole.Info($"Client #{id}: removed its {removed} AI objects");
+                if (traffic?.RemoveConnection(id) is > 0 and var removed)
+                {
+                    PacketConsole.Info($"Client #{id}: removed its {removed} AI objects");
+                }
+            }
         }
 
         var stats = session.Stats;
@@ -125,16 +128,21 @@ public sealed class XPlaneSimServer(
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
-                await session.TickAsync().ConfigureAwait(false);
+                try
+                {
+                    await session.TickAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not (IOException or OperationCanceledException or ObjectDisposedException))
+                {
+                    // Rule 2: one bad tick (a mapping that cannot be derived, an unexpected value) never stops the
+                    // periodic data or drops the connection.
+                    PacketConsole.Info($"Client #{id}: periodic data failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
         {
             // The session ended.
-        }
-        catch (Exception ex) when (ex is InvalidOperationException)
-        {
-            PacketConsole.Info($"Client #{id} periodic data stopped: {ex.Message}");
         }
     }
 }
