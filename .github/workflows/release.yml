@@ -55,7 +55,7 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $names = [IO.Compression.ZipFile]::OpenRead($zip.FullName).Entries.FullName | ForEach-Object { $_.Replace('\', '/') }
           if (-not ($names -like "X-Plane plugin/$env:APP/64/win.xpl")) { throw 'X-Plane plugin missing from the zip' }
-          if (-not ($names -contains "$env:APP.exe")) { throw "$env:APP.exe missing from the zip" }
+          if (-not ($names -contains "$($env:APP).exe")) { throw "$($env:APP).exe missing from the zip" }
           # Test data stays in the repository: recordings hold MSFS data, the test airports are GPL, and converted
           # FSLTL models may never be shipped.
           $banned = $names | Where-Object { $_ -match '\.jsonl$|(^|/)apt\.dat$|\.dds$|(^|/)xsb_aircraft\.txt$|(^|/)CSL/' }
