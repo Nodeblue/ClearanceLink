@@ -144,7 +144,7 @@ public static class CduPages
         {
             Row("X-PLANE", "BEYONDATC", s.XPlaneConnected ? new("CONNECTED", CduColor.Green) : new("WAITING"), batc),
             Row("X-PLANE VERSION", "OTHER ADD-ONS", new(s.XPlaneVersion ?? "-"), new(s.OtherAddOns == 0 ? "NONE" : $"{s.OtherAddOns} IGNORED")),
-            Row("LAST AIRPORT", "FROM", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
+            Row("ATC AIRPORT", "SCENERY", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
             Row("CONNECTION", "SESSION LOG", new(s.Connection == ConnectionMode.Automatic ? "AUTOMATIC" : "ALWAYS ON", CduColor.Magenta),
                 s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport),
             Row("RUNNING FOR", "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s.TrafficAircraft is null ? CduKey.GoSetup : CduKey.None),
@@ -212,16 +212,19 @@ public static class CduPages
     {
         var rows = new[]
         {
-            Row("", "", new("CONNECT BEYONDATC TO"), new("")),
-            Row("", "", new("X-PLANE 12"), new("")),
-            Row("VERSION", "LICENCE", new($"{s.Version} EXPERIMENTAL"), new("MIT")),
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
             s.Update is { } update
-                ? Row("MADE BY", "NEW VERSION", new("NODEBLUE", CduColor.Cyan), new($"{update.Version}>", CduColor.Magenta), CduKey.None, CduKey.OpenUpdatePage)
-                : Row("MADE BY", "", new("NODEBLUE", CduColor.Cyan), new("")),
-            Row("NOT AFFILIATED WITH", "", new("BEYONDATC", CduColor.Amber), new("")),
+                ? Row("", "NEW VERSION", new(""), new($"{update.Version}>", CduColor.Magenta), CduKey.None, CduKey.OpenUpdatePage)
+                : CduRow.Empty,
             Row("", "", new("<STATUS"), new("WEBSITE>"), CduKey.GoStatus, CduKey.OpenWebsite),
         };
-        return new(AppName, rows, new(flash ?? ""));
+        CduCell[] message =
+        [
+            Say($"{ProductName} {s.Version}", CduColor.Green),
+            Say("Connect BeyondATC\nto X-Plane 12."),
+            Say("Free and experimental, by Nodeblue. Not affiliated with BeyondATC.", CduColor.Cyan),
+        ];
+        return new(AppName, rows, new(flash ?? ""), message);
     }
 
     private static string StartTitle(PanelPage page) => $"WELCOME {StartPages.IndexOf(page) + 1}/{StartPages.Length}";
@@ -321,15 +324,14 @@ public static class CduPages
     {
         var rows = new[]
         {
-            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
-            Row("", "", new(""), new("MORE HELP>"), CduKey.None, CduKey.OpenHelp),
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
             StartNav(),
         };
         CduCell[] message =
         [
-            Say("Before you fly", CduColor.Green),
-            Say("In X-Plane's settings, so only BeyondATC talks and flies traffic:"),
-            Say("\u2022 ATC volume to 0 (Sound)\n\u2022 AI aircraft off\n\u2022 Parked aircraft off", CduColor.Cyan),
+            Say("In X-Plane's settings", CduColor.Green),
+            Say("\u2022 Sound: Radios to 0\n\u2022 Graphics: Draw parked aircraft off\n\u2022 No AI aircraft in your flight", CduColor.Cyan),
+            Say("So only BeyondATC talks and flies traffic."),
         ];
         return new(StartTitle(PanelPage.StartXPlane), rows, new(flash ?? ""), message);
     }
@@ -346,7 +348,7 @@ public static class CduPages
         CduCell[] message =
         [
             Say("You're all set", CduColor.Green),
-            Say($"Every flight:\n1. {(automatic ? "Close MSFS" : "MSFS can stay open")}\n2. Start X-Plane 12\n3. Keep {ProductName} open\n4. Start BeyondATC", CduColor.Cyan),
+            Say($"Every flight:\n1. Plan it in SimBrief\n2. {(automatic ? "Close MSFS" : "MSFS can stay open")}\n3. Start X-Plane 12 at the SimBrief departure\n4. Keep {ProductName} open\n5. Start BeyondATC", CduColor.Cyan),
         ];
         return new(StartTitle(PanelPage.StartDone), rows, new(flash ?? "REOPEN ON SUPPORT PAGE"), message);
     }
