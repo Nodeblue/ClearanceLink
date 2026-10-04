@@ -86,6 +86,30 @@ public sealed class TrafficBridgeTests
     }
 
     [Fact]
+    public void Aircraft_are_not_sent_while_the_plugin_has_no_models_and_are_sent_once_it_has()
+    {
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var plugin = new FakePlugin { Status = Connected() with { Models = 0 } };
+        var log = new List<string>();
+        var bridge = new TrafficBridge(registry, plugin, Models, null, log.Add, time);
+        registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXZE", new InitPosition(-27.39, 153.12, 13, 0, 0, 13, true, 0));
+
+        bridge.Sync();
+        time.Advance(TrafficBridge.ReAddInterval);
+        bridge.Sync();
+
+        Assert.Empty(plugin.Adds);
+        Assert.Empty(plugin.Updates);
+        Assert.Single(log, l => l.Contains("no CSL aircraft models", StringComparison.Ordinal)); // said once, not every sync
+
+        plugin.Status = Connected(); // models installed (X-Plane restarted with a CSL package)
+        bridge.Sync();
+        Assert.Single(plugin.Adds);
+        Assert.Single(plugin.Updates);
+    }
+
+    [Fact]
     public void Parked_aircraft_are_sent_only_when_they_change_or_every_few_seconds()
     {
         var time = new ManualTime();

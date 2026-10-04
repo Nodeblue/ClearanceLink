@@ -35,6 +35,7 @@ clink::UdpSocket g_socket;
 std::map<uint32_t, std::unique_ptr<clink::TrafficAircraft>> g_aircraft;
 std::vector<std::string> g_cslFolders;
 std::set<std::string> g_loggedOnce;
+std::set<uint32_t> g_refusedForNoModels;  // ids told once that there is nothing to draw them with
 float g_lastHello = -1;
 float g_lastGround = 0;
 float g_lastStatus = 0;
@@ -85,6 +86,7 @@ void LoadCsl() {
 
 void RemoveAll() {
     g_aircraft.clear();
+    g_refusedForNoModels.clear();
 }
 
 void Handle(const clink::Message& message, float now) {
@@ -92,6 +94,14 @@ void Handle(const clink::Message& message, float now) {
         if (g_lastHello < 0) Log("ClearanceLink " + hello->version + " connected");
         g_lastHello = now;
     } else if (auto add = std::get_if<clink::Add>(&message)) {
+        // Without a CSL model XPMP2 cannot create anything; say so once per aircraft instead of trying (and logging
+        // a failure) every time ClearanceLink re-sends the add.
+        if (XPMPGetNumberOfInstalledModels() == 0 && g_aircraft.find(add->id) == g_aircraft.end()) {
+            if (g_refusedForNoModels.insert(add->id).second)
+                g_socket.Send(clink::ClearanceLinkPort, clink::FormatError(add->id, "no CSL models installed"));
+            LogOnce("no CSL aircraft models found; BeyondATC's traffic is not drawn (install Bluebell or convert FSLTL)");
+            return;
+        }
         try {
             auto existing = g_aircraft.find(add->id);
             if (existing != g_aircraft.end()) {
@@ -121,13 +131,25 @@ void Handle(const clink::Message& message, float now) {
         if (found != g_aircraft.end()) found->second->SetGroundTrim(offset->groundFt, offset->groundPitch);
     } else if (auto del = std::get_if<clink::Del>(&message)) {
         g_aircraft.erase(del->id);
+        g_refusedForNoModels.erase(del->id);
     } else if (std::holds_alternative<clink::Clear>(message)) {
         RemoveAll();
     }
 }
 
+void FlightLoopBody(float now);
+
 float FlightLoop(float, float, int, void*) {
-    const float now = XPLMGetElapsedTime();
+    // Nothing may escape into X-Plane: an exception out of a flight loop callback ends the whole simulator.
+    try {
+        FlightLoopBody(XPLMGetElapsedTime());
+    } catch (const std::exception& e) {
+        LogOnce(std::string("flight loop failed: ") + e.what());
+    }
+    return -1.0f;  // every frame
+}
+
+void FlightLoopBody(float now) {
     static char buffer[65536];
     for (size_t size; (size = g_socket.Receive(buffer, sizeof(buffer))) > 0;) {
         for (const auto& line : clink::Lines(buffer, size)) {
@@ -173,7 +195,6 @@ float FlightLoop(float, float, int, void*) {
         g_socket.Send(clink::ClearanceLinkPort,
                       clink::FormatStatus(Version, g_aircraft.size(), XPMPGetNumberOfInstalledModels(), g_cslFolders));
     }
-    return -1.0f;  // every frame
 }
 
 int Preferences(const char*, const char*, int defaultValue) { return defaultValue; }

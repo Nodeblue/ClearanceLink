@@ -203,6 +203,27 @@ public sealed class SessionTests
     // 15 FLOAT64 + 3 FLOAT32 + 17 INT32, per the recorded definition (packed with no padding).
     private const int ExpectedDefine17Size = (15 * 8) + (3 * 4) + (17 * 4);
 
+    [Fact]
+    public async Task Facility_source_that_throws_gets_the_msfs_exception_so_batc_carries_on()
+    {
+        var session = NewSession(facilities: new ThrowingSource());
+        await session.HandleAsync(TestPackets.Open());
+        await session.HandleAsync(TestPackets.RequestFacilityData(444, 9, "YBAD", sendId: 42));
+
+        var exception = PacketDecoder.Decode(_sent[^1]);
+        Assert.Equal(RecvId.Exception, (RecvId)_sent[^1].TypeField);
+        Assert.Equal(42u, exception["sendId"]);
+        Assert.Contains(_log, l => l.Contains("YBAD", StringComparison.Ordinal) && l.Contains("FormatException", StringComparison.Ordinal));
+    }
+
+    /// <summary>An airport whose files cannot be read (a damaged apt.dat row).</summary>
+    private sealed class ThrowingSource : IFacilitySource
+    {
+        public string Description => "broken";
+
+        public IReadOnlyList<Packet>? Find(FacilityRequest request) => throw new FormatException("bad apt.dat row");
+    }
+
     private SimConnectSession NewSession(TimeProvider? time = null, IFacilitySource? facilities = null) =>
         new(1, ServerIdentity.Msfs2024, new SimVarResolver(Fixtures.Mappings(), _xp, time), _xp,
             p => { _sent.Add(p); return Task.CompletedTask; }, _log.Add, facilities, time);

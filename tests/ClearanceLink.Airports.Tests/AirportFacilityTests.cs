@@ -129,6 +129,44 @@ public sealed class AirportFacilityTests
         Assert.Equal(msfsPaths.Order(), runwayPaths.Order());
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void A_generated_network_for_a_strip_with_few_spots_has_no_coincident_points(int spots)
+    {
+        // With one spot the average of the spots is the spot itself, which put the apron point and the spot's own
+        // point on top of each other (two points at one position crash BATC 1.8.21).
+        var gates = string.Join("\n", Enumerable.Range(0, spots).Select(i => $"1300 -27.4010{i}000 153.09900000 90.00 tie_down props GA {i + 1}"));
+        var text = $"""
+            I
+            1200 Version
+            1 13 0 0 YONE One Strip
+            100 30.00 1 0 0.25 1 2 1 01 -27.41000000 153.10000000 0 0 3 5 1 1 19 -27.39000000 153.10500000 0 0 3 0 0 0
+            {gates}
+            99
+            """;
+        var airport = Assert.Single(AptDatParser.Parse(new StringReader(text)));
+        var network = TaxiNetwork.Build(airport);
+
+        Assert.True(network.Generated);
+        Assert.Equal(spots, network.Parking.Count);
+        var points = network.Points;
+        for (var i = 0; i < points.Count; i++)
+        {
+            for (var j = i + 1; j < points.Count; j++)
+            {
+                Assert.True(Geo.DistanceMeters(points[i].Latitude, points[i].Longitude, points[j].Latitude, points[j].Longitude) >= 0.5, $"points {i} and {j} coincide");
+            }
+        }
+
+        foreach (var path in network.Paths.Where(p => p.Type == MsfsCodes.ParkingPath))
+        {
+            var spot = network.Parking[path.End].Start;
+            Assert.True(Geo.DistanceMeters(points[path.Start].Latitude, points[path.Start].Longitude, spot.Latitude, spot.Longitude) >= 5, "spur on its spot");
+        }
+    }
+
     [Fact]
     public void Ytwb_without_an_xplane_taxi_network_gets_a_generated_one()
     {
