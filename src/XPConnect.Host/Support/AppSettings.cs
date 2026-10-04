@@ -38,6 +38,9 @@ public sealed class AppSettings
     /// <summary>Set once the user has been through (or skipped) the window's getting-started pages.</summary>
     public bool GettingStartedDone { get; set; }
 
+    /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     /// <summary>Reads the file; a missing file gives the defaults, a damaged one is kept as .bad and gives the defaults.</summary>
     public static AppSettings Load(string file)
     {

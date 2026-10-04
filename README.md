@@ -7,7 +7,7 @@ in X-Plane.
 > Experimental hobby project by Nodeblue. Not affiliated with, endorsed by or supported by BeyondATC.
 
 ## Get started
-1. Download the latest zip from [Releases](https://github.com/Nodeblue/XPConnect/releases) and unzip it anywhere.
+1. Download the latest zip and unzip it anywhere: see [Download and install](docs/install.md).
 2. Double-click `XPConnect.exe`. Its **WELCOME** pages find BeyondATC and X-Plane and set up traffic.
 3. Every flight: close MSFS, start X-Plane 12, keep XPConnect open, then start BeyondATC.
 
