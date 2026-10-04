@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using XPConnect.Host.Support;
 using XPConnect.Host.Traffic;
 
@@ -9,6 +10,12 @@ public enum PanelPage
     Setup,
     Support,
     About,
+    Welcome,
+    StartFolders,
+    StartTraffic,
+    StartModels,
+    StartXPlane,
+    StartDone,
 }
 
 /// <summary>Colours as on a Boeing CDU: cyan labels, white data, green good, amber attention, magenta active.</summary>
@@ -43,6 +50,14 @@ public enum CduKey
     OpenLogFolder,
     OpenWebsite,
     InstallTrafficAddOn,
+    Next,
+    Back,
+    FinishGettingStarted,
+    ShowGettingStarted,
+    OpenHelp,
+    OpenModelsHelp,
+    ChooseFsltlFolder,
+    ConvertFsltl,
     OpenUpdatePage,
 }
 
@@ -54,7 +69,8 @@ public sealed record CduRow(string LabelLeft, string LabelRight, CduCell Left, C
     public static CduRow Empty { get; } = new("", "", new(""), new(""));
 }
 
-public sealed record CduPage(string Title, IReadOnlyList<CduRow> Rows, CduCell Scratchpad);
+/// <summary>A page; <paramref name="Message"/>, when set, is plain text in the empty rows above the first row with content.</summary>
+public sealed record CduPage(string Title, IReadOnlyList<CduRow> Rows, CduCell Scratchpad, IReadOnlyList<CduCell>? Message = null);
 
 /// <summary>What the pages show, gathered once a second by the controller.</summary>
 public sealed record PanelState(
@@ -78,6 +94,10 @@ public sealed record PanelState(
     string? XPlaneFolder,
     PluginInstall.State TrafficAddOn = PluginInstall.State.NotBundled,
     int? TrafficAircraft = null,
+    int CslPackages = 0,
+    string? FsltlFolder = null,
+    int FsltlLiveries = 0,
+    bool FsltlConverting = false,
     UpdateInfo? Update = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
@@ -85,13 +105,30 @@ public static class CduPages
 {
     public const int Width = 24;
     public const string AppName = "XPCONNECT";
+
+    /// <summary>The product name in sentences (getting-started messages).</summary>
+    public const string ProductName = "XPConnect";
     public const string Website = "https://github.com/Nodeblue/XPConnect";
+    public const string HelpPage = Website + "/blob/main/docs/help.md";
+    public const string ModelsHelp = HelpPage + "#aircraft-models-for-traffic";
+
+    /// <summary>The page keys under the screen; the getting-started pages are reached from SUPPORT or on first run.</summary>
+    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.Setup, PanelPage.Support, PanelPage.About];
+
+    /// <summary>The getting-started pages in order.</summary>
+    public static readonly ImmutableArray<PanelPage> StartPages = [PanelPage.Welcome, PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartModels, PanelPage.StartXPlane, PanelPage.StartDone];
 
     public static CduPage Build(PanelPage page, PanelState s, string? flash = null) => page switch
     {
         PanelPage.Setup => Setup(s, flash),
         PanelPage.Support => Support(s, flash),
         PanelPage.About => About(s, flash),
+        PanelPage.Welcome => Welcome(flash),
+        PanelPage.StartFolders => StartFolders(s, flash),
+        PanelPage.StartTraffic => StartTraffic(s, flash),
+        PanelPage.StartModels => StartModels(s, flash),
+        PanelPage.StartXPlane => StartXPlane(flash),
+        PanelPage.StartDone => StartDone(s, flash),
         _ => Status(s, flash),
     };
 
@@ -164,8 +201,8 @@ public static class CduPages
                 CduKey.SessionLogOn, CduKey.SessionLogOff),
             Row("THIS SESSION", "KEPT FOR", new(s.SessionLog ? Size(s.SessionLogBytes) : "NOT LOGGED"), new($"{s.KeepDays} DAYS")),
             Row("SEND TO NODEBLUE", "", new("<CREATE SUPPORT FILE"), new(""), CduKey.CreateSupportFile),
-            Row("DETAILS", "", new("<SHOW LIVE LOG"), new(""), CduKey.ShowLiveLog),
-            Row("LOG FILES", "", new("<OPEN FOLDER"), new(""), CduKey.OpenLogFolder),
+            Row("DETAILS", "LOG FILES", new("<LIVE LOG"), new("OPEN FOLDER>"), CduKey.ShowLiveLog, CduKey.OpenLogFolder),
+            Row("WELCOME PAGES", "HELP", new("<SHOW AGAIN"), new("OPEN PAGE>"), CduKey.ShowGettingStarted, CduKey.OpenHelp),
             Row("", "", new("<STATUS"), new("SETUP>"), CduKey.GoStatus, CduKey.GoSetup),
         };
         return new($"{AppName} SUPPORT", rows, new(flash ?? ""));
@@ -187,6 +224,133 @@ public static class CduPages
         return new(AppName, rows, new(flash ?? ""));
     }
 
+    private static string StartTitle(PanelPage page) => $"WELCOME {StartPages.IndexOf(page) + 1}/{StartPages.Length}";
+
+    private static CduRow StartNav(CduKey next = CduKey.Next, string nextText = "NEXT>") =>
+        Row("", "", new("<BACK"), new(nextText), CduKey.Back, next);
+
+    private static CduCell Say(string text, CduColor color = CduColor.White) => new(text, color);
+
+    // The getting-started pages read as datalink messages: plain sentences in one size at the top of the screen,
+    // with line select keys only on the rows below them, where there is something to press.
+    private static CduPage Welcome(string? flash)
+    {
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            Row("", "", new("<SKIP"), new("NEXT>"), CduKey.FinishGettingStarted, CduKey.Next),
+        };
+        CduCell[] message =
+        [
+            Say($"Welcome to {ProductName}", CduColor.Green),
+            Say("Bring BeyondATC to X-Plane 12: clearances, taxi, handoffs and traffic, right in your sim."),
+            Say("Free and experimental, with no warranty. Not affiliated with or endorsed by BeyondATC.", CduColor.Cyan),
+        ];
+        return new(StartTitle(PanelPage.Welcome), rows, new(flash ?? "BY NODEBLUE"), message);
+    }
+
+    private static CduPage StartFolders(PanelState s, string? flash)
+    {
+        var found = s.BatcFolder is not null && s.XPlaneFolder is not null;
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty,
+            Folder("BEYONDATC FOLDER", s.BatcFolder, CduKey.ChooseBatcFolder),
+            Folder("X-PLANE FOLDER", s.XPlaneFolder, CduKey.ChooseXPlaneFolder),
+            CduRow.Empty,
+            StartNav(),
+        };
+        CduCell[] message = found
+            ? [Say("Found BeyondATC and X-Plane.", CduColor.Green), Say("Nothing in these folders is changed.")]
+            : [Say("A folder wasn't found.", CduColor.Amber), Say("Press CHOOSE beside it.")];
+        return new(StartTitle(PanelPage.StartFolders), rows, new(flash ?? ""), message);
+    }
+
+    private static CduPage StartTraffic(PanelState s, string? flash)
+    {
+        var bundled = s.TrafficAddOn != PluginInstall.State.NotBundled;
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            bundled ? TrafficAddOn(s) : CduRow.Empty,
+            StartNav(),
+        };
+        CduCell[] message = bundled
+            ?
+            [
+                Say("BeyondATC's traffic in X-Plane", CduColor.Green),
+                Say($"BeyondATC flies its own traffic; {ProductName}'s plugin draws it in X-Plane."),
+                Say("Optional. Close X-Plane to install."),
+            ]
+            :
+            [
+                Say("BeyondATC's traffic in X-Plane", CduColor.Green),
+                Say("This copy has no X-Plane plugin, so BeyondATC's traffic won't be drawn. ATC still works."),
+            ];
+        return new(StartTitle(PanelPage.StartTraffic), rows, new(flash ?? ""), message);
+    }
+
+    private static CduPage StartModels(PanelState s, string? flash)
+    {
+        var fsltl = s switch
+        {
+            { FsltlConverting: true } => Row("FSLTL", "", new("CONVERTING...", CduColor.Amber), new("")),
+            { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
+                CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
+            { FsltlFolder: not null } => Row("FSLTL", "", new("FOUND IN MSFS", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
+            _ => Row("FSLTL", "", new("NOT FOUND"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
+        };
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            Row("BLUEBELL", "", s.CslPackages > 0 ? new($"{s.CslPackages} PACKAGES", CduColor.Green) : new("NOT FOUND"),
+                new("HOW TO>"), CduKey.None, CduKey.OpenModelsHelp),
+            fsltl,
+            StartNav(),
+        };
+        CduCell[] message =
+        [
+            Say("Aircraft models", CduColor.Green),
+            Say("Either tested library works. FSLTL is converted from your MSFS copy."),
+        ];
+        var help = s.FsltlFolder is not null && s.FsltlLiveries == 0 && !s.FsltlConverting ? "CLOSE X-PLANE TO CONVERT" : "";
+        return new(StartTitle(PanelPage.StartModels), rows, new(flash ?? help), message);
+    }
+
+    private static CduPage StartXPlane(string? flash)
+    {
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            Row("", "", new(""), new("MORE HELP>"), CduKey.None, CduKey.OpenHelp),
+            StartNav(),
+        };
+        CduCell[] message =
+        [
+            Say("Before you fly", CduColor.Green),
+            Say("In X-Plane's settings, so only BeyondATC talks and flies traffic:"),
+            Say("\u2022 ATC volume to 0 (Sound)\n\u2022 AI aircraft off\n\u2022 Parked aircraft off", CduColor.Cyan),
+        ];
+        return new(StartTitle(PanelPage.StartXPlane), rows, new(flash ?? ""), message);
+    }
+
+    private static CduPage StartDone(PanelState s, string? flash)
+    {
+        var automatic = s.Connection == ConnectionMode.Automatic;
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            Row("", "", new(""), new("HELP PAGE>"), CduKey.None, CduKey.OpenHelp),
+            StartNav(CduKey.FinishGettingStarted, "FINISH>"),
+        };
+        CduCell[] message =
+        [
+            Say("You're all set", CduColor.Green),
+            Say($"Every flight:\n1. {(automatic ? "Close MSFS" : "MSFS can stay open")}\n2. Start X-Plane 12\n3. Keep {ProductName} open\n4. Start BeyondATC", CduColor.Cyan),
+        ];
+        return new(StartTitle(PanelPage.StartDone), rows, new(flash ?? "REOPEN ON SUPPORT PAGE"), message);
+    }
+
     /// <summary>The status page's traffic half: aircraft drawn in X-Plane, or why there are none.</summary>
     private static CduCell Traffic(PanelState s) => s switch
     {
@@ -196,12 +360,12 @@ public static class CduPages
         _ => new("-"),
     };
 
-    /// <summary>The X-Plane plugin that draws BATC's traffic, shown to users as the traffic add-on.</summary>
+    /// <summary>The X-Plane plugin that draws BATC's traffic, shown to users as the X-Plane plugin.</summary>
     private static CduRow TrafficAddOn(PanelState s) => s.TrafficAddOn switch
     {
-        PluginInstall.State.NotInstalled => Row("TRAFFIC ADD-ON", "", new("NOT INSTALLED", CduColor.Amber), new("INSTALL>"), CduKey.None, CduKey.InstallTrafficAddOn),
-        PluginInstall.State.Outdated => Row("TRAFFIC ADD-ON", "", new("NEWER VERSION", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.InstallTrafficAddOn),
-        PluginInstall.State.Installed => Row("TRAFFIC ADD-ON", "", new("INSTALLED", CduColor.Green), new("")),
+        PluginInstall.State.NotInstalled => Row("X-PLANE PLUGIN", "", new("NOT INSTALLED", CduColor.Amber), new("INSTALL>"), CduKey.None, CduKey.InstallTrafficAddOn),
+        PluginInstall.State.Outdated => Row("X-PLANE PLUGIN", "", new("NEWER VERSION", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.InstallTrafficAddOn),
+        PluginInstall.State.Installed => Row("X-PLANE PLUGIN", "", new("INSTALLED", CduColor.Green), new("")),
         _ => CduRow.Empty,
     };
 

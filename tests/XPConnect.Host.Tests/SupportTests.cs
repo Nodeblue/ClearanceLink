@@ -20,15 +20,17 @@ public sealed class SupportTests : IDisposable
         var defaults = AppSettings.Load(file);
         Assert.True(defaults.SessionLog);
         Assert.Equal(7, defaults.KeepDays);
+        Assert.False(defaults.GettingStartedDone);
         Assert.Null(defaults.BatcFolder);
 
-        new AppSettings { BatcFolder = @"D:\Games\BeyondATC", SessionLog = false, KeepDays = 3 }.Save(file);
+        new AppSettings { BatcFolder = @"D:\Games\BeyondATC", SessionLog = false, KeepDays = 3, GettingStartedDone = true }.Save(file);
         var loaded = AppSettings.Load(file);
 
         Assert.Equal(@"D:\Games\BeyondATC", loaded.BatcFolder);
         Assert.Null(loaded.XPlaneFolder);
         Assert.False(loaded.SessionLog);
         Assert.Equal(3, loaded.KeepDays);
+        Assert.True(loaded.GettingStartedDone);
         Assert.False(File.Exists(file + ".tmp"));
     }
 

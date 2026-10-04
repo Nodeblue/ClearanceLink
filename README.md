@@ -1,37 +1,26 @@
 # XPConnect
 
-Middleware that lets [BeyondATC](https://www.beyondatc.net/) (built for MSFS) work with X-Plane 12.
+**Use [BeyondATC](https://www.beyondatc.net/) with X-Plane 12.** BeyondATC is made for MSFS; XPConnect stands in for
+MSFS and answers from X-Plane, so you get BeyondATC's clearances, taxi routes, SIDs, STARs, approaches and traffic
+in X-Plane.
 
-```
-BeyondATC  <-- SimConnect -->  XPConnect  <-- Web API / files -->  X-Plane 12
-```
+> Experimental hobby project by Nodeblue. Not affiliated with, endorsed by or supported by BeyondATC.
 
-XPConnect pretends to be MSFS on the SimConnect pipe. It turns each request into X-Plane datarefs, commands and navdata.
+## Get started
+1. Download the latest zip and unzip it anywhere: see [Download and install](docs/install.md).
+2. Double-click `XPConnect.exe`. Its **WELCOME** pages find BeyondATC and X-Plane and set up traffic.
+3. Every flight: close MSFS, start X-Plane 12, keep XPConnect open, then start BeyondATC.
 
-**Status:** BeyondATC flies with X-Plane 12 end to end: clearance, taxi routes from X-Plane's taxiways, SIDs and STARs, handoffs, approaches, COM tuning (YBBN, YTWB and YSSY tested). Not yet: AI traffic, in-sim push-to-talk and quick buttons. See [docs/STATUS.md](docs/STATUS.md).
+You need Windows 10/11, X-Plane 12.1.4+ and BeyondATC. For traffic, add
+[aircraft models](docs/help.md#aircraft-models-for-traffic): Bluebell, or FSLTL converted from MSFS.
 
-## Using it (Windows)
+**[Help page](docs/help.md)**: X-Plane settings, flying MSFS as well, problems and support files.
 
-Download `XPConnect-<version>-win-x64.zip`, unzip it anywhere and read `README.txt`. In short:
-start X-Plane 12, double-click `XPConnect.exe` (the first time it offers to point BeyondATC at it), then start
-BeyondATC. `Use BeyondATC with MSFS.cmd` switches BeyondATC back to MSFS. No .NET install is needed.
-
-## Building from source
-
-```powershell
-winget install Microsoft.DotNet.SDK.10
-./scripts/test.ps1                     # build + all tests
-./scripts/run.ps1 serve                # run from source (X-Plane 12 running, BeyondATC pointed at XPConnect)
-./scripts/run.ps1 batc status          # is BeyondATC pointed at XPConnect or MSFS? (batc on / batc off)
-./scripts/publish.ps1                  # publish/XPConnect-<version>-win-x64.zip
-```
-
-Developer runbooks: [Phase 0 recording against MSFS](docs/runbooks/phase0.md), [X-Plane](docs/runbooks/phase1-xplane.md).
-Instructions for coding agents: [AGENTS.md](AGENTS.md).
+## For developers
+.NET 10, C#. `./scripts/test.ps1` builds and tests, `./scripts/run.ps1 serve` runs from source,
+`./scripts/publish.ps1` makes the zip. Where things stand: [docs/STATUS.md](docs/STATUS.md). How it fits together:
+[docs/architecture.md](docs/architecture.md). Coding agents: [AGENTS.md](AGENTS.md).
 
 ## Licence
-
-MIT, see [LICENSE](LICENSE). XPConnect is an independent project, not made or supported by BeyondATC, Microsoft
-or Laminar Research. Two kinds of test data are not covered by the MIT licence:
-[X-Plane Scenery Gateway excerpts](tests/XPConnect.Airports.Tests/fixtures/README.md) (GPL) and
-[MSFS recordings](recordings/samples/README.md). Neither is part of the release.
+MIT, see [LICENSE](LICENSE). Test data under other terms ([X-Plane Scenery Gateway excerpts](tests/XPConnect.Airports.Tests/fixtures/README.md),
+[MSFS recordings](recordings/samples/README.md)) is not part of the release.

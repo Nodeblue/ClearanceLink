@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -18,6 +19,7 @@ public sealed class PanelWindow : Window
 
     private const double DataSize = 19;
     private const double LabelSize = 13.5;
+    private const double MessageSize = 15;
     private static readonly TimeSpan FlashTime = TimeSpan.FromSeconds(4);
 
     private static readonly IBrush Bezel = Brush("#2A2F33");
@@ -29,6 +31,7 @@ public sealed class PanelWindow : Window
     private readonly Func<PanelState> _state;
     private readonly TextBlock _title = Text(DataSize);
     private readonly TextBlock _scratch = Text(DataSize);
+    private readonly TextBlock _message = Text(MessageSize);
     private readonly TextBlock[] _labelLeft = new TextBlock[6];
     private readonly TextBlock[] _labelRight = new TextBlock[6];
     private readonly TextBlock[] _dataLeft = new TextBlock[6];
@@ -70,6 +73,18 @@ public sealed class PanelWindow : Window
 
     public PanelPage Page { get; private set; } = PanelPage.Status;
 
+    /// <summary>Opens on the getting-started pages instead of STATUS (first run).</summary>
+    public bool StartWithGettingStarted
+    {
+        init
+        {
+            if (value)
+            {
+                ShowPage(CduPages.StartPages[0]);
+            }
+        }
+    }
+
     /// <summary>The page as last drawn (tests read it).</summary>
     public CduPage? Shown => _shown;
 
@@ -97,10 +112,35 @@ public sealed class PanelWindow : Window
             _lskRight[i].IsEnabled = row.KeyRight != CduKey.None;
         }
 
+        ShowMessage(page);
         Paint(_scratch, page.Scratchpad);
         foreach (var (key, button) in _pageKeys)
         {
             button.Foreground = key == Page ? Colour(CduColor.Green) : KeyText;
+        }
+    }
+
+    /// <summary>Draws the page's message over the empty rows at the top, one paragraph per cell.</summary>
+    private void ShowMessage(CduPage page)
+    {
+        var rows = page.Rows.TakeWhile(r => r == CduRow.Empty).Count();
+        _message.IsVisible = page.Message is { Count: > 0 } && rows > 0;
+        if (!_message.IsVisible)
+        {
+            return;
+        }
+
+        Grid.SetRowSpan(_message, rows * 2);
+        _message.Inlines!.Clear();
+        foreach (var (cell, i) in page.Message!.Select((c, i) => (c, i)))
+        {
+            if (i > 0)
+            {
+                _message.Inlines.Add(new LineBreak());
+                _message.Inlines.Add(new Run("\n") { FontSize = MessageSize / 2 });
+            }
+
+            _message.Inlines.Add(new Run(cell.Text) { Foreground = Colour(cell.Color) });
         }
     }
 
@@ -130,10 +170,28 @@ public sealed class PanelWindow : Window
                 return;
             case CduKey.ChooseBatcFolder:
             case CduKey.ChooseXPlaneFolder:
+            case CduKey.ChooseFsltlFolder:
                 await ChooseFolderAsync(key);
                 return;
             case CduKey.ShowLiveLog:
                 ShowLiveLog();
+                return;
+            case CduKey.ShowGettingStarted:
+                ShowPage(CduPages.StartPages[0]);
+                return;
+            case CduKey.Next:
+            case CduKey.Back:
+                var at = CduPages.StartPages.IndexOf(Page);
+                var to = at + (key == CduKey.Next ? 1 : -1);
+                ShowPage(at < 0 || to < 0 ? PanelPage.Status : CduPages.StartPages[Math.Min(to, CduPages.StartPages.Length - 1)]);
+                return;
+            case CduKey.FinishGettingStarted:
+                ShowPage(PanelPage.Status);
+                if (_controller is not null)
+                {
+                    Flash(await _controller.FinishGettingStartedAsync());
+                }
+
                 return;
         }
 
@@ -151,10 +209,14 @@ public sealed class PanelWindow : Window
             return;
         }
 
-        var batc = key == CduKey.ChooseBatcFolder;
         var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = batc ? "Choose the BeyondATC folder (the one with BeyondATC.exe)" : "Choose the X-Plane 12 folder",
+            Title = key switch
+            {
+                CduKey.ChooseBatcFolder => "Choose the BeyondATC folder (the one with BeyondATC.exe)",
+                CduKey.ChooseFsltlFolder => "Choose FSLTL's fsltl-traffic-base folder (in MSFS's Community folder)",
+                _ => "Choose the X-Plane 12 folder",
+            },
             AllowMultiple = false,
         });
         if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)
@@ -257,6 +319,15 @@ public sealed class PanelWindow : Window
             grid.Children.Add(_lskRight[i]);
         }
 
+        // Messages (getting-started pages) start under the title and wrap to the 24-column width.
+        _message.TextWrapping = TextWrapping.Wrap;
+        _message.LineHeight = MessageSize * 1.35;
+        _message.Width = CharWidth() * CduPages.Width;
+        _message.Margin = new Thickness(16, 4, 16, 0);
+        Place(grid, _message, 1);
+        _message.VerticalAlignment = VerticalAlignment.Top;
+        _message.HorizontalAlignment = HorizontalAlignment.Left;
+
         // The divider sits at the top of the scratchpad row and the text below it, whatever the screen's scaling.
         var divider = new Border { BorderBrush = Brush("#1A2228"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(16, 0) };
         Place(grid, divider, 13);
@@ -265,7 +336,7 @@ public sealed class PanelWindow : Window
         _scratch.Margin = new Thickness(16, 6, 16, 0);
 
         var keys = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 14) };
-        foreach (var page in Enum.GetValues<PanelPage>())
+        foreach (var page in CduPages.MainPages)
         {
             var button = new Button
             {

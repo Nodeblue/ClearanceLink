@@ -18,6 +18,9 @@ each user's font and settings, it breaks on resize, and Quick Edit mode can free
   directly. The window only draws them and maps keys to actions.
 - The screen font is B612 Mono, made for Airbus cockpit displays, under the SIL Open Font License (embedded,
   `Panel/Fonts/OFL.txt`).
+- First run opens on WELCOME pages (`CduPages.StartPages`) in the same screen, instead of a separate wizard. They are
+  messages (`CduPage.Message`, plain sentences in one size) above the rows that have keys, so advice never looks
+  selectable. A new user learns the line select keys while setting up. Done is a flag in settings.json.
 - Tests run the real window headless (Avalonia.Headless + Skia) and can save each page as a PNG
   (`XPCONNECT_SCREENSHOTS=<dir> dotnet test`), so agents can see what they changed.
 
