@@ -1,4 +1,4 @@
-# MSFS SimVar -> X-Plane 12 mapping, read by XPConnect.Server (MappingSet).
+# MSFS SimVar -> X-Plane 12 mapping, read by ClearanceLink.Server (MappingSet).
 # SimVars come from BATC's data definitions (recordings/samples/batc-1.8.21-setup.jsonl).
 #
 # Fields:

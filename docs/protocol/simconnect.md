@@ -25,7 +25,7 @@ Recorded MSFS 2024 reply (2026-09-30, protocol 6): `"SunRise"`, app 12.2.282174.
 - An unknown airport in RequestFacilityData gets exception 1, and BATC retries every minute.
 
 ## Function ids
-See `src/XPConnect.Protocol/FunctionNames.cs` (0x01 Open ... 0x6C CallCommBusEvent). 0x02 and 0x03 are not identified yet.
+See `src/ClearanceLink.Protocol/FunctionNames.cs` (0x01 Open ... 0x6C CallCommBusEvent). 0x02 and 0x03 are not identified yet.
 
 ## AI traffic (BATC 1.8.21 against MSFS 2024, recording 20260930-174605; fixture recordings/samples/batc-1.8.21-traffic.jsonl)
 

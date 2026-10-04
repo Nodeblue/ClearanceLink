@@ -4,13 +4,13 @@ Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committ
 
 ## Go/no-go notes
 
-- **Go.** With MSFS closed, BATC connected both SimConnect connections to `XPConnect fake --identity msfs2024` (see "Stand-in test" below).
-- BATC opens **two** SimConnect connections. Both honour a `SimConnect.cfg` (one next to `simconnect_ws.exe`, one next to `BeyondATC.exe`), so both can be pointed at XPConnect over TCP without touching MSFS.
+- **Go.** With MSFS closed, BATC connected both SimConnect connections to `ClearanceLink fake --identity msfs2024` (see "Stand-in test" below).
+- BATC opens **two** SimConnect connections. Both honour a `SimConnect.cfg` (one next to `simconnect_ws.exe`, one next to `BeyondATC.exe`), so both can be pointed at ClearanceLink over TCP without touching MSFS.
 - Before connecting, BATC checks for a running process named `FlightSimulator2024.exe`; a do-nothing stub with that name passes. On the SimConnect side, sim detection is from the Open reply only: `simconnect_ws` logs `SimConnect OPEN: app='SunRise' version=12.2 -> msfs2024=true`. No system events are subscribed and no system states are requested.
 - Everything BATC needs about the **user aircraft** is two data definitions plus two COM events. All of it has an obvious X-Plane source.
 - **Facility data** is the large job: 80 requests for 66 airports, 34,271 replies.
 - **AI traffic** is fully driven by BATC: it creates objects, releases them from sim AI control and writes their position and animation state continuously. This is 99% of the packet volume and needs an X-Plane plugin. It can be left out of the first milestone (run BATC with traffic off).
-- Not yet known: PTT and button behaviour, and whether BATC reconnects after XPConnect restarts. Both need the fake to return data first.
+- Not yet known: PTT and button behaviour, and whether BATC reconnects after ClearanceLink restarts. Both need the fake to return data first.
 
 ## Handshake
 
@@ -63,7 +63,7 @@ Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committ
 
 ## Stand-in test (runbook step 3, MSFS closed)
 
-Source: `recordings/local/20260930-183230-fake.jsonl` and BATC's `Player.log`, 2026-09-30 08:32Z to 09:01Z. `XPConnect fake --listen tcp:5112 --identity msfs2024`.
+Source: `recordings/local/20260930-183230-fake.jsonl` and BATC's `Player.log`, 2026-09-30 08:32Z to 09:01Z. `ClearanceLink fake --listen tcp:5112 --identity msfs2024`.
 
 | Attempt | Result |
 |---|---|
@@ -76,7 +76,7 @@ Source: `recordings/local/20260930-183230-fake.jsonl` and BATC's `Player.log`, 2
 - BATC then sent its 150 data definitions and 39 event mappings and polled define 17 (user aircraft, period once) about 10 times a second: 13,540 requests in 25 minutes. With no `SimObjectData` reply its UI showed "Waiting for connection to Sim..." and then a connection timeout. It kept polling and did not disconnect.
 - No facility requests were made in this state; they start once a flight is set up.
 - `--identity msfs2020` was not tried.
-- Consequence for XPConnect: it must run (or ship) a stub process named `FlightSimulator2024.exe`, and the first thing to implement is the `SimObjectData` reply for defines 300 and 17.
+- Consequence for ClearanceLink: it must run (or ship) a stub process named `FlightSimulator2024.exe`, and the first thing to implement is the `SimObjectData` reply for defines 300 and 17.
 
 ## Stand-in with data (MSFS closed, 2026-09-30 09:23Z)
 

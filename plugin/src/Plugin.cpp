@@ -1,4 +1,4 @@
-// XPConnect X-Plane plugin: draws BeyondATC's AI traffic sent by XPConnect, and reports terrain height under it.
+// ClearanceLink X-Plane plugin: draws BeyondATC's AI traffic sent by ClearanceLink, and reports terrain height under it.
 // Protocol: docs/protocol/plugin.md.
 #include "CslFolders.h"
 #include "Protocol.h"
@@ -23,16 +23,16 @@
 namespace {
 
 constexpr float HelloTimeoutSeconds = 10.0f;
-// XPConnect re-sends each aircraft's add every 10 s and its position at least every 2 s. One that hears neither for
+// ClearanceLink re-sends each aircraft's add every 10 s and its position at least every 2 s. One that hears neither for
 // this long was removed by a `del` that UDP dropped, and is removed here instead of staying drawn where it was.
 constexpr float AircraftTimeoutSeconds = 15.0f;
 constexpr float GroundReportSeconds = 0.25f;
 constexpr float StatusReportSeconds = 1.0f;
 
-const char* const Version = XPCONNECT_PLUGIN_VERSION;
+const char* const Version = CLEARANCELINK_PLUGIN_VERSION;
 
-xpc::UdpSocket g_socket;
-std::map<uint32_t, std::unique_ptr<xpc::TrafficAircraft>> g_aircraft;
+clink::UdpSocket g_socket;
+std::map<uint32_t, std::unique_ptr<clink::TrafficAircraft>> g_aircraft;
 std::vector<std::string> g_cslFolders;
 std::set<std::string> g_loggedOnce;
 float g_lastHello = -1;
@@ -41,7 +41,7 @@ float g_lastStatus = 0;
 bool g_tcas = false;
 
 void Log(const std::string& text) {
-    XPLMDebugString(("XPConnect: " + text + "\n").c_str());
+    XPLMDebugString(("ClearanceLink: " + text + "\n").c_str());
 }
 
 void LogOnce(const std::string& text) {
@@ -51,7 +51,7 @@ void LogOnce(const std::string& text) {
 std::filesystem::path PluginFolder() {
     char path[1024] = {};
     XPLMGetPluginInfo(XPLMGetMyID(), nullptr, path, nullptr, nullptr);
-    return std::filesystem::path(path).parent_path().parent_path();  // .../plugins/XPConnect/64/win.xpl -> XPConnect
+    return std::filesystem::path(path).parent_path().parent_path();  // .../plugins/ClearanceLink/64/win.xpl -> ClearanceLink
 }
 
 std::string XPlaneRoot() {
@@ -70,7 +70,7 @@ void LoadCsl() {
         return std::filesystem::is_directory(std::filesystem::u8path(path), error);
     };
     g_cslFolders.clear();
-    for (const auto& folder : xpc::CslFolders(XPlaneRoot(), extra, exists)) {
+    for (const auto& folder : clink::CslFolders(XPlaneRoot(), extra, exists)) {
         const char* error = XPMPLoadCSLPackage(folder.c_str());
         if (error && *error) {
             Log("CSL " + folder + ": " + error);
@@ -79,7 +79,7 @@ void LoadCsl() {
             Log("CSL loaded " + folder);
         }
     }
-    xpc::TrafficAircraft::SetCslPackages(xpc::FindCslPackages(g_cslFolders));
+    clink::TrafficAircraft::SetCslPackages(clink::FindCslPackages(g_cslFolders));
     Log(std::to_string(XPMPGetNumberOfInstalledModels()) + " CSL models from " + std::to_string(g_cslFolders.size()) + " folders");
 }
 
@@ -87,18 +87,18 @@ void RemoveAll() {
     g_aircraft.clear();
 }
 
-void Handle(const xpc::Message& message, float now) {
-    if (auto hello = std::get_if<xpc::Hello>(&message)) {
-        if (g_lastHello < 0) Log("XPConnect " + hello->version + " connected");
+void Handle(const clink::Message& message, float now) {
+    if (auto hello = std::get_if<clink::Hello>(&message)) {
+        if (g_lastHello < 0) Log("ClearanceLink " + hello->version + " connected");
         g_lastHello = now;
-    } else if (auto add = std::get_if<xpc::Add>(&message)) {
+    } else if (auto add = std::get_if<clink::Add>(&message)) {
         try {
             auto existing = g_aircraft.find(add->id);
             if (existing != g_aircraft.end()) {
                 existing->second->ChangeTo(*add);
                 existing->second->Heard(now);
             } else {
-                auto& aircraft = g_aircraft[add->id] = std::make_unique<xpc::TrafficAircraft>(*add);
+                auto& aircraft = g_aircraft[add->id] = std::make_unique<clink::TrafficAircraft>(*add);
                 aircraft->Heard(now);
                 if (!g_tcas) {
                     const char* error = XPMPMultiplayerEnable();
@@ -107,21 +107,21 @@ void Handle(const xpc::Message& message, float now) {
                 }
             }
         } catch (const std::exception& e) {
-            g_socket.Send(xpc::XPConnectPort, xpc::FormatError(add->id, e.what()));
+            g_socket.Send(clink::ClearanceLinkPort, clink::FormatError(add->id, e.what()));
             LogOnce(std::string("cannot create ") + add->icaoType + " " + add->icaoAirline + ": " + e.what());
         }
-    } else if (auto pos = std::get_if<xpc::Pos>(&message)) {
+    } else if (auto pos = std::get_if<clink::Pos>(&message)) {
         auto found = g_aircraft.find(pos->id);
         if (found != g_aircraft.end()) {
             found->second->Apply(*pos, now);
             found->second->Heard(now);
         }
-    } else if (auto offset = std::get_if<xpc::Offset>(&message)) {
+    } else if (auto offset = std::get_if<clink::Offset>(&message)) {
         auto found = g_aircraft.find(offset->id);
         if (found != g_aircraft.end()) found->second->SetGroundTrim(offset->groundFt, offset->groundPitch);
-    } else if (auto del = std::get_if<xpc::Del>(&message)) {
+    } else if (auto del = std::get_if<clink::Del>(&message)) {
         g_aircraft.erase(del->id);
-    } else if (std::holds_alternative<xpc::Clear>(message)) {
+    } else if (std::holds_alternative<clink::Clear>(message)) {
         RemoveAll();
     }
 }
@@ -130,9 +130,9 @@ float FlightLoop(float, float, int, void*) {
     const float now = XPLMGetElapsedTime();
     static char buffer[65536];
     for (size_t size; (size = g_socket.Receive(buffer, sizeof(buffer))) > 0;) {
-        for (const auto& line : xpc::Lines(buffer, size)) {
+        for (const auto& line : clink::Lines(buffer, size)) {
             std::string error;
-            if (auto message = xpc::Parse(line, &error)) {
+            if (auto message = clink::Parse(line, &error)) {
                 Handle(*message, now);
             } else if (!error.empty()) {
                 LogOnce(error.substr(0, error.find(' ', 12)));
@@ -141,14 +141,14 @@ float FlightLoop(float, float, int, void*) {
     }
 
     if (g_lastHello >= 0 && now - g_lastHello > HelloTimeoutSeconds) {
-        Log("XPConnect stopped sending; removing its traffic");
+        Log("ClearanceLink stopped sending; removing its traffic");
         RemoveAll();
         g_lastHello = -1;
     }
 
     for (auto it = g_aircraft.begin(); it != g_aircraft.end();) {
         if (now - it->second->LastHeard() > AircraftTimeoutSeconds) {
-            LogOnce("removing aircraft XPConnect stopped updating (a lost del)");
+            LogOnce("removing aircraft ClearanceLink stopped updating (a lost del)");
             it = g_aircraft.erase(it);
         } else {
             ++it;
@@ -159,26 +159,26 @@ float FlightLoop(float, float, int, void*) {
         g_lastGround = now;
         std::string lines;
         for (const auto& [id, aircraft] : g_aircraft) {
-            if (auto ground = aircraft->GroundElevationFt()) lines += xpc::FormatGround(id, *ground) + "\n";
+            if (auto ground = aircraft->GroundElevationFt()) lines += clink::FormatGround(id, *ground) + "\n";
             if (lines.size() > 60000) {
-                g_socket.Send(xpc::XPConnectPort, lines);
+                g_socket.Send(clink::ClearanceLinkPort, lines);
                 lines.clear();
             }
         }
-        if (!lines.empty()) g_socket.Send(xpc::XPConnectPort, lines);
+        if (!lines.empty()) g_socket.Send(clink::ClearanceLinkPort, lines);
     }
 
     if (now - g_lastStatus >= StatusReportSeconds) {
         g_lastStatus = now;
-        g_socket.Send(xpc::XPConnectPort,
-                      xpc::FormatStatus(Version, g_aircraft.size(), XPMPGetNumberOfInstalledModels(), g_cslFolders));
+        g_socket.Send(clink::ClearanceLinkPort,
+                      clink::FormatStatus(Version, g_aircraft.size(), XPMPGetNumberOfInstalledModels(), g_cslFolders));
     }
     return -1.0f;  // every frame
 }
 
 int Preferences(const char*, const char*, int defaultValue) { return defaultValue; }
 
-// Plugins > XPConnect > Show tail labels. Off by default; the choice is kept in settings.txt next to the plugin.
+// Plugins > ClearanceLink > Show tail labels. Off by default; the choice is kept in settings.txt next to the plugin.
 XPLMMenuID g_menu = nullptr;
 int g_labelsItem = -1;
 
@@ -203,34 +203,34 @@ void MenuHandler(void*, void* item) {
 }  // namespace
 
 PLUGIN_API int XPluginStart(char* name, char* signature, char* description) {
-    std::strcpy(name, "XPConnect");
-    std::strcpy(signature, "com.nodeblue.xpconnect");
-    std::strcpy(description, "Draws BeyondATC traffic sent by XPConnect");
+    std::strcpy(name, "ClearanceLink");
+    std::strcpy(signature, "com.nodeblue.clearancelink");
+    std::strcpy(description, "Draws BeyondATC traffic sent by ClearanceLink");
     XPLMEnableFeature("XPLM_USE_NATIVE_PATHS", 1);
     return 1;
 }
 
 PLUGIN_API int XPluginEnable() {
     const auto resources = (PluginFolder() / "Resources").string();
-    const char* error = XPMPMultiplayerInit("XPConnect", resources.c_str(), Preferences, "A320", "XPConnect");
+    const char* error = XPMPMultiplayerInit("ClearanceLink", resources.c_str(), Preferences, "A320", "ClearanceLink");
     if (error && *error) {
         Log(std::string("XPMP2 init failed: ") + error);
         return 0;
     }
-    if (!xpc::TrafficAircraft::AddModelDatarefs()) Log("XPMP2 refused the World Traffic gear dataref; those models' bogies stay tilted");
+    if (!clink::TrafficAircraft::AddModelDatarefs()) Log("XPMP2 refused the World Traffic gear dataref; those models' bogies stay tilted");
     LoadCsl();
     if (!g_menu) {
-        const int root = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "XPConnect", nullptr, 0);
-        g_menu = XPLMCreateMenu("XPConnect", XPLMFindPluginsMenu(), root, MenuHandler, nullptr);
+        const int root = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "ClearanceLink", nullptr, 0);
+        g_menu = XPLMCreateMenu("ClearanceLink", XPLMFindPluginsMenu(), root, MenuHandler, nullptr);
         g_labelsItem = XPLMAppendMenuItem(g_menu, "Show tail labels", &g_labelsItem, 0);
     }
     ApplyLabels(LabelsSetting(), false);
 
     std::string socketError;
-    if (!g_socket.Open(xpc::PluginPort, socketError)) {
-        Log("cannot listen for XPConnect: " + socketError);
+    if (!g_socket.Open(clink::PluginPort, socketError)) {
+        Log("cannot listen for ClearanceLink: " + socketError);
     } else {
-        Log(std::string("plugin ") + Version + " listening on 127.0.0.1:" + std::to_string(xpc::PluginPort));
+        Log(std::string("plugin ") + Version + " listening on 127.0.0.1:" + std::to_string(clink::PluginPort));
     }
     XPLMRegisterFlightLoopCallback(FlightLoop, -1.0f, nullptr);
     return 1;
@@ -239,7 +239,7 @@ PLUGIN_API int XPluginEnable() {
 PLUGIN_API void XPluginDisable() {
     XPLMUnregisterFlightLoopCallback(FlightLoop, nullptr);
     RemoveAll();
-    xpc::TrafficAircraft::ForgetModelFits();
+    clink::TrafficAircraft::ForgetModelFits();
     if (g_tcas) XPMPMultiplayerDisable();
     g_tcas = false;
     XPMPMultiplayerCleanup();

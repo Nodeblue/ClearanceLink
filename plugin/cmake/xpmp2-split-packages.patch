@@ -7,7 +7,7 @@ index 6fd1e11..16de556 100755
  /// The ids of our garbage collection flight loop callback
  XPLMFlightLoopID gGarbageCollectionID = nullptr;
 +
-+/// XPConnect patch: further folders of a package split over several folders under one EXPORT_NAME (Bluebell's
++/// ClearanceLink patch: further folders of a package split over several folders under one EXPORT_NAME (Bluebell's
 +/// BB_Boeing1..3 and BB_Airbus..2). Each has the same xsb_aircraft.txt but only some of the .obj files.
 +std::multimap<std::string, std::string> gSplitPkgFolders;
 +/// Folders that only continue an earlier package: their xsb_aircraft.txt is already read from the first folder.
@@ -19,7 +19,7 @@ index 6fd1e11..16de556 100755
      // Full path is package path plus relative path
      std::string path = pkgIter->second + relFilePath;
      
-+    // XPConnect patch: a package split over several folders keeps each file in one of them
++    // ClearanceLink patch: a package split over several folders keeps each file in one of them
 +    if (!ExistsFile(TOPOSIX(path))) {
 +        const auto range = gSplitPkgFolders.equal_range(pkg);
 +        for (auto i = range.first; i != range.second; ++i) {
@@ -37,7 +37,7 @@ index 6fd1e11..16de556 100755
      
      // read the file line by line
  //    LOG_MSG(logINFO, INFO_XSBACTXT_READ, xsbName.c_str());
-+    int splitNames = 0, newNames = 0;   // XPConnect patch
++    int splitNames = 0, newNames = 0;   // ClearanceLink patch
      while (fAc)
      {
          // read a line, trim it (remove whitespace at both ends)
@@ -45,7 +45,7 @@ index 6fd1e11..16de556 100755
              // Found a package id -> save an entry for a package
              auto p = glob.mapCSLPkgs.insert(std::make_pair(tokens[1], path + XPLMGetDirectorySeparator()[0]));
              if (!p.second) {                // not inserted, ie. package name existed already?
-+                // XPConnect patch: another folder of the same package: look for files missing in the first one here
++                // ClearanceLink patch: another folder of the same package: look for files missing in the first one here
 +                const std::string folder = path + XPLMGetDirectorySeparator()[0];
 +                if (p.first->second != folder) {
 +                    gSplitPkgFolders.emplace(tokens[1], folder);
@@ -66,7 +66,7 @@ index 6fd1e11..16de556 100755
      // Close the xsb_aircraft.txt file
      fAc.close();
 +
-+    // XPConnect patch: a folder that only continues packages read from other folders lists the same models again
++    // ClearanceLink patch: a folder that only continues packages read from other folders lists the same models again
 +    if (splitNames > 0 && newNames == 0)
 +        gSplitPkgPaths.insert(path);
      
@@ -85,7 +85,7 @@ index 6fd1e11..16de556 100755
      // Now we can process each folder and read in the CSL models there
      for (const std::string& p: paths)
      {
-+        // XPConnect patch: a split package's further folders list the same models, all read from its first folder
++        // ClearanceLink patch: a split package's further folders list the same models, all read from its first folder
 +        if (gSplitPkgPaths.count(p)) {
 +            LOG_MSG(logINFO, "Models of %s were read with the first folder of its package", StripXPSysDir(p).c_str());
 +            continue;

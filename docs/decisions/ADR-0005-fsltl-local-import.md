@@ -12,8 +12,8 @@ FSLTL's models are plain glTF + DDS (not encrypted): `docs/research/fsltl-models
 authors. They say nothing about a user converting their own copy.
 
 ## Decision
-`xpconnect fsltl import` reads the user's FSLTL package (found from MSFS's `UserCfg.opt`, or `--fsltl`) and writes an
-X-Plane CSL package to `<X-Plane>/Custom Data/CSL/XPConnect-FSLTL` on the same PC: one .obj per model and texture
+`clearancelink fsltl import` reads the user's FSLTL package (found from MSFS's `UserCfg.opt`, or `--fsltl`) and writes an
+X-Plane CSL package to `<X-Plane>/Custom Data/CSL/ClearanceLink-FSLTL` on the same PC: one .obj per model and texture
 (XPMP2 swaps the livery texture per entry), DXT DDS textures capped at `--size` (default 2048), an `xsb_aircraft.txt`
 with one `LIVERY <type> <airline> <key>` entry per livery, and `fsltl-catalogue.json` (title to key). `serve` loads that
 catalogue and sends BATC's exact livery key to the plugin, so XPMP2 picks the right livery; other titles keep the

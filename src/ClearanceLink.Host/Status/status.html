@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClearanceLink</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #e2e5ea;
+    --ok: #1f8a4c; --ok-bg: #e5f4ea; --wait: #9a6700; --wait-bg: #fdf3d8; --bad: #c0362c; --bad-bg: #fbe6e4;
+    --accent: #3d5afe;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b2029; --text: #e6e9ef; --muted: #98a1b3; --line: #2a303b;
+      --ok: #4cc27f; --ok-bg: #173324; --wait: #e2b340; --wait-bg: #3a3017; --bad: #f07167; --bad-bg: #3b1e1c;
+      --accent: #8c9eff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 40px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .2px; }
+  h1 span { color: var(--muted); font-weight: 400; font-size: 15px; margin-left: 6px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .banner { border-radius: 10px; padding: 14px 16px; font-weight: 600; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+  .banner.ok { background: var(--ok-bg); color: var(--ok); }
+  .banner.waiting { background: var(--wait-bg); color: var(--wait); }
+  .banner.problem, .banner.stopped { background: var(--bad-bg); color: var(--bad); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .row .k { color: var(--muted); white-space: nowrap; }
+  .row .v { text-align: right; overflow-wrap: anywhere; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.waiting { background: var(--wait); } .dot.problem, .dot.stopped { background: var(--bad); }
+  .state { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 8px; }
+  .empty { color: var(--muted); }
+  .client + .client { margin-top: 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 4px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; border-top: 0; }
+  td.num, th.num { text-align: right; }
+  .wide { grid-column: 1 / -1; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 18px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ClearanceLink<span>BeyondATC for X-Plane 12</span></h1>
+    <span id="version" class="empty"></span>
+  </header>
+
+  <div id="banner" class="banner waiting" role="status" aria-live="polite"><span class="dot waiting"></span><span id="message">Loading…</span></div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>X-Plane</h2>
+      <div class="state"><span id="xp-dot" class="dot"></span><span id="xp-state">–</span></div>
+      <div class="row"><span class="k">Version</span><span class="v" id="xp-version">–</span></div>
+      <div class="row"><span class="k">Web API</span><span class="v"><code id="xp-address">–</code></span></div>
+      <div class="row"><span class="k">Traffic plugin</span><span class="v" id="xp-plugin">–</span></div>
+    </section>
+
+    <section class="card">
+      <h2>BeyondATC</h2>
+      <div id="clients"><p class="empty">Not connected yet.</p></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Airports sent to BeyondATC</h2>
+      <div id="airports"><p class="empty">None yet. BeyondATC asks for airports when you start a flight.</p></div>
+    </section>
+
+    <section class="card wide">
+      <h2>BeyondATC traffic</h2>
+      <div id="traffic"><p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Details</h2>
+      <div class="row"><span class="k">Listening for BeyondATC on</span><span class="v"><code id="listen">–</code></span></div>
+      <div class="row"><span class="k">Simulator check</span><span class="v" id="stub">–</span></div>
+      <div class="row"><span class="k">Recording</span><span class="v"><code id="recording">–</code></span></div>
+      <div class="row"><span class="k">Running since</span><span class="v" id="started">–</span></div>
+    </section>
+  </div>
+
+  <footer>This page updates every second. Close ClearanceLink's window to stop it.</footer>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const time = iso => new Date(iso).toLocaleTimeString();
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ago = s => s < 2 ? "just now" : s < 90 ? `${Math.round(s)} s ago` : `${Math.round(s / 60)} min ago`;
+
+  function setBanner(level, message) {
+    $("banner").className = `banner ${level}`;
+    $("banner").querySelector(".dot").className = `dot ${level}`;
+    $("message").textContent = message;
+  }
+
+  function render(s) {
+    setBanner(s.overall.level, s.overall.message);
+    $("version").textContent = `v${s.version}`;
+    $("xp-dot").className = `dot ${s.xPlane.connected ? "ok" : "waiting"}`;
+    $("xp-state").textContent = s.xPlane.connected ? "Connected" : "Not connected";
+    $("xp-version").textContent = s.xPlane.version || "–";
+    $("xp-address").textContent = s.xPlane.address;
+    $("xp-plugin").textContent = !s.plugin
+      ? "Not running"
+      : s.plugin.models === 0
+        ? "Running, but no CSL aircraft models found"
+        : `${s.plugin.aircraft} aircraft, ${s.plugin.models} models`;
+    $("listen").textContent = s.listen;
+    $("stub").textContent = s.stub || "–";
+    $("recording").textContent = s.recording || "–";
+    $("started").textContent = new Date(s.started).toLocaleString();
+
+    $("clients").innerHTML = s.clients.length === 0
+      ? '<p class="empty">Not connected yet.</p>'
+      : s.clients.map(c => `<div class="client">
+          <div class="state"><span class="dot ok"></span><span>${esc(c.description)}</span></div>
+          <div class="row"><span class="k">Connected</span><span class="v">${time(c.connectedAt)}</span></div>
+          <div class="row"><span class="k">Last message</span><span class="v">${ago(c.secondsSinceLastPacket)}</span></div></div>`).join("");
+
+    $("airports").innerHTML = s.airports.length === 0
+      ? '<p class="empty">None yet. BeyondATC asks for airports when you start a flight.</p>'
+      : `<table><thead><tr><th>Airport</th><th>From</th><th class="num">Time</th><th class="num">At</th></tr></thead><tbody>${
+          s.airports.map(a => `<tr><td><strong>${esc(a.icao)}</strong></td><td>${a.source ? esc(a.source) : '<span class="empty">not found, BeyondATC skips it</span>'}</td><td class="num">${a.source ? a.milliseconds + " ms" : ""}</td><td class="num">${time(a.at)}</td></tr>`).join("")
+        }</tbody></table>`;
+
+    const traffic = (s.traffic || []).filter(t => t.kind === "aircraft");
+    $("traffic").innerHTML = traffic.length === 0
+      ? '<p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p>'
+      : `<p>${traffic.length} aircraft${(s.traffic.length - traffic.length) ? `, ${s.traffic.length - traffic.length} ground vehicles` : ""}. ${!s.plugin ? "Not drawn in X-Plane: the ClearanceLink plugin is not running there." : s.plugin.models === 0 ? "Not drawn in X-Plane: no CSL aircraft models found." : "Drawn in X-Plane by the ClearanceLink plugin."}</p>
+         <table><thead><tr><th>Tail</th><th>Model</th><th>State</th><th class="num">Altitude</th><th class="num">Speed</th><th class="num">Heading</th><th class="num">Updated</th></tr></thead><tbody>${
+          traffic.map(t => `<tr><td><strong>${esc(t.tail)}</strong></td><td>${esc(t.model)}</td><td>${t.onGround ? "ground" : "airborne"}</td><td class="num">${t.altitudeFeet} ft</td><td class="num">${t.groundSpeedKnots} kt</td><td class="num">${t.heading}°</td><td class="num">${ago(t.secondsSinceUpdate)}</td></tr>`).join("")
+        }</tbody></table>`;
+  }
+
+  async function poll() {
+    try {
+      const response = await fetch("status.json", { cache: "no-store" });
+      render(await response.json());
+    } catch {
+      setBanner("stopped", "ClearanceLink is not running. Start it again, then this page reconnects by itself.");
+      $("xp-dot").className = "dot";
+    }
+    setTimeout(poll, 1000);
+  }
+  poll();
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 Date: 2026-10-02. Status: accepted.
 
 ## Context
-Until now, BATC reached XPConnect through two `SimConnect.cfg` files written into BeyondATC's folder (one next to
+Until now, BATC reached ClearanceLink through two `SimConnect.cfg` files written into BeyondATC's folder (one next to
 `simconnect_ws.exe`, one next to `BeyondATC.exe`) pointing at `tcp:5112`. That meant switching back and forth with
 batch files, and it left BeyondATC unable to reach MSFS while those files were in place. Without a cfg file, every
 SimConnect client connects to MSFS's default named pipe, `\\.\pipe\Microsoft Flight Simulator\SimConnect`.
@@ -18,8 +18,8 @@ logged and left unanswered.
 A new `connection` setting, `automatic` by default:
 - **Automatic:** `serve` answers on the default pipe while the real MSFS is not running, plus `tcp:5112` for a
   BeyondATC still set up with cfg files. Nothing in BeyondATC's folder is changed. `MsfsGate` checks every 3 s for a
-  `FlightSimulator2024` or `FlightSimulator` process that is not XPConnect's stand-in. While MSFS runs, XPConnect
-  opens no pipe instance. If MSFS starts while XPConnect runs, XPConnect steps aside: the waiting pipe instance and
+  `FlightSimulator2024` or `FlightSimulator` process that is not ClearanceLink's stand-in. While MSFS runs, ClearanceLink
+  opens no pipe instance. If MSFS starts while ClearanceLink runs, ClearanceLink steps aside: the waiting pipe instance and
   every pipe client are closed and the stand-in is stopped. Both come back when MSFS closes.
 - **Always on:** the cfg files are written, as before, and `serve` listens on `tcp:5112` only, so BeyondATC goes to
   X-Plane even while MSFS is open.
@@ -28,11 +28,11 @@ Other MSFS add-ons that connect are shown on the status page as "Other MSFS add-
 as BeyondATC.
 
 ## Alternatives
-- **Cfg files only (before).** Needs switching, and breaks BeyondATC for MSFS while XPConnect is closed.
+- **Cfg files only (before).** Needs switching, and breaks BeyondATC for MSFS while ClearanceLink is closed.
 - **Pipe only, never TCP.** Breaks anyone still set up with the cfg files from 0.3.0.
 - **Turn other add-ons away.** They would retry and flood the log. Accepting and ignoring them was harmless in the test.
 
 ## Consequences
 - Users only have to close MSFS before flying X-Plane. The status page says so when MSFS is running.
-- Untested: MSFS starting while XPConnect is running. MSFS might check for a process with its own name before the
+- Untested: MSFS starting while ClearanceLink is running. MSFS might check for a process with its own name before the
   stand-in is stopped; that needs a test on a PC with MSFS.

@@ -1,18 +1,18 @@
 # Traffic showcase: check CSL models without BeyondATC
 
-`xpconnect showcase` draws a fixed scene through the X-Plane plugin so models, liveries, wheels, propellers and
+`clearancelink showcase` draws a fixed scene through the X-Plane plugin so models, liveries, wheels, propellers and
 steering can be checked in one place, the same way every time.
 
 ## Run it
-1. Close XPConnect (the showcase uses the plugin link instead of it; it clears the plugin's aircraft when it starts).
-2. Start X-Plane with the XPConnect plugin and park somewhere you can see the runway, e.g. at YBBN.
-3. `xpconnect showcase` (defaults: YBBN, its longest runway from the first end, the longest named taxiway).
+1. Close ClearanceLink (the showcase uses the plugin link instead of it; it clears the plugin's aircraft when it starts).
+2. Start X-Plane with the ClearanceLink plugin and park somewhere you can see the runway, e.g. at YBBN.
+3. `clearancelink showcase` (defaults: YBBN, its longest runway from the first end, the longest named taxiway).
 4. Ctrl+C removes the aircraft.
 
 What you get:
 - **Line-up:** one aircraft of each type, nose to tail on the runway centre line from the threshold, grouped Light,
   Regional jet, Narrow body, Wide body, Heavy, with a wider gap between groups. Gear down, engines stopped, nav lights.
-  With imported FSLTL liveries (`xpconnect fsltl import`) each type gets a real airline livery, Australian airlines
+  With imported FSLTL liveries (`clearancelink fsltl import`) each type gets a real airline livery, Australian airlines
   first; without, the plugin picks a CSL model by type.
 - **Taxiing:** 8 of them (one per group in turn) going up and down a taxiway at 15 kt with engines running, turning
   round at each end: wheels roll, propellers turn, nose wheels steer.

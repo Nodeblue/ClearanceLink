@@ -10,7 +10,7 @@ For the maintainer. Users read [install.md](install.md).
 3. Open **Releases**, check the draft (notes, the zip and its `.sha256.txt`), edit the notes if you
    like, and press **Publish release**.
 
-Nobody sees a draft. Once published, everyone's XPConnect shows NEW VERSION on its ABOUT page the next time it
+Nobody sees a draft. Once published, everyone's ClearanceLink shows NEW VERSION on its ABOUT page the next time it
 starts. A version with a dash is published as a **pre-release**: testers can download it, but the update check
 never offers it.
 
