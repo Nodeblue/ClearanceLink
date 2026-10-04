@@ -22,6 +22,7 @@ public sealed class PanelController : IAsyncDisposable
     private Found _folders = new();
     private bool _foldersChanged;
     private volatile bool _fsltlConverting;
+    private volatile string? _fsltlMessage;
 
     public void Start()
     {
@@ -30,7 +31,19 @@ public sealed class PanelController : IAsyncDisposable
             _stop = new CancellationTokenSource();
             _board = null;
             var stop = _stop.Token;
-            _serve = Task.Run(() => Cli.RunServerAsync("serve", Options.Parse(["--quiet"]), board => _board = board, stop));
+            _serve = Task.Run(async () =>
+            {
+                try
+                {
+                    await Cli.RunServerAsync("serve", Options.Parse(["--quiet"]), board => _board = board, stop).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // The page would only say STARTING... for ever; the reason goes in the log (LIVE LOG on SUPPORT).
+                    PacketConsole.Info($"panel: server stopped: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+                    _board = null;
+                }
+            });
         }
     }
 
@@ -76,7 +89,9 @@ public sealed class PanelController : IAsyncDisposable
             _folders.Fsltl,
             _folders.FsltlLiveries,
             _fsltlConverting,
-            UpdateCheck.Available);
+            UpdateCheck.Available,
+            snapshot?.Plugin?.Models,
+            _fsltlMessage);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -353,7 +368,8 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         _fsltlConverting = true;
-        _ = Task.Run(() =>
+        _fsltlMessage = null;
+        _ = Task.Run(async () =>
         {
             try
             {
@@ -363,11 +379,30 @@ public sealed class PanelController : IAsyncDisposable
                     Output = Cli.FsltlOutput(xplane, moveOld: true),
                     Log = line => PacketConsole.Info($"fsltl: {line}"),
                 });
-                PacketConsole.Info($"fsltl: imported {result.Liveries} liveries ({result.Models} models, {result.Skipped} skipped)");
+                foreach (var problem in result.Problems.Take(MaxProblemsLogged)) PacketConsole.Info($"fsltl problem: {problem}");
+                if (result.Problems.Count > MaxProblemsLogged) PacketConsole.Info($"fsltl: {result.Problems.Count - MaxProblemsLogged} more problems not shown");
+                PacketConsole.Info($"fsltl: imported {result.Liveries} liveries ({result.Models} models, {result.Skipped} skipped, {result.Problems.Count} problems)");
+                _fsltlMessage = result.Liveries == 0 ? "CONVERT FAILED: SEE LIVE LOG" : $"{result.Liveries} LIVERIES CONVERTED";
+                _fsltlConverting = false;
+                _folders = new();
+                // The server read the catalogue when it started; it must read the new one for BATC's aircraft to be
+                // drawn with these liveries. Not while BeyondATC is connected: a restart would drop it.
+                if (result.Liveries > 0 && State() is { BatcHelper: false, BatcApp: false })
+                {
+                    await RestartAsync().ConfigureAwait(false);
+                }
+                else if (result.Liveries > 0)
+                {
+                    PacketConsole.Info("fsltl: restart ClearanceLink (and BeyondATC) to draw traffic with the new models");
+                    _fsltlMessage = "RESTART TO USE MODELS";
+                }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            catch (Exception ex)
             {
-                PacketConsole.Info($"fsltl: import failed: {ex.Message}");
+                // Anything, not only I/O: an unexpected failure (a texture the decoder cannot read, out of memory)
+                // must be seen on the page and in the log, not vanish with the background task.
+                PacketConsole.Info($"fsltl: import failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+                _fsltlMessage = "CONVERT FAILED: SEE LIVE LOG";
             }
             finally
             {
@@ -377,6 +412,9 @@ public sealed class PanelController : IAsyncDisposable
         });
         return "CONVERTING FSLTL MODELS";
     }
+
+    /// <summary>How many of a conversion's problems go in the log (the rest are counted).</summary>
+    private const int MaxProblemsLogged = 25;
 
     /// <summary>What was last found on disk; looked up at most every 10 s.</summary>
     private sealed record Found

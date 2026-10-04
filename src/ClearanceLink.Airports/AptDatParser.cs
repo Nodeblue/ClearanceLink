@@ -22,75 +22,87 @@ public static class AptDatParser
                 continue;
             }
 
-            switch (code)
+            Airport? finished = null;
+            try
             {
-                case 1 or 16 or 17 when f.Length >= 5:
-                    if (current is not null)
-                    {
-                        yield return current;
-                    }
+                Read(code, f, ref current, ref lastStart, ref lastEdge, out finished);
+            }
+            catch (Exception ex) when (ex is FormatException or OverflowException)
+            {
+                // A hand-edited row with a word where a number belongs (custom scenery): skip the row, keep the airport.
+            }
 
-                    current = new Airport { Icao = f[4], Kind = code, ElevationFeet = D(f[1]), Name = Rest(f, 5) };
-                    lastStart = null;
-                    lastEdge = null;
-                    break;
-                case 99:
-                    if (current is not null)
-                    {
-                        yield return current;
-                    }
-
-                    current = null;
-                    break;
-                case 100 when current is not null && f.Length >= 26:
-                    current.Runways.Add(new Runway(D(f[1]), I(f[2]), End(f, 8), End(f, 17)));
-                    break;
-                case 1302 when current is not null && f.Length >= 2:
-                    current.Metadata[f[1]] = Rest(f, 2);
-                    break;
-                case >= 1050 and <= 1056 when current is not null && f.Length >= 2:
-                    current.Frequencies.Add(new Frequency((FrequencyKind)(code - 1050), I(f[1]), Rest(f, 2)));
-                    break;
-                case >= 50 and <= 56 when current is not null && f.Length >= 2:
-                    // Legacy rows are in units of 10 kHz (11885 = 118.85 MHz).
-                    current.Frequencies.Add(new Frequency((FrequencyKind)(code - 50), I(f[1]) * 10, Rest(f, 2)));
-                    break;
-                case 1201 when current is not null && f.Length >= 5:
-                    current.TaxiNodes.Add(new TaxiNode(I(f[4]), D(f[1]), D(f[2]), f[3], Rest(f, 5)));
-                    break;
-                case 1202 when current is not null && f.Length >= 4:
-                    var type = f.Length > 4 ? f[4] : "taxiway";
-                    lastEdge = new TaxiEdge(
-                        I(f[1]),
-                        I(f[2]),
-                        f[3] == "oneway",
-                        type == "runway",
-                        type.StartsWith("taxiway_", StringComparison.Ordinal) ? type[8..] : "",
-                        Rest(f, 5));
-                    current.TaxiEdges.Add(lastEdge);
-                    break;
-                case 1204 when lastEdge is not null && f.Length >= 3:
-                    lastEdge.ActiveZones.Add((f[1], f[2].Split(',', StringSplitOptions.RemoveEmptyEntries)));
-                    break;
-                case 1300 when current is not null && f.Length >= 6:
-                    lastStart = new StartLocation(D(f[1]), D(f[2]), D(f[3]), f[4], f[5].Split('|'), Rest(f, 6));
-                    current.StartLocations.Add(lastStart);
-                    break;
-                case 1301 when lastStart is not null && f.Length >= 2:
-                    lastStart.SizeCategory = f[1];
-                    lastStart.Operation = f.Length > 2 ? f[2] : null;
-                    lastStart.Airlines = f.Length > 3 ? f[3..] : [];
-                    break;
-                case 15 when current is not null && f.Length >= 4:
-                    // Legacy start location without a type.
-                    current.StartLocations.Add(new StartLocation(D(f[1]), D(f[2]), D(f[3]), "misc", ["all"], Rest(f, 4)));
-                    break;
+            if (finished is not null)
+            {
+                yield return finished;
             }
         }
 
         if (current is not null)
         {
             yield return current;
+        }
+    }
+
+    private static void Read(int code, string[] f, ref Airport? current, ref StartLocation? lastStart, ref TaxiEdge? lastEdge, out Airport? finished)
+    {
+        finished = null;
+        switch (code)
+        {
+            case 1 or 16 or 17 when f.Length >= 5:
+                var next = new Airport { Icao = f[4], Kind = code, ElevationFeet = D(f[1]), Name = Rest(f, 5) };
+                finished = current;
+                current = next;
+                lastStart = null;
+                lastEdge = null;
+                break;
+            case 99:
+                finished = current;
+                current = null;
+                break;
+            case 100 when current is not null && f.Length >= 26:
+                current.Runways.Add(new Runway(D(f[1]), I(f[2]), End(f, 8), End(f, 17)));
+                break;
+            case 1302 when current is not null && f.Length >= 2:
+                current.Metadata[f[1]] = Rest(f, 2);
+                break;
+            case >= 1050 and <= 1056 when current is not null && f.Length >= 2:
+                current.Frequencies.Add(new Frequency((FrequencyKind)(code - 1050), I(f[1]), Rest(f, 2)));
+                break;
+            case >= 50 and <= 56 when current is not null && f.Length >= 2:
+                // Legacy rows are in units of 10 kHz (11885 = 118.85 MHz).
+                current.Frequencies.Add(new Frequency((FrequencyKind)(code - 50), I(f[1]) * 10, Rest(f, 2)));
+                break;
+            case 1201 when current is not null && f.Length >= 5:
+                current.TaxiNodes.Add(new TaxiNode(I(f[4]), D(f[1]), D(f[2]), f[3], Rest(f, 5)));
+                break;
+            case 1202 when current is not null && f.Length >= 4:
+                var type = f.Length > 4 ? f[4] : "taxiway";
+                lastEdge = new TaxiEdge(
+                    I(f[1]),
+                    I(f[2]),
+                    f[3] == "oneway",
+                    type == "runway",
+                    type.StartsWith("taxiway_", StringComparison.Ordinal) ? type[8..] : "",
+                    Rest(f, 5));
+                current.TaxiEdges.Add(lastEdge);
+                break;
+            case 1204 when lastEdge is not null && f.Length >= 3:
+                lastEdge.ActiveZones.Add((f[1], f[2].Split(',', StringSplitOptions.RemoveEmptyEntries)));
+                break;
+            case 1300 when current is not null && f.Length >= 6:
+                lastStart = new StartLocation(D(f[1]), D(f[2]), D(f[3]), f[4], f[5].Split('|'), Rest(f, 6));
+                current.StartLocations.Add(lastStart);
+                break;
+            case 1301 when lastStart is not null && f.Length >= 2:
+                lastStart.SizeCategory = f[1];
+                lastStart.Operation = f.Length > 2 ? f[2] : null;
+                lastStart.Airlines = f.Length > 3 ? f[3..] : [];
+                break;
+            case 15 when current is not null && f.Length >= 4:
+                // Legacy start location without a type.
+                current.StartLocations.Add(new StartLocation(D(f[1]), D(f[2]), D(f[3]), "misc", ["all"], Rest(f, 4)));
+                break;
         }
     }
 

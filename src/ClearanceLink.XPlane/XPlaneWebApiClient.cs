@@ -146,8 +146,11 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
             {
                 break;
             }
-            catch (Exception ex) when (ex is HttpRequestException or WebSocketException or IOException or TaskCanceledException or JsonException or InvalidOperationException)
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                // Any failure (also one we did not expect, such as an answer without a field we read) is a
+                // disconnect followed by a reconnect; the loop must never end while the server runs, or BATC would be
+                // served the last values forever.
                 if (_connected)
                 {
                     _log($"xplane DISCONNECTED: {ex.Message}");
@@ -285,7 +288,7 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
 
                 break;
             case "result" when root.TryGetProperty("success", out var ok) && !ok.GetBoolean():
-                _log($"xplane request {root.GetProperty("req_id")} failed: {root.GetRawText()}");
+                _log($"xplane request {(root.TryGetProperty("req_id", out var reqId) ? reqId.ToString() : "?")} failed: {root.GetRawText()}");
                 break;
         }
     }

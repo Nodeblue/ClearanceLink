@@ -59,6 +59,7 @@ public enum CduKey
     ChooseFsltlFolder,
     ConvertFsltl,
     OpenUpdatePage,
+    GoModels,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -98,7 +99,9 @@ public sealed record PanelState(
     string? FsltlFolder = null,
     int FsltlLiveries = 0,
     bool FsltlConverting = false,
-    UpdateInfo? Update = null);
+    UpdateInfo? Update = null,
+    int? PluginModels = null,
+    string? FsltlMessage = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -147,7 +150,12 @@ public static class CduPages
             Row("ATC AIRPORT", "SCENERY", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
             Row("CONNECTION", "SESSION LOG", new(s.Connection == ConnectionMode.Automatic ? "AUTOMATIC" : "ALWAYS ON", CduColor.Magenta),
                 s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport),
-            Row("RUNNING FOR", "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s.TrafficAircraft is null ? CduKey.GoSetup : CduKey.None),
+            Row("RUNNING FOR", "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
+            {
+                { TrafficAircraft: null } => CduKey.GoSetup,
+                { PluginModels: 0 } => CduKey.GoModels,
+                _ => CduKey.None,
+            }),
             Row("", "", new("<SETUP"), new("SUPPORT>"), CduKey.GoSetup, CduKey.GoSupport),
         };
         return new($"{AppName} STATUS", rows, flash is null ? Advice(s) : new(flash));
@@ -317,7 +325,9 @@ public static class CduPages
             Say("Either tested library works. FSLTL is converted from your MSFS copy."),
         ];
         var help = s.FsltlFolder is not null && s.FsltlLiveries == 0 && !s.FsltlConverting ? "CLOSE X-PLANE TO CONVERT" : "";
-        return new(StartTitle(PanelPage.StartModels), rows, new(flash ?? help), message);
+        // The last conversion's result stays on the page (it ran in the background, so the key's flash is long gone).
+        var line = flash ?? s.FsltlMessage ?? help;
+        return new(StartTitle(PanelPage.StartModels), rows, new(line, line.StartsWith("CONVERT FAILED", StringComparison.Ordinal) ? CduColor.Amber : CduColor.White), message);
     }
 
     private static CduPage StartXPlane(string? flash)
@@ -355,6 +365,8 @@ public static class CduPages
     /// <summary>The status page's traffic half: aircraft drawn in X-Plane, or why there are none.</summary>
     private static CduCell Traffic(PanelState s) => s switch
     {
+        // The plugin runs but has no CSL package to draw with: the key opens the aircraft models page.
+        { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SEE SETUP", CduColor.Amber),
         { TrafficAddOn: PluginInstall.State.Installed } => new("WAITING"),

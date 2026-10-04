@@ -61,8 +61,8 @@ public static class FsltlImporter
         var airplanes = Path.Combine(options.PackageRoot, "SimObjects", "Airplanes");
         var textureJobs = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);  // output name -> source
         var keepAlpha = new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);       // used by a MASK/BLEND material
-        var entries = new StringBuilder($"EXPORT_NAME {ExportName}\n\n");
-        var catalogue = new List<CatalogueEntry>();
+        // One xsb entry per livery, kept back until its textures are known to have converted.
+        var entries = new List<(string Text, CatalogueEntry Entry, List<string> Textures)>();
         var models = 0;
         var skipped = 0;
         var modelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -130,6 +130,7 @@ public static class FsltlImporter
             foreach (var livery in model)
             {
                 var lines = new StringBuilder();
+                var textures = new List<string>();
                 var complete = true;
                 for (var i = 0; i < converted.Parts.Count; i++)
                 {
@@ -142,8 +143,13 @@ public static class FsltlImporter
                     }
 
                     textureJobs.TryAdd(texture.Name, texture.Source);
+                    textures.Add(texture.Name);
                     if (!converted.Parts[i].Opaque) keepAlpha[texture.Name] = true;
-                    if (lit is not null) textureJobs.TryAdd(lit.Name, lit.Source);
+                    if (lit is not null)
+                    {
+                        textureJobs.TryAdd(lit.Name, lit.Source);
+                        textures.Add(lit.Name);
+                    }
                     lines.Append(CultureInfo($"OBJ8 SOLID YES {ExportName}/{ObjectsFolder}/{ObjName(modelName, i)}"));
                     if (texture.Name != defaults[i].Texture?.Name || lit?.Name != defaults[i].Lit?.Name)
                     {
@@ -161,16 +167,28 @@ public static class FsltlImporter
                 }
 
                 var type = livery.IcaoType.Length > 0 ? livery.IcaoType : "ZZZZ";
-                entries.Append("OBJ8_AIRCRAFT ").Append(livery.Key).Append('\n')
+                var text = new StringBuilder().Append("OBJ8_AIRCRAFT ").Append(livery.Key).Append('\n')
                     .Append(lines)
                     .Append("LIVERY ").Append(type).Append(' ').Append(livery.IcaoAirline.Length > 0 ? livery.IcaoAirline : "-").Append(' ').Append(livery.Key).Append("\n\n");
-                catalogue.Add(new CatalogueEntry(livery.Title, livery.Key, livery.IcaoType, livery.IcaoAirline, modelName));
+                entries.Add((text.ToString(), new CatalogueEntry(livery.Title, livery.Key, livery.IcaoType, livery.IcaoAirline, modelName), textures));
             }
 
             options.Log($"FSLTL: {modelName}: {converted.Parts.Count} object(s), {converted.Parts.Sum(p => p.Triangles)} triangles, {model.Count()} liveries");
         }
 
-        var textures = ConvertTextures(textureJobs, keepAlpha, objects, options, problems);
+        var (textureCount, failed) = ConvertTextures(textureJobs, keepAlpha, objects, options, problems);
+        // A livery whose texture did not convert (a damaged file, a full disk) is left out rather than listed with a
+        // texture X-Plane cannot load; the package still works for every other livery.
+        var kept = entries.Where(e => !e.Textures.Any(failed.Contains)).ToList();
+        foreach (var dropped in entries.Except(kept))
+        {
+            problems.Add($"{dropped.Entry.Title}: left out, its texture could not be converted");
+            skipped++;
+        }
+
+        var catalogue = kept.Select(e => e.Entry).ToList();
+        var xsb = new StringBuilder($"EXPORT_NAME {ExportName}\n\n");
+        foreach (var e in kept) xsb.Append(e.Text);
         if (options.Filter is null)
         {
             // Objects a previous import wrote that this one did not (a model now has fewer parts), and their XPMP2 copies.
@@ -182,12 +200,12 @@ public static class FsltlImporter
             }
         }
 
-        File.WriteAllText(Path.Combine(options.Output, "xsb_aircraft.txt"), entries.ToString());
+        File.WriteAllText(Path.Combine(options.Output, "xsb_aircraft.txt"), xsb.ToString());
         File.WriteAllText(Path.Combine(options.Output, CatalogueFile), JsonSerializer.Serialize(catalogue, CatalogueJson.Options));
         File.WriteAllText(Path.Combine(options.Output, "README.txt"),
             "Converted by ClearanceLink from your own FSLTL install (https://fslivetrafficliveries.com/) for your own use.\n" +
             "The models and liveries belong to FSLTL and their original authors. Do not share or upload this folder.\n");
-        return new ImportResult(catalogue.Count, models, textures, skipped, problems);
+        return new ImportResult(catalogue.Count, models, textureCount, skipped, problems);
     }
 
     /// <summary>The ten FSLTL_Asobo_* aircraft are Microsoft's own MSFS models, not FSLTL's to give; they stay on Bluebell.</summary>
@@ -246,9 +264,11 @@ public static class FsltlImporter
 
     private static string CultureInfo(FormattableString s) => FormattableString.Invariant(s);
 
-    private static int ConvertTextures(ConcurrentDictionary<string, string> jobs, ConcurrentDictionary<string, bool> keepAlpha, string folder, ImportOptions options, List<string> problems)
+    /// <summary>Converts the textures not yet in the output; returns how many the output now has and the names that failed.</summary>
+    private static (int Textures, HashSet<string> Failed) ConvertTextures(ConcurrentDictionary<string, string> jobs, ConcurrentDictionary<string, bool> keepAlpha, string folder, ImportOptions options, List<string> problems)
     {
         var failures = new ConcurrentBag<string>();
+        var failedNames = new ConcurrentBag<string>();
         var done = 0;
         var todo = jobs.Where(j => options.Force || !File.Exists(Path.Combine(folder, j.Key))).ToList();
         options.Log($"FSLTL: converting {todo.Count} textures ({jobs.Count - todo.Count} already done), at most {options.MaxTextureSize} px");
@@ -261,16 +281,19 @@ public static class FsltlImporter
                 File.WriteAllBytes(target + ".tmp", bytes);
                 File.Move(target + ".tmp", target, overwrite: true);
             }
-            catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or IOException or ArgumentException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                failures.Add($"{job.Value}: {ex.Message}");
+                // Any one texture (a damaged file, a decoder failing on an odd block layout) must not abort the other
+                // thousands: Parallel.ForEach would rethrow and the whole conversion would be lost.
+                failures.Add($"{job.Value}: {ex.GetType().Name}: {ex.Message}");
+                failedNames.Add(job.Key);
             }
 
             var n = Interlocked.Increment(ref done);
             if (n % 200 == 0) options.Log($"FSLTL: {n}/{todo.Count} textures");
         });
         problems.AddRange(failures);
-        return jobs.Count - failures.Count;
+        return (jobs.Count - failures.Count, new HashSet<string>(failedNames, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>The catalogue written by an import, or empty if there is none, it is damaged or it is being written.</summary>

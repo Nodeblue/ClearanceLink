@@ -390,8 +390,10 @@ public sealed class SimConnectSession(
                 log($"#{connectionId} {name}({data}) -> {dataref} = {value}");
             }
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or TimeoutException or HttpRequestException)
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or TimeoutException or HttpRequestException or OperationCanceledException)
         {
+            // OperationCanceledException: HttpClient's 5 s timeout (X-Plane busy loading scenery) is a TaskCanceledException;
+            // it must not reach the connection loop, which would drop BATC.
             log($"#{connectionId} {name} failed: {ex.Message}");
         }
     }
@@ -623,9 +625,20 @@ public sealed class SimConnectSession(
         {
             // Building an airport from X-Plane's files can take a moment the first time; keep it off the caller.
             var started = _time.GetTimestamp();
-            var answer = await Task.Run(() => facilities is FacilitySourceChain chain
-                ? chain.Answer(request)
-                : facilities.Find(request) is { } found ? (found, facilities.Description) : null).ConfigureAwait(false);
+            (IReadOnlyList<Packet>, string)? answer;
+            try
+            {
+                answer = await Task.Run(() => facilities is FacilitySourceChain chain
+                    ? chain.Answer(request)
+                    : facilities.Find(request) is { } found ? (found, facilities.Description) : null).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Rule 2: an airport we cannot build (a damaged apt.dat or CIFP file) gets the "no such airport"
+                // exception below, so BATC carries on instead of waiting for an answer that never comes.
+                log($"#{connectionId} RequestFacilityData {icao} define {defineId}: failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+                answer = null;
+            }
             if (answer is { } reply)
             {
                 var ms = _time.GetElapsedTime(started).TotalMilliseconds;

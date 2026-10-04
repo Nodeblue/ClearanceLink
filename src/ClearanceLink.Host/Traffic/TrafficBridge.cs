@@ -58,6 +58,7 @@ public sealed class TrafficBridge(
     // the plugin never hears `del` for would stay drawn where it was.
     private readonly Dictionary<uint, int> _removed = [];
     private int _nextPluginId;
+    private bool _noModels;
 
     /// <summary>How many syncs a removed aircraft's `del` is sent on.</summary>
     public const int RemoveRepeats = 3;
@@ -85,16 +86,26 @@ public sealed class TrafficBridge(
             }
         }
 
-        var connected = plugin.Status is not null;
+        var status = plugin.Status;
+        var connected = status is not null;
+        // Without a single CSL model the plugin cannot draw anything: sending the aircraft would only make it fail
+        // each one (and log it in X-Plane) every ReAddInterval. They are sent as soon as it reports models.
+        var noModels = status is { Models: 0 };
+        if (noModels != _noModels)
+        {
+            _noModels = noModels;
+            if (noModels) log($"traffic: the X-Plane plugin has no CSL aircraft models; {aircraft.Count} BeyondATC aircraft are not drawn (install Bluebell or convert FSLTL)");
+        }
+
         // Plugin 0.4.0+ parks each model on its own wheels and takes the per-type pitch only as a fallback; older ones
         // get that pitch in every position.
-        var pluginFits = PluginFitsModels(plugin.Status);
+        var pluginFits = PluginFitsModels(status);
         foreach (var o in aircraft.Values)
         {
             var drawn = _drawn.GetOrAdd(o.ObjectId, _ => new Drawn(NextPluginId(), models.Match(o.Title)));
-            if (!connected)
+            if (!connected || noModels)
             {
-                drawn.LastAdd = null; // add again as soon as the plugin is back
+                drawn.LastAdd = null; // add again as soon as the plugin is back, or has models
                 continue;
             }
 

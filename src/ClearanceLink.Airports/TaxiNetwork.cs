@@ -434,6 +434,14 @@ public sealed class TaxiNetwork
         var hub = Parking.Count > 0
             ? frame.ToLocal(Parking.Average(p => p.Start.Latitude), Parking.Average(p => p.Start.Longitude))
             : (X: 0.0, Z: 0.0);
+        // One spot (or a few in a row) puts the average on a spot; the apron point then sits behind it instead.
+        if (Parking.Select(p => frame.ToLocal(p.Start.Latitude, p.Start.Longitude)).FirstOrDefault(s => Distance(s, hub) < SpurMeters * 2) is var near && Parking.Count > 0
+            && Distance(near, hub) < SpurMeters * 2)
+        {
+            var back = (Parking[0].Heading + 180) * Math.PI / 180;
+            hub = (near.X + (Math.Sin(back) * LeadInMeters * 3), near.Z + (Math.Cos(back) * LeadInMeters * 3));
+        }
+
         var hubPoint = Add(frame, hub, MsfsCodes.NormalPoint);
 
         foreach (var runway in airport.Runways)
@@ -479,8 +487,13 @@ public sealed class TaxiNetwork
         {
             var spot = frame.ToLocal(Parking[p].Start.Latitude, Parking[p].Start.Longitude);
             var toHub = Distance(spot, hub);
-            var along = toHub == 0 ? 0 : Math.Min(15, toHub / 2) / toHub;
-            var spur = Add(frame, (spot.X + ((hub.X - spot.X) * along), spot.Z + ((hub.Z - spot.Z) * along)), MsfsCodes.NormalPoint);
+            // A spot next to the apron point gets its point behind the parked aircraft, never on the apron point or
+            // on the spot (two points at one position crashed BATC 1.8.21).
+            var back = (Parking[p].Heading + 180) * Math.PI / 180;
+            var along = Math.Min(15, toHub / 2) / toHub;
+            var spur = toHub < SpurMeters * 2
+                ? Add(frame, (spot.X + (Math.Sin(back) * LeadInMeters), spot.Z + (Math.Cos(back) * LeadInMeters)), MsfsCodes.NormalPoint)
+                : Add(frame, (spot.X + ((hub.X - spot.X) * along), spot.Z + ((hub.Z - spot.Z) * along)), MsfsCodes.NormalPoint);
             Paths.Add(new TaxiPath(MsfsCodes.TaxiwayPath, spur, hubPoint, 0, 15));
             Paths.Add(new TaxiPath(MsfsCodes.ParkingPath, spur, p, 0, 10));
         }
