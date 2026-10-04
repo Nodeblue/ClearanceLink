@@ -78,6 +78,22 @@ public sealed class PanelTests
         Assert.Equal(expected, CduPages.Advice(state).Text);
     }
 
+    [AvaloniaFact]
+    public void Window_and_exe_icon_has_every_size_windows_asks_for()
+    {
+        using var icon = Avalonia.Platform.AssetLoader.Open(new Uri("avares://ClearanceLink/Assets/ClearanceLink.ico"));
+        using var reader = new BinaryReader(icon);
+        Assert.Equal(0, reader.ReadUInt16());
+        Assert.Equal(1, reader.ReadUInt16()); // icon, not cursor
+        var sizes = Enumerable.Range(0, reader.ReadUInt16()).Select(_ =>
+        {
+            var entry = reader.ReadBytes(16);
+            return entry[0] == 0 ? 256 : entry[0];
+        }).ToList();
+        Assert.Subset(sizes.ToHashSet(), new HashSet<int> { 16, 24, 32, 48, 256 });
+        Assert.NotNull(PanelWindow.AppIcon());
+    }
+
     [Fact]
     public void Setup_offers_to_remove_old_files_only_in_automatic_mode()
     {

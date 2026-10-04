@@ -15,6 +15,8 @@
     <!-- WinExe: double-clicking opens only the window; commands attach to the prompt's console (Panel/ConsoleAttach). -->
     <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Explorer and taskbar icon; the window uses the same file (PanelWindow.AppIcon). Rebuild with scripts/make-icon.py. -->
+    <ApplicationIcon>Assets\ClearanceLink.ico</ApplicationIcon>
     <AssemblyName>ClearanceLink</AssemblyName>
     <RootNamespace>ClearanceLink.Host</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
@@ -30,6 +32,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Panel\Fonts\*.ttf" />
+    <AvaloniaResource Include="Assets\ClearanceLink.ico" />
     <None Include="Panel\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="B612-OFL.txt" />
   </ItemGroup>
 
