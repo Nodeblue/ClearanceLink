@@ -3,6 +3,8 @@ name: Screenshots
 # Renders every page of the ClearanceLink window with the headless panel test and commits the PNGs to
 # docs/images, so the pictures in the help pages always match the code. Runs when the window or this
 # workflow changes in a pull request, or by hand (Actions > Screenshots > Run workflow) on any branch.
+# GitHub doesn't start CI for a commit this workflow pushes, so push another commit after it to get checks on
+# the branch head.
 on:
   pull_request:
     paths:
