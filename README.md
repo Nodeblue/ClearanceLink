@@ -22,5 +22,5 @@ You need Windows 10/11, X-Plane 12.1.4+ and BeyondATC. For traffic, add
 [docs/architecture.md](docs/architecture.md). Coding agents: [AGENTS.md](AGENTS.md).
 
 ## Licence
-MIT, see [LICENSE](LICENSE). Test data under other terms ([X-Plane Scenery Gateway excerpts](tests/ClearanceLink.Airports.Tests/fixtures/README.md),
+GPLv3, see [LICENSE](LICENSE). Test data under other terms ([X-Plane Scenery Gateway excerpts](tests/ClearanceLink.Airports.Tests/fixtures/README.md),
 [MSFS recordings](recordings/samples/README.md)) is not part of the release.
