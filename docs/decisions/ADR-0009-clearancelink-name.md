@@ -14,7 +14,7 @@ disagree.
   `com.nodeblue.clearancelink`, version 0.5.0), environment variables (`CLEARANCELINK_*`) and converted FSLTL models
   (`Custom Data\CSL\ClearanceLink-FSLTL`).
 - Unchanged: the stand-in `FlightSimulator2024.exe` (BeyondATC looks for that name), the plugin's UDP protocol and
-  ports, and the GitHub repository address until Ben renames the repository (GitHub then redirects the old one).
+  ports, and the GitHub repository address, which Ben renamed to Nodeblue/ClearanceLink the same day (GitHub redirects the old one).
 - An upgrade keeps everything. The old names are listed once in `OldNames`:
   - `%LOCALAPPDATA%\XPConnect` (settings, logs) is moved to `%LOCALAPPDATA%\ClearanceLink` on first start; if an old
     copy still has its log open, only settings.json is copied.

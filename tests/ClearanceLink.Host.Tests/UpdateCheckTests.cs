@@ -8,7 +8,7 @@ public sealed class UpdateCheckTests
 {
     private const string Release = """
         {"tag_name":"v0.6.0","name":"ClearanceLink v0.6.0","draft":false,"prerelease":false,
-         "html_url":"https://github.com/Nodeblue/XPConnect/releases/tag/v0.6.0"}
+         "html_url":"https://github.com/Nodeblue/ClearanceLink/releases/tag/v0.6.0"}
         """;
 
     [Theory]
@@ -29,7 +29,7 @@ public sealed class UpdateCheckTests
     public void A_newer_release_is_offered_with_its_page()
     {
         var found = UpdateCheck.FromJson(Release, "0.5.0");
-        Assert.Equal(new UpdateInfo("0.6.0", "https://github.com/Nodeblue/XPConnect/releases/tag/v0.6.0"), found);
+        Assert.Equal(new UpdateInfo("0.6.0", "https://github.com/Nodeblue/ClearanceLink/releases/tag/v0.6.0"), found);
         Assert.Null(UpdateCheck.FromJson(Release, "0.6.0"));
     }
 
