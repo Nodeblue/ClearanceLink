@@ -245,6 +245,25 @@ public sealed class FsltlTests
     }
 
     [Fact]
+    public void A_livery_whose_texture_cannot_be_converted_is_left_out_and_the_rest_imported()
+    {
+        using var package = new FakePackage();
+        var output = Path.Combine(package.Root, "out");
+        // The British Airways livery's own texture is damaged (not a DDS file at all).
+        File.WriteAllBytes(Path.Combine(package.Root, "SimObjects", "Airplanes", "FSLTL_A20N_BAW Speedbird", "TEXTURE.BAW", "LIVERY_T.PNG.DDS"), new byte[64]);
+
+        var result = FsltlImporter.Import(new ImportOptions { PackageRoot = package.Root, Output = output, MaxTextureSize = 4 });
+
+        Assert.Equal(1, result.Liveries);
+        Assert.Equal(1, result.Skipped);
+        Assert.Contains(result.Problems, p => p.Contains("FSLTL_A20N_BAW-British Airways", StringComparison.Ordinal) && p.Contains("left out", StringComparison.Ordinal));
+        var xsb = File.ReadAllText(Path.Combine(output, "xsb_aircraft.txt"));
+        Assert.DoesNotContain("FSLTL_A20N_BAW_Speedbird", xsb);
+        Assert.Contains("LIVERY A20N - FSLTL_A20N\n", xsb);
+        Assert.Single(FsltlImporter.LoadCatalogue(output));
+    }
+
+    [Fact]
     public void A_damaged_catalogue_reads_as_empty()
     {
         var folder = Path.Combine(Path.GetTempPath(), $"cl-catalogue-{Guid.NewGuid():N}");

@@ -283,6 +283,42 @@ public sealed class PanelTests
         window.Close();
     }
 
+    [Fact]
+    public void Status_says_no_models_when_the_plugin_runs_without_a_csl_package()
+    {
+        // BATC flies its traffic and the plugin runs, but there is nothing to draw it with: say so, and the key opens
+        // the aircraft models page. "0 AIRCRAFT" in green would read as all well.
+        var noModels = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 0, PluginModels = 0 };
+        var row = CduPages.Build(PanelPage.Status, noModels).Rows[4];
+        Assert.Equal("NO MODELS", row.Right.Text);
+        Assert.Equal(CduColor.Amber, row.Right.Color);
+        Assert.Equal(CduKey.GoModels, row.KeyRight);
+
+        var drawing = noModels with { TrafficAircraft = 12, PluginModels = 2027 };
+        Assert.Equal("12 AIRCRAFT", CduPages.Build(PanelPage.Status, drawing).Rows[4].Right.Text);
+        Assert.Equal(CduKey.None, CduPages.Build(PanelPage.Status, drawing).Rows[4].KeyRight);
+    }
+
+    [Fact]
+    public void Models_page_keeps_the_last_conversion_result_on_its_bottom_line()
+    {
+        var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3112 };
+        Assert.Equal("3112 LIVERIES CONVERTED", CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "3112 LIVERIES CONVERTED" }).Scratchpad.Text);
+        var failed = CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "CONVERT FAILED: SEE LIVE LOG" }).Scratchpad;
+        Assert.Equal(CduColor.Amber, failed.Color);
+        Assert.Equal("FLASH", CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "3112 LIVERIES CONVERTED" }, "FLASH").Scratchpad.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task No_models_key_opens_the_aircraft_models_page()
+    {
+        var window = new PanelWindow(() => Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 0, PluginModels = 0 });
+        window.Show();
+        await window.PressAsync(4, right: true);
+        Assert.Equal(PanelPage.StartModels, window.Page);
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void Panel_renders_every_page()
     {

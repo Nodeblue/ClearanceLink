@@ -183,6 +183,9 @@ public sealed class PanelWindow : Window
             case CduKey.ShowGettingStarted:
                 ShowPage(CduPages.StartPages[0]);
                 return;
+            case CduKey.GoModels:
+                ShowPage(PanelPage.StartModels);
+                return;
             case CduKey.Next:
             case CduKey.Back:
                 var at = CduPages.StartPages.IndexOf(Page);
