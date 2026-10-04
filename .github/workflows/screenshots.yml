@@ -1,0 +1,43 @@
+name: Screenshots
+
+# Renders every page of the ClearanceLink window with the headless panel test and commits the PNGs to
+# docs/images, so the pictures in the help pages always match the code. Runs when the window or this
+# workflow changes in a pull request, or by hand (Actions > Screenshots > Run workflow) on any branch.
+on:
+  pull_request:
+    paths:
+      - 'src/ClearanceLink.Host/Panel/**'
+      - 'tests/ClearanceLink.Host.Tests/PanelTests.cs'
+      - '.github/workflows/screenshots.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    # Pushing back needs the branch to be in this repository, not a fork.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Render every page
+        run: dotnet test tests/ClearanceLink.Host.Tests --nologo --filter "FullyQualifiedName~Panel_renders_every_page"
+        env:
+          CLEARANCELINK_SCREENSHOTS: docs/images
+      - name: Commit the pictures when they changed
+        run: |
+          git add docs/images
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update window screenshots in docs/images"
+          git push
