@@ -44,7 +44,10 @@ public sealed class StatusServer(StatusBoard board, int port, Action<string> log
             {
                 context = await _listener.GetContextAsync().ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or InvalidOperationException)
+            // Stopped before or while asking for the next request. On Windows a listener stopped just before
+            // GetContextAsync throws ArgumentException ("The handle is invalid").
+            catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or InvalidOperationException
+                                       || (ex is ArgumentException && !_listener.IsListening))
             {
                 return;
             }

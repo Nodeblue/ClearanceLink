@@ -56,6 +56,11 @@ jobs:
           $names = [IO.Compression.ZipFile]::OpenRead($zip.FullName).Entries.FullName | ForEach-Object { $_.Replace('\', '/') }
           if (-not ($names -like "X-Plane plugin/$env:APP/64/win.xpl")) { throw 'X-Plane plugin missing from the zip' }
           if (-not ($names -contains "$($env:APP).exe")) { throw "$($env:APP).exe missing from the zip" }
+          $required = 'LICENSE.txt', 'LICENSE-EXCEPTION.txt', 'THIRD-PARTY-NOTICES.txt', 'B612-OFL.txt', 'licenses/dotnet-THIRD-PARTY-NOTICES.txt',
+            'licenses/SkiaSharp-THIRD-PARTY-NOTICES.txt', 'licenses/CommunityToolkit-ThirdPartyNotices.txt',
+            "X-Plane plugin/$env:APP/XPMP2-LICENSE.txt", "X-Plane plugin/$env:APP/XPLM-SDK-LICENSE.txt"
+          $absent = $required | Where-Object { $names -notcontains $_ }
+          if ($absent) { throw "licence files missing from the zip: $($absent -join ', ')" }
           # Test data stays in the repository: recordings hold MSFS data, the test airports are GPL, and converted
           # FSLTL models may never be shipped.
           $banned = $names | Where-Object { $_ -match '\.jsonl$|(^|/)apt\.dat$|\.dds$|(^|/)xsb_aircraft\.txt$|(^|/)CSL/' }

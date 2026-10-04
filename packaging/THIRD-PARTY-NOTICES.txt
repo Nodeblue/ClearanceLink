@@ -1,0 +1,76 @@
+ClearanceLink third-party notices
+=================================
+
+ClearanceLink is free software under the GNU General Public License version 3 (LICENSE.txt). It includes the
+parts below, each under its own licence. All of them allow this use; their notices follow.
+
+ClearanceLink.exe and FlightSimulator2024.exe
+---------------------------------------------
+- .NET runtime, (c) .NET Foundation and Contributors. MIT licence. Its own third-party notices:
+  licenses/dotnet-THIRD-PARTY-NOTICES.txt
+- Avalonia (Avalonia, Avalonia.Desktop, Avalonia.Win32, Avalonia.Skia, Avalonia.Themes.Simple,
+  Avalonia.FreeDesktop, Avalonia.Native, Avalonia.X11, Avalonia.Remote.Protocol, Avalonia.BuildServices),
+  Copyright 2013-2026 (c) The AvaloniaUI Project. MIT licence.
+- ANGLE (in Avalonia.Angle.Windows.Natives), Copyright 2018 The ANGLE Project Authors. BSD 3-clause licence,
+  below.
+- SkiaSharp and HarfBuzzSharp, (c) Microsoft Corporation. MIT licence. Skia, HarfBuzz and the libraries they
+  include: licenses/SkiaSharp-THIRD-PARTY-NOTICES.txt
+- CommunityToolkit.HighPerformance, (c) .NET Foundation and Contributors. MIT licence. Its own third-party
+  notices: licenses/CommunityToolkit-ThirdPartyNotices.txt
+- MicroCom.Runtime, Copyright 2021 (c) Nikita Tsukanov. MIT licence.
+- Tmds.DBus.Protocol, Copyright Tom Deseyn. MIT licence.
+- YamlDotNet, Copyright (c) Antoine Aubry and contributors. MIT licence.
+- BCnEncoder.Net, offered under the MIT licence or the Unlicense; used here under the Unlicense.
+- B612 Mono font, Copyright 2012 The B612 Project Authors. SIL Open Font License 1.1: B612-OFL.txt
+
+X-Plane plugin (X-Plane plugin/ClearanceLink)
+---------------------------------------------
+- XPMP2 by Birger Hoppe, with a small ClearanceLink change for CSL packages split over several folders
+  (plugin/cmake/xpmp2-split-packages.patch in the source). MIT licence: XPMP2-LICENSE.txt in the plugin folder.
+  The plugin's Resources folder comes from XPMP2.
+- X-Plane SDK, Copyright (c) 2008, Sandy Barbour and Ben Supnik. Licence: XPLM-SDK-LICENSE.txt in the plugin
+  folder.
+
+
+MIT licence
+-----------
+The parts above marked "MIT licence" are licensed as follows, with the copyright line given for each:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+ANGLE (BSD 3-clause licence)
+----------------------------
+Copyright 2018 The ANGLE Project Authors.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+following conditions are met:
+
+    Redistributions of source code must retain the above copyright notice, this list of conditions and the
+    following disclaimer.
+
+    Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+    following disclaimer in the documentation and/or other materials provided with the distribution.
+
+    Neither the name of TransGaming Inc., Google Inc., 3DLabs Inc. Ltd., nor the names of their contributors may
+    be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
