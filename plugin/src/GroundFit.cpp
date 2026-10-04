@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <sstream>
 
-namespace xpc {
+namespace clink {
 namespace {
 
 constexpr double Pi = 3.14159265358979323846;
@@ -503,4 +503,4 @@ std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line, c
     return files;
 }
 
-}  // namespace xpc
+}  // namespace clink

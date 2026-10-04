@@ -1,10 +1,10 @@
 name: Release
 
-# Makes a GitHub release with the Windows zip (XPConnect.exe, stub, X-Plane plugin, docs).
+# Makes a GitHub release with the Windows zip (ClearanceLink.exe, stub, X-Plane plugin, docs).
 #
 # To release: set <Version> in Directory.Build.props (merged into main), then Actions > Release > Run workflow on
 # main. It builds and tests, tags v<Version> and creates a DRAFT release with the zip. Check it on the Releases page
-# and press Publish: only then do users (and XPConnect's update check) see it. A version with a dash
+# and press Publish: only then do users (and ClearanceLink's update check) see it. A version with a dash
 # (0.6.0-beta.1) becomes a pre-release, which the update check never offers. See docs/releasing.md.
 #
 # Pushing a tag v<Version> yourself does the same. Without a matching version it stops, so a zip never carries
@@ -19,7 +19,7 @@ permissions:
 
 # The product name in file names, the plugin folder and the release text. Change it here when the app is renamed.
 env:
-  APP: XPConnect
+  APP: ClearanceLink
 
 jobs:
   zip:
@@ -82,7 +82,7 @@ jobs:
 
           **New here?** Download the zip below and follow [Install and update](https://github.com/${{ github.repository }}/blob/$tag/docs/install.md). Windows may warn that the app is from an unknown publisher; the guide shows what to click.
 
-          **Updating?** Close $env:APP, unzip over your old $env:APP folder, then open the SETUP page: if it says the traffic add-on has a newer version, close X-Plane and press UPDATE.
+          **Updating?** Close $env:APP, unzip over your old $env:APP folder, then open the SETUP page: if the X-PLANE PLUGIN line says NEWER VERSION, close X-Plane and press UPDATE.
 
           SHA-256 of the zip is in the .sha256.txt file.
           "@

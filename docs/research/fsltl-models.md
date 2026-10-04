@@ -1,10 +1,10 @@
-# Using FSLTL models for XPConnect's X-Plane traffic
+# Using FSLTL models for ClearanceLink's X-Plane traffic
 
 Investigation, 2026-10-03. Read-only on `...\Community\fsltl-traffic-base` (FSLTL Traffic Base 1.5.0, MSFS 2024 Community folder). Nothing was copied out of it; one mesh was decoded in memory to confirm the vertex format.
 
 ## Recommendation
 
-Yes, it is technically feasible, and it is the best way to get airline-accurate traffic. Build it as an **opt-in local importer**: an `xpconnect fsltl import` step (and a Setup-page button) that reads the user's own FSLTL install and writes an X-Plane CSL package into their own X-Plane folder. Never ship, host or upload converted FSLTL content. Keep Bluebell as the fallback for anything not imported, and for users without MSFS/FSLTL.
+Yes, it is technically feasible, and it is the best way to get airline-accurate traffic. Build it as an **opt-in local importer**: an `clearancelink fsltl import` step (and a Setup-page button) that reads the user's own FSLTL install and writes an X-Plane CSL package into their own X-Plane folder. Never ship, host or upload converted FSLTL content. Keep Bluebell as the fallback for anything not imported, and for users without MSFS/FSLTL.
 
 Before publishing a release that includes the importer, ask the FSLTL team for their blessing. Their terms forbid redistribution but say nothing about a user converting their own copy, and the models belong to their original authors (FAIB, FSPX, TFS and others).
 
@@ -12,10 +12,10 @@ Before publishing a release that includes the importer, ask the FSLTL team for t
 
 Re-checked against XPMP2 v3.7.0's source (`src/CSLModels.cpp`) and our plugin/host code. Corrections to the first pass:
 
-1. **The 100% name match is partly circular.** `mapping/liveries.json` (the model list XPConnect offers BATC) was captured from this same MSFS install, so of course it matches. For Ben it holds; for another user with a different FSLTL version it may not. Fix: the importer writes its own catalogue, and XPConnect should offer BATC the titles the user actually imported (plus Bluebell-backed ones), not Ben's list.
+1. **The 100% name match is partly circular.** `mapping/liveries.json` (the model list ClearanceLink offers BATC) was captured from this same MSFS install, so of course it matches. For Ben it holds; for another user with a different FSLTL version it may not. Fix: the importer writes its own catalogue, and ClearanceLink should offer BATC the titles the user actually imported (plus Bluebell-backed ones), not Ben's list.
 2. **On-demand import does not fit XPMP2.** XPMP2 scans CSL packages when they are loaded, so converting a livery the first time BATC asks for it would not show until X-Plane reloads plugins. Import up front (all, or a filter such as types/airlines) instead.
 3. **One texture per OBJ.** An X-Plane `.obj` has exactly one texture, but FSLTL airliners have two materials (livery atlas + a separate window/porthole material). XPMP2 allows several `OBJ8` lines per CSL entry, so each material becomes its own `.obj` drawn together.
-4. **Livery keys must be one word.** XPMP2 tokenises `xsb_aircraft.txt` on whitespace, so the exact BATC title cannot be the `LIVERY` key. Use the FSLTL folder name (plus the `[FLTSIM.n]` index when a folder has several) and look it up from the title in XPConnect. Today XPConnect sends no livery to the plugin at all (`TrafficBridge.cs:96` passes `null`).
+4. **Livery keys must be one word.** XPMP2 tokenises `xsb_aircraft.txt` on whitespace, so the exact BATC title cannot be the `LIVERY` key. Use the FSLTL folder name (plus the `[FLTSIM.n]` index when a folder has several) and look it up from the title in ClearanceLink. Today ClearanceLink sends no livery to the plugin at all (`TrafficBridge.cs:96` passes `null`).
 5. **Per-livery textures are cheap in XPMP2.** `OBJ8 SOLID YES model.obj livery.dds` makes XPMP2 write a small `.xpmp2.obj` copy with the texture swapped, so one converted model serves all its liveries; only textures are per livery.
 6. **Texture conversion is cheaper than first stated.** FSLTL DDS files already contain mipmaps, so a 4096 DXT1/DXT5 texture becomes 2048 or 1024 by dropping the top mip levels: no decode, no quality loss, near-instant. Only BC7 (about 36% of livery textures) needs decoding and re-encoding, unless X-Plane 12 accepts BC7 (not documented; to be tested).
 7. **LOD makes the frame cost lower than estimated.** FSLTL ships LOD0 and LOD3 meshes for most airliners; both can go in one `.obj` with `ATTR_LOD`, so distant traffic draws the ~1-2k triangle version.
@@ -64,7 +64,7 @@ Measured on Ben's PC:
 
 ## What building it would take
 
-A C# importer in `XPConnect.Host` (fits the existing stack, unit-testable on Linux with synthetic glTF fixtures, no FSLTL files in the repo):
+A C# importer in `ClearanceLink.Host` (fits the existing stack, unit-testable on Linux with synthetic glTF fixtures, no FSLTL files in the repo):
 1. **Find FSLTL:** read MSFS's `UserCfg.opt` `InstalledPackagesPath` (2020 and 2024), look for `fsltl-traffic-base`. Let the user browse if not found.
 2. **Parse liveries:** each `aircraft.cfg` `[FLTSIM.n]` gives title, ICAO type, airline, model folder and texture folder, following `base_container` and `texture.CFG` fallbacks.
 3. **Convert each base model once** (about 100 airliner models, not 3,211): glTF + Asobo vertex packing to OBJ8, flatten node transforms, axis swap, map animations to XPMP2 datarefs, pick a lower LOD when LOD0 is too heavy.

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace xpc {
+namespace clink {
 namespace {
 
 constexpr double Pi = 3.14159265358979323846;
@@ -20,7 +20,7 @@ constexpr double MaxBlendMeters = 1000;
 // (YBBN, 2026-10-03). Speeds are measured over at least a tenth of a second (two updates can land in one frame).
 constexpr double JumpMarginMps = 15;
 constexpr float MinSpeedInterval = 0.1f;
-// Updates further apart than this are XPConnect's keep-alives for an aircraft that is not moving: no speed.
+// Updates further apart than this are ClearanceLink's keep-alives for an aircraft that is not moving: no speed.
 constexpr float MaxMovingInterval = 1.0f;
 // Moves on for at most this long after the updates stop.
 constexpr float MaxAheadSeconds = 1.0f;
@@ -112,7 +112,7 @@ void Track::Update(const Pos& pos, float now) {
         latPerSecond_ = lonPerSecond_ = 0;
     } else {
         from_ = Drawn(now);  // blend on from where it is drawn now, so a late or early update never jumps
-        // Two updates read in one frame (after an X-Plane stutter) are still about XPConnect's 0.1 s apart.
+        // Two updates read in one frame (after an X-Plane stutter) are still about ClearanceLink's 0.1 s apart.
         const float interval = std::max(since, MinSpeedInterval);
         fromTime_ = now - interval;
         // Not at gsKt: BATC's speed for a stopped aircraft is not always 0, which slid parked aircraft forward and
@@ -136,4 +136,4 @@ Pos Track::Drawn(float now) const {
     return p;
 }
 
-}  // namespace xpc
+}  // namespace clink

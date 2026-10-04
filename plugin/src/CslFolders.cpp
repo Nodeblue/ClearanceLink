@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace xpc {
+namespace clink {
 namespace {
 
 std::string Trim(const std::string& text) {
@@ -31,7 +31,7 @@ std::string Native(std::string path) {
 
 const std::vector<std::string>& KnownCslFolders() {
     static const std::vector<std::string> folders = {
-        "Resources/plugins/XPConnect/Resources/CSL",
+        "Resources/plugins/ClearanceLink/Resources/CSL",
         "Custom Data/CSL",
         "Resources/plugins/LiveTraffic/Resources/CSL",
         "Resources/plugins/xPilot/Resources/CSL",
@@ -59,4 +59,4 @@ std::vector<std::string> CslFolders(const std::string& xplaneRoot,
     return found;
 }
 
-}  // namespace xpc
+}  // namespace clink

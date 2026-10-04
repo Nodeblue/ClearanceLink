@@ -49,7 +49,7 @@ YTWB with define 444, as a run-length sequence of `type x count`:
 - BIAS_X / BIAS_Z of taxi points and parking are metres east / north of the airport reference point (the AIRPORT latitude/longitude). Verified: with this reading MSFS's YBBN parking spots lie a median 15 m from X-Plane's ramp starts (other readings gave over 500 m).
 - Fields that do not apply are left as uninitialised memory by MSFS (for example RUNWAY_NUMBER on taxiway paths). We send zeros.
 
-## Values read off MSFS's answers (used by `src/XPConnect.Airports`)
+## Values read off MSFS's answers (used by `src/ClearanceLink.Airports`)
 | Field | Values seen |
 |---|---|
 | RUNWAY | LATITUDE/LONGITUDE is the runway centre. The primary end is the higher number (19 of 01/19, 29 of 11/29) and HEADING is its true heading. DESIGNATOR 0 none, 1 L, 2 R, 3 C. SURFACE 4 asphalt. PATTERN_ALTITUDE 304.8 (1,000 ft). |
@@ -70,7 +70,7 @@ YTWB with define 444, as a run-length sequence of `type x count`:
 
 ## What X-Plane has for the same airports (Ben's install, X-Plane 12.4.3)
 
-Fixtures: `tests/XPConnect.Airports.Tests/fixtures/YBBN.apt.dat` and `YTWB.apt.dat`, cut from `Global Scenery/Global Airports/Earth nav data/apt.dat` (Scenery Gateway data, 363 MB in full).
+Fixtures: `tests/ClearanceLink.Airports.Tests/fixtures/YBBN.apt.dat` and `YTWB.apt.dat`, cut from `Global Scenery/Global Airports/Earth nav data/apt.dat` (Scenery Gateway data, 363 MB in full).
 
 | Airport (source) | Runways (100) | Ramp starts (1300) | Taxi nodes (1201) | Taxi edges (1202) | Frequencies (105x) |
 |---|---|---|---|---|---|
@@ -79,7 +79,7 @@ Fixtures: `tests/XPConnect.Airports.Tests/fixtures/YBBN.apt.dat` and `YTWB.apt.d
 | YTWB (Global Airports) | 2 (+1 helipad) | 72 | **0** | **0** | 2 |
 
 Consequences for the generator:
-1. **Scenery priority.** An airport can be defined in several scenery packs; X-Plane uses the first one in `Custom Scenery/scenery_packs.ini` (here `Orbx_A_YBBNv2_Brisbane` comes before `*GLOBAL_AIRPORTS*`). XPConnect must read the same one, or gates and taxiways will not match what the pilot sees. Payware apt.dat files must not be committed.
+1. **Scenery priority.** An airport can be defined in several scenery packs; X-Plane uses the first one in `Custom Scenery/scenery_packs.ini` (here `Orbx_A_YBBNv2_Brisbane` comes before `*GLOBAL_AIRPORTS*`). ClearanceLink must read the same one, or gates and taxiways will not match what the pilot sees. Payware apt.dat files must not be committed.
 2. **Airports with no taxi network.** YTWB has no 1200/1201/1202 rows at all, only pavement and ramp starts. MSFS gave BATC 215 taxi points and 270 paths there. A fallback is needed (at least: connect each ramp start to the runways), otherwise BATC has nothing to route on.
 3. **MSFS's graph is denser.** Its taxi points include parking connectors and hold-short points; X-Plane's 1202 edges carry the taxiway name and runway "hot zone" flags instead. Parking radius and type have to be derived from the 1300 row's aircraft classes and the 1301 width code.
 4. **Procedures.** CIFP files are in `Custom Data/CIFP/<ICAO>.dat` when a navdata update is installed (here Navigraph AIRAC 2609), otherwise `Resources/default data/CIFP/`. They are licensed data: do not commit them; write test fixtures by hand.

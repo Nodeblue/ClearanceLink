@@ -3,17 +3,17 @@
 Date: 2026-10-02. Status: accepted.
 
 ## Context
-Until now, double-clicking XPConnect.exe opened a console that scrolled log lines, and batch files switched
+Until now, double-clicking ClearanceLink.exe opened a console that scrolled log lines, and batch files switched
 BeyondATC's set-up. Ben wants something a non-technical simmer finds friendly and appealing: an FMS/CDU-style
 screen (24 columns, line select keys, cyan labels, white data) that works with mouse and keys. The web status page
 stays as the detailed view. He picked an app window over a console TUI (2026-10-02): a console's look depends on
 each user's font and settings, it breaks on resize, and Quick Edit mode can freeze it.
 
 ## Decision
-- **Avalonia 11.3** draws the window, in the same XPConnect.exe (`src/XPConnect.Host/Panel`). Double-clicking opens
+- **Avalonia 11.3** draws the window, in the same ClearanceLink.exe (`src/ClearanceLink.Host/Panel`). Double-clicking opens
   the window, which runs `serve` in the background until it is closed. Commands still work from a command prompt:
   the exe is a Windows GUI program that attaches to the prompt's console when it has arguments
-  (`Panel/ConsoleAttach.cs`). `xpconnect start` keeps the old console flow.
+  (`Panel/ConsoleAttach.cs`). `clearancelink start` keeps the old console flow.
 - The pages are built by `CduPages.Build` from a `PanelState` record, with no UI types, so the content is tested
   directly. The window only draws them and maps keys to actions.
 - The screen font is B612 Mono, made for Airbus cockpit displays, under the SIL Open Font License (embedded,
@@ -22,7 +22,7 @@ each user's font and settings, it breaks on resize, and Quick Edit mode can free
   messages (`CduPage.Message`, plain sentences in one size) above the rows that have keys, so advice never looks
   selectable. A new user learns the line select keys while setting up. Done is a flag in settings.json.
 - Tests run the real window headless (Avalonia.Headless + Skia) and can save each page as a PNG
-  (`XPCONNECT_SCREENSHOTS=<dir> dotnet test`), so agents can see what they changed.
+  (`CLEARANCELINK_SCREENSHOTS=<dir> dotnet test`), so agents can see what they changed.
 
 ## Alternatives
 - **WPF or WinForms.** Windows-only, so neither builds nor tests in the Linux cloud sessions and CI where most of

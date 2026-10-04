@@ -1,9 +1,9 @@
-// Smooth movement between XPConnect's position updates. X-Plane-independent so it can be tested.
+// Smooth movement between ClearanceLink's position updates. X-Plane-independent so it can be tested.
 #pragma once
 
 #include "Protocol.h"
 
-namespace xpc {
+namespace clink {
 
 // Blends two positions: `f` 0 gives `a`, 1 gives `b`. Heading takes the short way round; switches (on ground, lights)
 // and the other values come from `b`.
@@ -36,7 +36,7 @@ private:
 // Heading change from `from` to `to` in degrees, the short way round (-180..180).
 float HeadingDelta(float from, float to);
 
-// One aircraft's updates from XPConnect and where to draw it between them. It is drawn one update interval behind,
+// One aircraft's updates from ClearanceLink and where to draw it between them. It is drawn one update interval behind,
 // blending from where it was drawn when the latest update came to that update, so turns, climbs and pitch changes are
 // smooth. Once that runs out (updates stopped), it moves on at the speed measured between the last two updates
 // received, for at most a second. A move far faster than its speed (BATC placing an aircraft) is drawn at once.
@@ -54,4 +54,4 @@ private:
     bool has_ = false;
 };
 
-}  // namespace xpc
+}  // namespace clink

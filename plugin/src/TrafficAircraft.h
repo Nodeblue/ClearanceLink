@@ -1,4 +1,4 @@
-// One BATC traffic aircraft, drawn by XPMP2 from the latest state XPConnect sent.
+// One BATC traffic aircraft, drawn by XPMP2 from the latest state ClearanceLink sent.
 #pragma once
 
 #include "GroundFit.h"
@@ -13,7 +13,7 @@
 #include <optional>
 #include <string>
 
-namespace xpc {
+namespace clink {
 
 struct ModelFit;
 
@@ -32,12 +32,12 @@ public:
     ~TrafficAircraft() override;
 
     void Apply(const Pos& pos, float now);
-    // When XPConnect last sent this aircraft's add or position (X-Plane elapsed seconds).
+    // When ClearanceLink last sent this aircraft's add or position (X-Plane elapsed seconds).
     void Heard(float now) { lastHeard_ = now; }
     float LastHeard() const { return lastHeard_; }
     void ChangeTo(const Add& add);
-    // XPConnect's per-type height (feet) and, from XPConnect versions that send it, parked pitch: used for models whose
-    // wheels could not be read. Without a pitch, XPConnect puts its per-type pitch in each `pos` itself.
+    // ClearanceLink's per-type height (feet) and, from ClearanceLink versions that send it, parked pitch: used for models whose
+    // wheels could not be read. Without a pitch, ClearanceLink puts its per-type pitch in each `pos` itself.
     void SetGroundTrim(float feet, std::optional<float> pitch) {
         groundOffsetFt_ = feet;
         groundPitch_ = pitch;
@@ -67,7 +67,7 @@ private:
     // airborne (only the reported ground height needs it). Returns false when there is no terrain under it.
     bool ProbeGround(bool onGround, float now);
 
-    Track track_;  // XPConnect's updates, blended between (Motion.h)
+    Track track_;  // ClearanceLink's updates, blended between (Motion.h)
     float lastHeard_ = 0;
     XPLMProbeRef probe_ = nullptr;
     std::optional<double> groundFt_;
@@ -87,4 +87,4 @@ private:
     bool hasLast_ = false;
 };
 
-}  // namespace xpc
+}  // namespace clink

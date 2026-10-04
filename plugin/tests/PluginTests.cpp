@@ -27,9 +27,9 @@ void Check(bool ok, const char* what, int line) {
 #define CHECK(x) Check((x), #x, __LINE__)
 
 void ParsesPos() {
-    auto m = xpc::Parse("pos 7 -27.384 153.117 23.5 13.0 2.5 -1.25 15.5 1 1 0.25 0 0.3 19");
+    auto m = clink::Parse("pos 7 -27.384 153.117 23.5 13.0 2.5 -1.25 15.5 1 1 0.25 0 0.3 19");
     CHECK(m.has_value());
-    auto pos = std::get<xpc::Pos>(*m);
+    auto pos = std::get<clink::Pos>(*m);
     CHECK(pos.id == 7);
     CHECK(std::fabs(pos.lat + 27.384) < 1e-9);
     CHECK(std::fabs(pos.lon - 153.117) < 1e-9);
@@ -37,59 +37,59 @@ void ParsesPos() {
     CHECK(pos.bank == -1.25f);
     CHECK(pos.onGround);
     CHECK(pos.flaps == 0.25f);
-    CHECK(pos.lights == (xpc::LightNav | xpc::LightBeacon | xpc::LightTaxi));
+    CHECK(pos.lights == (clink::LightNav | clink::LightBeacon | clink::LightTaxi));
 }
 
 void ParsesOffset() {
-    auto offset = std::get<xpc::Offset>(*xpc::Parse("offset 9 -1.5"));
+    auto offset = std::get<clink::Offset>(*clink::Parse("offset 9 -1.5"));
     CHECK(offset.id == 9);
     CHECK(offset.groundFt == -1.5f);
     std::string error;
-    CHECK(!xpc::Parse("offset 9 900", &error) && error.find("bad offset") != std::string::npos);
+    CHECK(!clink::Parse("offset 9 900", &error) && error.find("bad offset") != std::string::npos);
     CHECK(!offset.groundPitch);
-    auto trimmed = std::get<xpc::Offset>(*xpc::Parse("offset 9 0.00 -1.50"));
+    auto trimmed = std::get<clink::Offset>(*clink::Parse("offset 9 0.00 -1.50"));
     CHECK(trimmed.groundPitch && *trimmed.groundPitch == -1.5f);
-    CHECK(!xpc::Parse("offset 9 0 45", &error));
+    CHECK(!clink::Parse("offset 9 0 45", &error));
 }
 
 void ParsesAddWithLabelAndUnknowns() {
-    auto add = std::get<xpc::Add>(*xpc::Parse("add 3 B738 QFA - VH-XZE Qantas 1"));
+    auto add = std::get<clink::Add>(*clink::Parse("add 3 B738 QFA - VH-XZE Qantas 1"));
     CHECK(add.id == 3);
     CHECK(add.icaoType == "B738");
     CHECK(add.icaoAirline == "QFA");
     CHECK(add.livery.empty());
     CHECK(add.label == "VH-XZE Qantas 1");
-    auto bare = std::get<xpc::Add>(*xpc::Parse("add 4 C172 - -"));
+    auto bare = std::get<clink::Add>(*clink::Parse("add 4 C172 - -"));
     CHECK(bare.icaoAirline.empty() && bare.label.empty());
 }
 
 void RejectsBadLines() {
     std::string error;
-    CHECK(!xpc::Parse("pos 7 1 2", &error) && error.find("14 fields") != std::string::npos);
-    CHECK(!xpc::Parse("pos 0 1 2 3 4 5 6 7 0 0 0 0 0 0", &error));  // id 0 is not allowed
-    CHECK(!xpc::Parse("pos 1 95 2 3 4 5 6 7 0 0 0 0 0 0", &error));  // latitude out of range
-    CHECK(!xpc::Parse("pos 1 1,5 2 3 4 5 6 7 0 0 0 0 0 0", &error)); // decimal comma
-    CHECK(!xpc::Parse("add 1 - QFA -", &error));
-    CHECK(!xpc::Parse("warp 1", &error) && error == "unknown message: warp");
-    CHECK(!xpc::Parse("   ", &error) && error.empty());
-    CHECK(std::holds_alternative<xpc::Clear>(*xpc::Parse("clear")));
-    CHECK(std::get<xpc::Del>(*xpc::Parse("del 9")).id == 9);
-    CHECK(std::get<xpc::Hello>(*xpc::Parse("hello 0.4.0")).version == "0.4.0");
+    CHECK(!clink::Parse("pos 7 1 2", &error) && error.find("14 fields") != std::string::npos);
+    CHECK(!clink::Parse("pos 0 1 2 3 4 5 6 7 0 0 0 0 0 0", &error));  // id 0 is not allowed
+    CHECK(!clink::Parse("pos 1 95 2 3 4 5 6 7 0 0 0 0 0 0", &error));  // latitude out of range
+    CHECK(!clink::Parse("pos 1 1,5 2 3 4 5 6 7 0 0 0 0 0 0", &error)); // decimal comma
+    CHECK(!clink::Parse("add 1 - QFA -", &error));
+    CHECK(!clink::Parse("warp 1", &error) && error == "unknown message: warp");
+    CHECK(!clink::Parse("   ", &error) && error.empty());
+    CHECK(std::holds_alternative<clink::Clear>(*clink::Parse("clear")));
+    CHECK(std::get<clink::Del>(*clink::Parse("del 9")).id == 9);
+    CHECK(std::get<clink::Hello>(*clink::Parse("hello 0.4.0")).version == "0.4.0");
 }
 
 void SplitsDatagrams() {
     const char data[] = "hello 1\r\npos 1 0 0 0 0 0 0 0 0 0 0 0 0 0\n\nclear";
-    auto lines = xpc::Lines(data, std::strlen(data));
+    auto lines = clink::Lines(data, std::strlen(data));
     CHECK(lines.size() == 3);
     CHECK(lines[0] == "hello 1");
     CHECK(lines[2] == "clear");
 }
 
 void FormatsReplies() {
-    CHECK(xpc::FormatGround(5, 12.345) == "ground 5 12.3");
-    CHECK(xpc::FormatStatus("0.1.0", 2, 0, {}) == "status 0.1.0 2 0 -");
-    CHECK(xpc::FormatStatus("0.1.0", 0, 900, {"C:\\a", "D:\\b c"}) == "status 0.1.0 0 900 C:\\a;D:\\b c");
-    CHECK(xpc::FormatError(5, "no\nmodel") == "error 5 no model");
+    CHECK(clink::FormatGround(5, 12.345) == "ground 5 12.3");
+    CHECK(clink::FormatStatus("0.1.0", 2, 0, {}) == "status 0.1.0 2 0 -");
+    CHECK(clink::FormatStatus("0.1.0", 0, 900, {"C:\\a", "D:\\b c"}) == "status 0.1.0 0 900 C:\\a;D:\\b c");
+    CHECK(clink::FormatError(5, "no\nmodel") == "error 5 no model");
 }
 
 void FindsCslFolders() {
@@ -103,10 +103,10 @@ void FindsCslFolders() {
 #endif
     auto exists = [&](const std::string& p) { return existing.count(p) > 0; };
 #ifdef _WIN32
-    auto found = xpc::CslFolders(root, {"# comment", " D:\\CSL\\Bluebell ", "", "D:\\missing"}, exists);
+    auto found = clink::CslFolders(root, {"# comment", " D:\\CSL\\Bluebell ", "", "D:\\missing"}, exists);
     CHECK(found.size() == 2 && found[0] == "D:\\CSL\\Bluebell");
 #else
-    auto found = xpc::CslFolders(root, {"# comment", " /csl/Bluebell/ ", "", "/missing", "Custom Data/CSL"}, exists);
+    auto found = clink::CslFolders(root, {"# comment", " /csl/Bluebell/ ", "", "/missing", "Custom Data/CSL"}, exists);
     CHECK(found.size() == 3);
     CHECK(found[0] == "/csl/Bluebell");
     CHECK(found[1] == "/xp/Custom Data/CSL");  // listed once although also a default
@@ -115,8 +115,8 @@ void FindsCslFolders() {
 }
 
 // A 36 m airliner in OBJ8 coordinates (nose at -z): fuselage, engines under the wings, nose and main wheels.
-std::vector<xpc::Vertex> Airliner(float noseWheelY) {
-    std::vector<xpc::Vertex> v;
+std::vector<clink::Vertex> Airliner(float noseWheelY) {
+    std::vector<clink::Vertex> v;
     for (float z = -18; z <= 18; z += 1) v.push_back({0, 1.5f + (z > 10 ? z - 10 : 0) * 0.2f, z});
     for (float x : {-5.0f, 5.0f}) v.push_back({x, -1.4f, -3});    // engines: low, but off the centre line
     for (float x : {-0.2f, 0.2f}) v.push_back({x, noseWheelY, -14});
@@ -125,7 +125,7 @@ std::vector<xpc::Vertex> Airliner(float noseWheelY) {
 }
 
 void FitsNoseAndMainWheels() {
-    auto wheels = xpc::FindWheels(xpc::PosedModel{Airliner(-1.9f), {}});
+    auto wheels = clink::FindWheels(clink::PosedModel{Airliner(-1.9f), {}});
     CHECK(wheels.has_value());
     CHECK(wheels->noseZ == -14 && wheels->mainZ == 1);
     const float pitch = wheels->LevelPitchDeg();
@@ -139,13 +139,13 @@ void FitsNoseAndMainWheels() {
     CHECK(height > 1.99f && height < 2.0f);
     // Rotating for take-off lifts the nose; the model rises so the main wheels stay on the ground.
     CHECK(wheels->GroundHeightM(8) > height + 0.1f);
-    CHECK(std::fabs(xpc::Wheels{-14, -2, 1, -2}.GroundHeightM(0) - 2) < 1e-6f);
+    CHECK(std::fabs(clink::Wheels{-14, -2, 1, -2}.GroundHeightM(0) - 2) < 1e-6f);
 }
 
 void LeavesOddModelsLevel() {
     std::string why;
-    CHECK(!xpc::FindWheels(xpc::PosedModel{Airliner(-1.0f), {}}, &why) && why.find("3 degrees") != std::string::npos);
-    CHECK(!xpc::FindWheels(xpc::PosedModel{{{0, 0, 0}}, {}}, &why) && why == "too few vertices");
+    CHECK(!clink::FindWheels(clink::PosedModel{Airliner(-1.0f), {}}, &why) && why.find("3 degrees") != std::string::npos);
+    CHECK(!clink::FindWheels(clink::PosedModel{{{0, 0, 0}}, {}}, &why) && why == "too few vertices");
 }
 
 // A cut-down Bluebell B738 (gear lines as in B738_QFA.obj, read on Ben's PC 2026-10-03): a fuselage, then the nose
@@ -199,8 +199,8 @@ const char* const PosedB738 =
 
 void PosesGearDown() {
     std::istringstream obj(PosedB738);
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(model.all.size() == 5);   // the touch-down part is hidden
     CHECK(model.gear.size() == 2);  // nose and main wheel, not the door
     // Nose wheel: 0.47 up and 1.19 ahead of the hinge, swung down 110 degrees: 1.28 m below and 0.04 m ahead of it.
@@ -215,7 +215,7 @@ void PosesGearDown() {
     CHECK(std::fabs(model.all[3].x - 0.4f) > 0.01f || std::fabs(model.all[3].y + 1.2f) > 0.01f);
 
     std::string why;
-    auto wheels = xpc::FindWheels(model, &why);
+    auto wheels = clink::FindWheels(model, &why);
     CHECK(wheels.has_value());
     CHECK(wheels && std::fabs(wheels->noseY - nose.y) < 1e-6f && std::fabs(wheels->mainY - main.y) < 1e-6f);
 }
@@ -223,8 +223,8 @@ void PosesGearDown() {
 void ReadsOnlyTrianglePoints() {
     std::istringstream obj("I\r\n800\r\nOBJ\r\nTEXTURE a.png\r\nVT 1.5 -2.25 3 0 1 0 0.5 0.5\r\nVLINE 9 -9 9 1 1 1\r\n"
                            "VT\t0 1 -4 0 1 0 0 0\r\nVT 0 -50 0 0 1 0 0 0\r\nIDX 1\r\nIDX 0\r\nTRIS 0 2\r\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(model.all.size() == 2);  // the unused VT at -50 is not drawn
     CHECK(model.all[0].z == -4);
     CHECK(model.all[1].x == 1.5f && model.all[1].y == -2.25f && model.all[1].z == 3);
@@ -235,15 +235,15 @@ void ReadsOnlyTheNearestLod() {
     // Vertices come before the commands, so a far LOD's points are in the file but drawn only after its ATTR_LOD.
     std::istringstream obj("I\n800\nOBJ\nTEXTURE a.dds\nPOINT_COUNTS 2 0 0 2\nVT 0 -2 0 0 1 0 0 0\nVT 0 -3 0 0 1 0 0 0\n"
                            "IDX 0\nIDX 1\nATTR_LOD 0 2000\nTRIS 0 1\nATTR_LOD 2000 30000\nTRIS 1 1\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(model.all.size() == 1);
     CHECK(!model.all.empty() && model.all[0].y == -2);
 }
 
 void FindsModelObjFiles() {
     namespace fs = std::filesystem;
-    const auto root = fs::temp_directory_path() / "xpconnect-plugin-tests";
+    const auto root = fs::temp_directory_path() / "clearancelink-plugin-tests";
     fs::remove_all(root);
     fs::create_directories(root / "Bluebell" / "BB_E190" / "E190");
     fs::create_directories(root / "Bluebell" / "BB_Shared");
@@ -258,21 +258,21 @@ void FindsModelObjFiles() {
         << "OBJ8_AIRCRAFT BB_E190_BAW\r\n"                      // line 7
         << "OBJ8 SOLID YES BB_E190/E190/E190.obj BAW.png\r\n";
 
-    const auto packages = xpc::FindCslPackages({(root / "Bluebell").u8string()});
+    const auto packages = clink::FindCslPackages({(root / "Bluebell").u8string()});
     CHECK(packages.size() == 2);
     const auto e190 = (root / "Bluebell" / "BB_E190").u8string();
     CHECK(packages.find("BB_E190")->second == e190);
-    auto files = xpc::ModelObjFiles(e190, 2, packages);
+    auto files = clink::ModelObjFiles(e190, 2, packages);
     CHECK(files.size() == 2);
     CHECK(fs::u8path(files[0]) == fs::u8path(e190) / "E190" / "E190.obj");
     CHECK(fs::u8path(files[1]) == root / "Bluebell" / "BB_Shared" / "glass.obj");
-    CHECK(xpc::ModelObjFiles(e190, 7, packages).size() == 1);
-    CHECK(xpc::ModelObjFiles(e190, 3, packages).empty());  // not an OBJ8_AIRCRAFT line
+    CHECK(clink::ModelObjFiles(e190, 7, packages).size() == 1);
+    CHECK(clink::ModelObjFiles(e190, 3, packages).empty());  // not an OBJ8_AIRCRAFT line
     fs::remove_all(root);
 }
 
-xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0) {
-    xpc::Pos p;
+clink::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0) {
+    clink::Pos p;
     p.id = 1;
     p.lat = lat;
     p.lon = 153;
@@ -284,7 +284,7 @@ xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0
 }
 
 void EasesHeightAcrossLiftOff() {
-    xpc::Smoothed h;
+    clink::Smoothed h;
     CHECK(h.Next(10, 0.1f, false, false) == 10);                  // first value: as is
     const float atSwitch = h.Next(14, 0.0f, true, false);         // source changed: carries on from 10
     CHECK(std::fabs(atSwitch - 10) < 1e-4f);
@@ -296,31 +296,31 @@ void EasesHeightAcrossLiftOff() {
 
 void SteersTheNoseWheelAlongTheTurn() {
     // 15 m wheelbase, 10 kt (5.14 m/s), turning right at 10 deg/s: atan(15 x 0.1745 / 5.14) = 27 deg right.
-    CHECK(std::fabs(xpc::SteeringAngleDeg(10, 10, 15) - 27.0f) < 0.5f);
-    CHECK(std::fabs(xpc::SteeringAngleDeg(-10, 10, 15) + 27.0f) < 0.5f);  // left turn
-    CHECK(xpc::SteeringAngleDeg(10, 0.2f, 15) == 0);                       // parked: straight
-    CHECK(xpc::SteeringAngleDeg(90, 2, 30) == 70);                          // capped
-    CHECK(std::fabs(xpc::HeadingDelta(350, 10) - 20) < 1e-4f);
-    CHECK(std::fabs(xpc::HeadingDelta(10, 350) + 20) < 1e-4f);
+    CHECK(std::fabs(clink::SteeringAngleDeg(10, 10, 15) - 27.0f) < 0.5f);
+    CHECK(std::fabs(clink::SteeringAngleDeg(-10, 10, 15) + 27.0f) < 0.5f);  // left turn
+    CHECK(clink::SteeringAngleDeg(10, 0.2f, 15) == 0);                       // parked: straight
+    CHECK(clink::SteeringAngleDeg(90, 2, 30) == 70);                          // capped
+    CHECK(std::fabs(clink::HeadingDelta(350, 10) - 20) < 1e-4f);
+    CHECK(std::fabs(clink::HeadingDelta(10, 350) + 20) < 1e-4f);
 }
 
 void TurnsPropellersAndWheels() {
-    CHECK(std::fabs(xpc::AdvanceAngle(350, 10, 0.5f, 1000) - 20) < 1e-3);    // 10 rpm = 60 deg/s, wraps past 360
-    CHECK(std::fabs(xpc::AdvanceAngle(0, 1000, 0.1f, 1500) - 150) < 1e-3);   // capped at 1500 deg/s
-    CHECK(xpc::AdvanceAngle(42, 0, 1, 1500) == 42);                          // stopped engine stays put
+    CHECK(std::fabs(clink::AdvanceAngle(350, 10, 0.5f, 1000) - 20) < 1e-3);    // 10 rpm = 60 deg/s, wraps past 360
+    CHECK(std::fabs(clink::AdvanceAngle(0, 1000, 0.1f, 1500) - 150) < 1e-3);   // capped at 1500 deg/s
+    CHECK(clink::AdvanceAngle(42, 0, 1, 1500) == 42);                          // stopped engine stays put
 }
 
 void BlendsBetweenUpdates() {
     auto a = At(-27.0, 1000, 350, 2), b = At(-26.999, 1100, 10, 6);
-    auto mid = xpc::Blend(a, b, 0.5f);
+    auto mid = clink::Blend(a, b, 0.5f);
     CHECK(std::fabs(mid.lat + 26.9995) < 1e-9);
     CHECK(std::fabs(mid.altFt - 1050) < 1e-9);
     CHECK(std::fabs(mid.heading - 0) < 1e-3 || std::fabs(mid.heading - 360) < 1e-3);  // short way round through north
     CHECK(std::fabs(mid.pitch - 4) < 1e-6);
-    CHECK(std::fabs(xpc::Blend(At(0, 0, 10, 0), At(0, 0, 350, 0), 0.25f).heading - 5) < 1e-3);
+    CHECK(std::fabs(clink::Blend(At(0, 0, 10, 0), At(0, 0, 350, 0), 0.25f).heading - 5) < 1e-3);
 
     // Drawn one update interval (0.1 s) behind: halfway through it, halfway between the two updates.
-    xpc::Track track;
+    clink::Track track;
     track.Update(a, 10.0f);
     track.Update(At(-27.0, 1100, 10, 6), 10.1f);  // climbing in place: 111 m in 0.1 s would be a jump
     CHECK(std::fabs(track.Drawn(10.15f).altFt - 1050) < 1e-3);
@@ -330,14 +330,14 @@ void BlendsBetweenUpdates() {
 
 void MovesOnWhenUpdatesStop() {
     auto a = At(0, 0, 0, 0, 100), b = At(0.00005, 0, 0, 0, 100);  // 5.6 m in 0.1 s
-    xpc::Track track;
+    clink::Track track;
     track.Update(a, 10.0f);
     track.Update(b, 10.1f);
     // 0.5 s after the blend ended, moved on as far as 5 updates; never more than 1 s ahead.
     CHECK(std::fabs(track.Drawn(10.7f).lat - 0.00005 * 6) < 1e-7);  // float times
     CHECK(std::fabs(track.Drawn(60.0f).lat - 0.00005 * 11) < 1e-7);
     // A parked aircraft stays put, whatever speed BATC gives it (it is not always 0).
-    xpc::Track parked;
+    clink::Track parked;
     parked.Update(At(0, 0, 0, 0, 12), 10.0f);
     parked.Update(At(0, 0, 0, 0, 12), 12.0f);
     CHECK(parked.Drawn(13.5f).lat == 0);
@@ -349,7 +349,7 @@ void MovesOnWhenUpdatesStop() {
 void DrawsBatcPlacingAnAircraftAtOnce() {
     // A parked aircraft that BATC moves 150 m to its gate, then keeps sending there every 2 s: drawn at the gate at
     // once and kept there, not slid across and overshot back and forth (YBBN, 2026-10-03).
-    xpc::Track track;
+    clink::Track track;
     track.Update(At(0, 0, 0, 0, 0), 10.0f);
     const auto gate = At(0.00135, 0, 0, 0, 0);  // 150 m north
     float now = 10.1f;
@@ -360,12 +360,12 @@ void DrawsBatcPlacingAnAircraftAtOnce() {
         track.Update(gate, now);
     }
     // Two taxi updates read in the same frame after a stutter: moved on at the taxi speed, not 2 m per 0.02 s.
-    xpc::Track stutter;
+    clink::Track stutter;
     stutter.Update(At(0, 0, 0, 0, 15), 10.0f);
     stutter.Update(At(0.000018, 0, 0, 0, 15), 10.0f);  // 2 m
     CHECK(stutter.Drawn(12.0f).lat < 0.000018 * 11.5);  // at most 1 s ahead at 2 m per 0.1 s
     // Taxiing at 15 kt, updates every 0.1 s: blended, not jumped.
-    xpc::Track taxi;
+    clink::Track taxi;
     taxi.Update(At(0, 0, 0, 0, 15), 10.0f);
     taxi.Update(At(0.0000069, 0, 0, 0, 15), 10.1f);  // 0.77 m
     CHECK(taxi.Drawn(10.15f).lat > 0 && taxi.Drawn(10.15f).lat < 0.0000069);
@@ -374,7 +374,7 @@ void DrawsBatcPlacingAnAircraftAtOnce() {
 void FindsObjFilesInSplitPackages() {
     // Bluebell's __Bluebell_Airbus spans BB_Airbus and BB_Airbus1: one xsb_aircraft.txt, the .obj files spread out.
     namespace fs = std::filesystem;
-    const auto root = fs::temp_directory_path() / "xpconnect-plugin-split";
+    const auto root = fs::temp_directory_path() / "clearancelink-plugin-split";
     fs::remove_all(root);
     for (const char* part : {"BB_Airbus", "BB_Airbus1"}) {
         fs::create_directories(root / part / "A320");
@@ -382,9 +382,9 @@ void FindsObjFilesInSplitPackages() {
             << "EXPORT_NAME __Bluebell_Airbus\nOBJ8_AIRCRAFT A320_QFA\nOBJ8 SOLID YES __Bluebell_Airbus/A320/A320_QFA.obj\n";
     }
     std::ofstream(root / "BB_Airbus1" / "A320" / "A320_QFA.obj") << "I\n800\nOBJ\n";
-    const auto packages = xpc::FindCslPackages({root.u8string()});
+    const auto packages = clink::FindCslPackages({root.u8string()});
     CHECK(packages.count("__Bluebell_Airbus") == 2);
-    const auto files = xpc::ModelObjFiles((root / "BB_Airbus").u8string(), 2, packages);
+    const auto files = clink::ModelObjFiles((root / "BB_Airbus").u8string(), 2, packages);
     CHECK(files.size() == 1 && fs::u8path(files[0]) == root / "BB_Airbus1" / "A320" / "A320_QFA.obj");
     fs::remove_all(root);
 }
@@ -396,13 +396,13 @@ void LevelsTiltingBogies() {
         "ANIM_begin\nANIM_rotate 0 0 1 3 -80 0 1 libxplanemp/controls/gear_ratio\n"
         "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\n"
         "ANIM_end\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
-    CHECK(model.bogieDataref == xpc::TireDeflectionDataref);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
+    CHECK(model.bogieDataref == clink::TireDeflectionDataref);
     CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
     CHECK(model.gear.size() == 2 && std::fabs(model.gear[0].y - model.gear[1].y) < 1e-4f);  // level
-    CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", xpc::TireDeflectionDataref, 0.5f) == 0.5f);
-    CHECK(xpc::PoseValue("libxplanemp/controls/flap_ratio", xpc::TireDeflectionDataref, 0.5f) == 0);
+    CHECK(clink::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", clink::TireDeflectionDataref, 0.5f) == 0.5f);
+    CHECK(clink::PoseValue("libxplanemp/controls/flap_ratio", clink::TireDeflectionDataref, 0.5f) == 0);
 }
 
 void LevelsWorldTrafficBogies() {
@@ -415,13 +415,13 @@ void LevelsWorldTrafficBogies() {
         "ANIM_rotate_key 0 -20\nANIM_rotate_key 0.5 0\nANIM_rotate_key 1 5\nANIM_rotate_end\n"
         "ANIM_begin\nANIM_rotate 1 0 0 0 30 0 1 cjs/world_traffic/nose_gear_steering_angle\nANIM_end\n"
         "TRIS 0 2\nANIM_end\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
-    CHECK(model.bogieDataref == xpc::WorldTrafficDeflectionDataref);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
+    CHECK(model.bogieDataref == clink::WorldTrafficDeflectionDataref);
     CHECK(std::fabs(model.bogieLevel - 0.5f) < 0.001f);
     CHECK(model.gear.size() == 2 && std::fabs(model.gear[0].y - model.gear[1].y) < 1e-4f);  // level
     // The libxplanemp tyre deflection does not move this model's bogies, and vice versa.
-    CHECK(xpc::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", model.bogieDataref, model.bogieLevel) == 0);
+    CHECK(clink::PoseValue("libxplanemp/gear/tire_vertical_deflection_mtr", model.bogieDataref, model.bogieLevel) == 0);
 }
 
 void LevelsBogiesModelledTilted() {
@@ -433,9 +433,9 @@ void LevelsBogiesModelledTilted() {
         "ANIM_begin\nANIM_rotate 1 0 0 0 0 0 1 libxplanemp/controls/gear_ratio\n"
         "ANIM_begin\nANIM_rotate 1 0 0 30 73 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\n"
         "ANIM_end\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
-    CHECK(model.bogieDataref == xpc::TireDeflectionDataref);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
+    CHECK(model.bogieDataref == clink::TireDeflectionDataref);
     CHECK(std::fabs(model.bogieLevel - 0.4651f) < 0.001f);
     CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);  // level
 }
@@ -446,8 +446,8 @@ void SkipsLinksThatTurnFurtherThanTheBogie() {
         "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
         "ANIM_begin\nANIM_rotate 1 0 0 0 40 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n"
         "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
 }
 
@@ -456,8 +456,8 @@ void LeavesBogiesModelledLevelAtZero() {
     std::istringstream obj(
         "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
         "ANIM_begin\nANIM_rotate 1 0 0 0 -20 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(model.bogieDataref.empty() && model.bogieLevel == 0);
     CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);
 }
@@ -468,8 +468,8 @@ void SkipsLinksKeyedToDeflection() {
         "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
         "ANIM_begin\nANIM_rotate 1 0 0 0 5 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nANIM_end\n"
         "ANIM_begin\nANIM_rotate 1 0 0 -20 10 0 1 libxplanemp/gear/tire_vertical_deflection_mtr\nTRIS 0 2\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
     CHECK(std::fabs(model.bogieTiltDeg + 20) < 0.001f);
     CHECK(model.all.size() == 2 && std::fabs(model.all[0].y - model.all[1].y) < 1e-4f);  // level
@@ -483,10 +483,10 @@ void KeepsOneBogieLevelAcrossFiles() {
     std::istringstream other(
         "I\n800\nOBJ\n\nVT 0 0 -2 0 1 0 0 0\nVT 0 0 2 0 1 0 0 0\nIDX 0\nIDX 1\n"
         "ANIM_begin\nANIM_rotate 1 0 0 -6 0 0 1 cjs/world_traffic/main_gear_deflection\nTRIS 0 2\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ScanBogies(other, model);
-    xpc::ScanBogies(gear, model);
-    CHECK(model.bogieDataref == xpc::TireDeflectionDataref);
+    clink::PosedModel model;
+    clink::ScanBogies(other, model);
+    clink::ScanBogies(gear, model);
+    CHECK(model.bogieDataref == clink::TireDeflectionDataref);
     CHECK(std::fabs(model.bogieLevel - 0.6667f) < 0.001f);
 }
 
@@ -495,8 +495,8 @@ void ReadsAnimationsKeyedHighToLow() {
     std::istringstream obj(
         "I\n800\nOBJ\n\nVT 0 0 0 0 1 0 0 0\nIDX 0\n"
         "ANIM_begin\nANIM_trans 0 -1 0 0 0 0 1 0 libxplanemp/controls/flap_ratio\nTRIS 0 1\nANIM_end\n");
-    xpc::PosedModel model;
-    xpc::ReadPosedObj(obj, model);
+    clink::PosedModel model;
+    clink::ReadPosedObj(obj, model);
     CHECK(model.all.size() == 1 && std::fabs(model.all[0].y) < 1e-6f);
 }
 

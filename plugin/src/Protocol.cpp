@@ -4,7 +4,7 @@
 #include <cmath>
 #include <sstream>
 
-namespace xpc {
+namespace clink {
 namespace {
 
 std::vector<std::string> Words(const std::string& line, size_t maxWords, std::string* rest) {
@@ -159,4 +159,4 @@ std::string FormatError(uint32_t id, const std::string& message) {
     return "error " + std::to_string(id) + " " + clean;
 }
 
-}  // namespace xpc
+}  // namespace clink

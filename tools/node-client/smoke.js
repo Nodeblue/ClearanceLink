@@ -1,11 +1,11 @@
 // Usage: node smoke.js [host] [port] [protocol: KittyHawk|SunRise]
-// Connects to an XPConnect server with an independent SimConnect implementation, performs the handshake and
+// Connects to an ClearanceLink server with an independent SimConnect implementation, performs the handshake and
 // sends a few typical ATC-client requests. Exits 0 when the handshake succeeds.
 const { open, Protocol, SimConnectDataType, SimConnectPeriod, SimConnectConstants } = require('node-simconnect');
 
 const [host = '127.0.0.1', port = '5000', protocolName = 'SunRise'] = process.argv.slice(2);
 
-open('XPConnect smoke test', Protocol[protocolName], { remote: { host, port: Number(port) } })
+open('ClearanceLink smoke test', Protocol[protocolName], { remote: { host, port: Number(port) } })
   .then(({ recvOpen, handle }) => {
     console.log(`Connected to "${recvOpen.applicationName}" SimConnect ${recvOpen.simConnectVersionMajor}.${recvOpen.simConnectVersionMinor}`);
     handle.addToDataDefinition(0, 'PLANE ALTITUDE', 'feet', SimConnectDataType.FLOAT64);

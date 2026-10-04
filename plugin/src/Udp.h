@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string>
 
-namespace xpc {
+namespace clink {
 
 class UdpSocket {
 public:
@@ -32,4 +32,4 @@ private:
 #endif
 };
 
-}  // namespace xpc
+}  // namespace clink

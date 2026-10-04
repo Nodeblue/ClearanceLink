@@ -1,4 +1,4 @@
-# XPConnect: BeyondATC on X-Plane 12, research and implementation plan
+# ClearanceLink: BeyondATC on X-Plane 12, research and implementation plan
 
 _Written 2026-09-30. Facts marked **(verified)** come from a source linked at the bottom; facts marked **(inferred)** are my reading of the evidence and are the first things the Phase 0 spike checks._
 
@@ -29,7 +29,7 @@ That gives us two places to plug in:
 ```
 BeyondATC.exe (Unity) --WebSocket--> simconnect_ws.exe --SimConnect pipe/TCP--> [MSFS]
                                                                                    ^
-                                               we replace MSFS here:  XPConnect ---+--> X-Plane 12 Web API (+ later plugin)
+                                               we replace MSFS here:  ClearanceLink ---+--> X-Plane 12 Web API (+ later plugin)
 ```
 
 **Chosen: emulate the SimConnect server** (right-hand side). It needs no changes to BATC's files, the protocol is public and stable, and every request is self-describing (clients send SimVar names like `"PLANE ALTITUDE", "feet"` as strings), which makes the "record every call and map it" idea almost free. Fallback if that fails: speak `simconnect_ws.exe`'s WebSocket protocol instead (undocumented, would need capturing, more fragile across BATC updates).
@@ -37,7 +37,7 @@ BeyondATC.exe (Unity) --WebSocket--> simconnect_ws.exe --SimConnect pipe/TCP--> 
 ## 2. Architecture
 
 ```
-            +-------------------------------- XPConnect (one .NET process) -------------------------------+
+            +-------------------------------- ClearanceLink (one .NET process) -------------------------------+
 BATC  <---->| Transport      Protocol codec     Session/dispatcher      Handlers            Sources          |<----> X-Plane 12
 (simconn    | named pipe  -> decode packets  -> per-client state:    -> SimVar mapping   -> XP Web API      |       Web API :8086
  _ws.exe)   | + TCP          encode replies     data defs, requests,     Facilities         client (REST+WS)|
@@ -52,7 +52,7 @@ Key design rules (these are what make it AI-friendly):
 1. **Pure core, thin edges.** The protocol codec and the mapping engine are pure functions with no I/O; they get byte-level golden tests.
 2. **Everything behind interfaces with fakes.** `IXPlane` has a real Web API implementation and a `FakeXPlane` that plays scripted flights. The whole stack runs on Linux with TCP transport and no simulator, so cloud Claude/Codex sessions can run end-to-end tests.
 3. **Mapping as data, not code.** `mapping/simvars.yaml` lists each MSFS SimVar/event, its X-Plane dataref/command, unit conversion, and status (`implemented`, `emulated`, `stubbed`, `unsupported`). Adding a mapping is a one-line YAML change plus a test.
-4. **Unknown calls never crash.** Every request type has an explicit policy: implement, stub with success, or reply with a SimConnect exception. Anything unhandled is logged as `UNMAPPED` and counted; `xpconnect report unmapped` prints the to-do list for the next AI session.
+4. **Unknown calls never crash.** Every request type has an explicit policy: implement, stub with success, or reply with a SimConnect exception. Anything unhandled is logged as `UNMAPPED` and counted; `clearancelink report unmapped` prints the to-do list for the next AI session.
 5. **Record and replay.** Every BATC session is recorded as decoded JSONL. Recordings become regression tests: replay the client side against the server and snapshot the replies. When BATC updates and starts asking for something new, the replay diff shows it.
 6. **One log stream.** Structured JSON logs (Serilog) with a session id, plus BATC's own `Player.log` tailed into the same stream, so an agent can see "BATC asked for X, we answered Y, BATC logged error Z" in one file.
 
@@ -65,7 +65,7 @@ Why:
 - Runs on Linux too, so cloud agents can build and test everything except the real-pipe/real-BATC step.
 - `dotnet watch` rebuilds and restarts in a few seconds; `dotnet test` for the whole suite should stay well under a minute.
 - Codex and Claude are both strong in C#; strong typing catches their mistakes at compile time.
-- Single-file `dotnet publish` gives you one `XPConnect.exe` to run.
+- Single-file `dotnet publish` gives you one `ClearanceLink.exe` to run.
 
 Considered: TypeScript (node-simconnect is a good protocol reference but weaker for a long-running binary server) and Rust (great, but slower iteration for AI agents). The later AI-traffic plugin must be **C++** (X-Plane SDK + XPMP2); it stays small and separate.
 
@@ -73,7 +73,7 @@ Test client: we use **node-simconnect** (an independent client implementation) a
 
 ## 4. Fast dev loop on your PC
 
-- X-Plane and BATC stay running. XPConnect talks to X-Plane only through the Web API in phases 0 to 3, so **rebuilding never restarts X-Plane**.
+- X-Plane and BATC stay running. ClearanceLink talks to X-Plane only through the Web API in phases 0 to 3, so **rebuilding never restarts X-Plane**.
 - `scripts/dev.ps1` runs `dotnet watch` on the host: save a file, it rebuilds and restarts in seconds, and `simconnect_ws.exe` reconnects (to confirm in Phase 0; if it does not, the script restarts BATC's bridge for you).
 - Dashboard at `http://localhost:5577` shows reconnection instantly.
 - `scripts/test.ps1` = unit + replay tests; `scripts/publish.ps1` = single exe.
@@ -81,7 +81,7 @@ Test client: we use **node-simconnect** (an independent client implementation) a
 
 ## 5. Connectivity dashboard (web UI, localhost)
 
-A small web page served by XPConnect (browser tab, later a tray icon that opens it). Chosen over a desktop UI because agents can test it with Playwright and screenshots.
+A small web page served by ClearanceLink (browser tab, later a tray icon that opens it). Chosen over a desktop UI because agents can test it with Playwright and screenshots.
 
 - **Tiles:** X-Plane (Web API reachable, version, sim paused/running, aircraft), BATC client (connected, app name, protocol version, requests/sec), NavData (index built, AIRAC, airports loaded), Plugin (later).
 - **Live SimVar table:** what BATC subscribed to, where it maps in X-Plane, current value, status colour.
@@ -92,7 +92,7 @@ A small web page served by XPConnect (browser tab, later a tray icon that opens 
 
 **Phase 0: Go/no-go spike (first session on your PC).**
 1. Minimal SimConnect server on the MSFS named pipe (and TCP): answer the Open handshake, log every packet.
-2. Close MSFS, start X-Plane-less XPConnect, start BATC. Does it connect? Does it refuse without MSFS running or installed? What does it ask for?
+2. Close MSFS, start X-Plane-less ClearanceLink, start BATC. Does it connect? Does it refuse without MSFS running or installed? What does it ask for?
 3. Try announcing as MSFS 2020 and as MSFS 2024; keep whichever BATC is happier with.
 4. If you have MSFS installed: a pass-through recorder between BATC and real MSFS captures a complete real flight, the best possible spec.
 5. Output: `docs/research/batc-call-inventory.md` and a go/no-go.
@@ -108,7 +108,7 @@ A small web page served by XPConnect (browser tab, later a tray icon that opens 
 ## 7. Repository and memory layout
 
 ```
-xpconnect/
+clearancelink/
   AGENTS.md              # single source of truth for agents: build, test, rules, where things live
   CLAUDE.md              # one line: @AGENTS.md (so Claude and Codex read the same file)
   README.md
@@ -123,14 +123,14 @@ xpconnect/
     simvars.yaml         # MSFS SimVar/event -> X-Plane dataref/command + status
     facilities.yaml
   src/
-    XPConnect.Protocol/  # wire codec, pure
-    XPConnect.Server/    # transports, sessions, dispatcher
-    XPConnect.Mapping/   # mapping engine + unit conversions
-    XPConnect.XPlane/    # Web API client, FakeXPlane
-    XPConnect.NavData/   # apt.dat / CIFP parsers, SQLite index
-    XPConnect.Traffic/   # AI object registry (stub first)
-    XPConnect.Recorder/  # JSONL record/replay
-    XPConnect.Host/      # entry point, dashboard, status API
+    ClearanceLink.Protocol/  # wire codec, pure
+    ClearanceLink.Server/    # transports, sessions, dispatcher
+    ClearanceLink.Mapping/   # mapping engine + unit conversions
+    ClearanceLink.XPlane/    # Web API client, FakeXPlane
+    ClearanceLink.NavData/   # apt.dat / CIFP parsers, SQLite index
+    ClearanceLink.Traffic/   # AI object registry (stub first)
+    ClearanceLink.Recorder/  # JSONL record/replay
+    ClearanceLink.Host/      # entry point, dashboard, status API
   tests/                 # one test project per src project + Replay.Tests
   recordings/            # sanitized sample sessions used as tests
   tools/                 # simconnect-probe, replay CLI, node-simconnect test client
