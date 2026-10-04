@@ -23,6 +23,7 @@ public sealed class LiveLogWindow : Window
     public LiveLogWindow()
     {
         Title = "ClearanceLink live log";
+        Icon = PanelWindow.AppIcon();
         Width = 900;
         Height = 500;
         Background = new SolidColorBrush(Color.Parse("#05080A"));
