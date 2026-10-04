@@ -60,6 +60,11 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
             return [$"No plugin next to ClearanceLink ({Bundled})."];
         }
 
+        // Stop before copying anything while X-Plane has either plugin loaded: otherwise the new plugin is copied,
+        // the old folder can't be deleted, and X-Plane loads both next time.
+        ThrowIfLoaded(Target);
+        ThrowIfLoaded(OldTarget);
+
         foreach (var file in Files(Bundled))
         {
             var to = Path.Combine(Target, file);
@@ -94,6 +99,8 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
 
     public IReadOnlyList<string> Remove()
     {
+        // The user's CSL folder list, from the new folder or else the old XPConnect one, is shown so it isn't lost.
+        var kept = new[] { Target, OldTarget }.Select(f => Path.Combine(f, UserFile)).Where(File.Exists).Select(File.ReadAllText).FirstOrDefault();
         if (Directory.Exists(OldTarget))
         {
             Directory.Delete(OldTarget, recursive: true);
@@ -101,15 +108,29 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
 
         if (!Directory.Exists(Target))
         {
-            return ["The ClearanceLink plugin is not installed."];
+            return kept is not null && kept.Trim().Length > 0
+                ? ["Removed the old XPConnect plugin.", $"Your CSL folder list was:{Environment.NewLine}{kept.Trim()}"]
+                : ["The ClearanceLink plugin is not installed."];
         }
 
-        var keep = Path.Combine(Target, UserFile);
-        string? kept = File.Exists(keep) ? File.ReadAllText(keep) : null;
         Directory.Delete(Target, recursive: true);
         return kept is not null && kept.Trim().Length > 0
             ? [$"Removed {Target}", $"Your CSL folder list was:{Environment.NewLine}{kept.Trim()}"]
             : [$"Removed {Target}"];
+    }
+
+    /// <summary>Throws IOException when a plugin binary in <paramref name="folder"/> is open (X-Plane has it loaded).</summary>
+    private static void ThrowIfLoaded(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return;
+        }
+
+        foreach (var xpl in Directory.EnumerateFiles(folder, "*.xpl", SearchOption.AllDirectories))
+        {
+            using var _ = new FileStream(xpl, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        }
     }
 
     private static IEnumerable<string> Files(string root) =>

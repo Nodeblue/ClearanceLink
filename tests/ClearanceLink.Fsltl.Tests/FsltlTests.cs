@@ -245,6 +245,22 @@ public sealed class FsltlTests
     }
 
     [Fact]
+    public void A_damaged_catalogue_reads_as_empty()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"cl-catalogue-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, FsltlImporter.CatalogueFile), "[{\"title\":\"FSLTL_A20N");
+            Assert.Empty(FsltlImporter.LoadCatalogue(folder));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Import_leaves_out_microsoft_models()
     {
         Assert.True(FsltlImporter.IsMicrosoftFolder("FSLTL_Asobo_C172SP"));
