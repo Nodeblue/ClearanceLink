@@ -18,6 +18,7 @@ Remove-Item "$out/*.runtimeconfig.json", "$out/*.deps.json" -ErrorAction Silentl
 Copy-Item mapping "$out/mapping" -Recurse
 Copy-Item packaging/* $out -Recurse
 Copy-Item LICENSE "$out/LICENSE.txt"
+Copy-Item LICENSE-EXCEPTION.txt $out
 
 # Third-party notices that come with the packages inside ClearanceLink.exe (THIRD-PARTY-NOTICES.txt lists them all),
 # taken from the exact package versions this publish used.
