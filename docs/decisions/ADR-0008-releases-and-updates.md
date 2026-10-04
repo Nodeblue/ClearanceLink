@@ -1,4 +1,4 @@
-# ADR-0007: GitHub releases, and an update check that only looks
+# ADR-0008: GitHub releases, and an update check that only looks
 
 Date: 2026-10-04. Status: accepted.
 
