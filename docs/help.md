@@ -3,148 +3,178 @@
 ClearanceLink lets [BeyondATC](https://www.beyondatc.net/), which is made for Microsoft Flight Simulator, work with
 X-Plane 12. BeyondATC talks to ClearanceLink as if it were MSFS, and ClearanceLink answers from X-Plane.
 
-> **Experimental.** ClearanceLink is a free hobby project by Nodeblue. It is not affiliated with, endorsed by or
-> supported by BeyondATC, Microsoft or Laminar Research. Please don't ask BeyondATC's team for help with it.
+> **Experimental.** ClearanceLink is a free hobby project by Nodeblue, with no warranty. It is not affiliated with,
+> endorsed by or supported by BeyondATC, Microsoft or Laminar Research. Please don't ask BeyondATC's team for help
+> with it.
 
-**Contents:** [What you need](#what-you-need) · [First start](#first-start) · [Every flight](#every-flight) ·
-[Aircraft models for traffic](#aircraft-models-for-traffic) · [X-Plane settings](#x-plane-settings) ·
-[BeyondATC settings](#beyondatc-settings) · [Flying MSFS as well](#flying-msfs-as-well) ·
-[What works](#what-works) · [Problems](#problems) · [Commands](#commands)
+**Contents:** [The window](#the-window) · [First start](#first-start) · [Every flight](#every-flight) ·
+[X-Plane settings](#x-plane-settings) · [Aircraft models for traffic](#aircraft-models-for-traffic) ·
+[BeyondATC settings](#beyondatc-settings) · [Flying MSFS as well](#flying-msfs-as-well) · [What works](#what-works) ·
+[Problems](#problems) · [Getting help](#getting-help) · [Commands](#commands)
 
-## What you need
-- Windows 10 or 11 (64-bit).
-- X-Plane 12.1.4 or later.
-- BeyondATC, installed as usual. It stays set up for MSFS too.
-- For traffic in X-Plane (optional): Bluebell CSL models or an FSLTL install in MSFS. See
-  [Aircraft models for traffic](#aircraft-models-for-traffic).
+Downloading, the Windows warning and updating are on [Download and install](install.md).
 
-You don't need .NET or MSFS installed.
+## The window
+ClearanceLink looks like an aircraft's FMS. Each page has six rows; press the button beside a row, or click the row,
+to do what it says. The keys under the screen change page. On the keyboard, 1 to 6 press the left buttons,
+Shift+1 to 6 the right ones, and F1 to F4 change page.
+
+| STATUS | SETUP | SUPPORT |
+|---|---|---|
+| ![STATUS page](images/panel-status-flying.png) | ![SETUP page](images/panel-setup-flying.png) | ![SUPPORT page](images/panel-support.png) |
+
+- **STATUS** shows what is connected. Its bottom line says what to do next, and **READY FOR CLEARANCE** when all is
+  well.
+- **SETUP** shows the BeyondATC and X-Plane folders, the connection mode and the X-Plane plugin, starts BeyondATC and
+  opens a web page in your browser with the same status.
+- **SUPPORT** makes a support file, shows the live log, and reopens the WELCOME pages.
+- **ABOUT** shows the version, and **NEW VERSION** when a newer release is out.
 
 ## First start
-1. Unzip ClearanceLink anywhere you like, for example `Documents\ClearanceLink`.
-2. Double-click `ClearanceLink.exe`. ClearanceLink isn't signed with a paid certificate yet, so Windows may warn you the
-   first time. For downloading, updates and that warning, see [Download and install](install.md).
-3. The window opens on six **WELCOME** pages. Use the buttons beside each line, or keys 1-6 (left) and Shift+1-6
-   (right). After the welcome message:
-   - **Folders.** ClearanceLink finds BeyondATC and X-Plane by itself. If a line says NOT FOUND, press CHOOSE and pick
-     the folder (the BeyondATC folder is the one with `BeyondATC.exe`). Nothing in these folders is changed.
-   - **BeyondATC's traffic.** BeyondATC creates and flies its own traffic; ClearanceLink's X-Plane plugin draws it in
-     X-Plane. Press INSTALL (close X-Plane first). Traffic is optional: skip it and ATC still works.
-   - **Aircraft models.** The plugin draws traffic with Bluebell or FSLTL models, see
-     [Aircraft models for traffic](#aircraft-models-for-traffic).
-   - **X-Plane settings.** Three settings to turn down, explained [below](#x-plane-settings).
-   - **Every flight.** The order to start things in, below.
+Double-click `ClearanceLink.exe`. The first time, six **WELCOME** pages take you through the set-up. Press **NEXT**
+to go on, **BACK** to go back, or **SKIP** on the first page to skip them (SUPPORT > **SHOW AGAIN** brings them back).
 
-You can open the welcome pages again from the SUPPORT page.
+| 1 Welcome | 2 Folders | 3 Traffic |
+|---|---|---|
+| ![Welcome page](images/panel-welcome.png) | ![Folders page](images/panel-startfolders.png) | ![Traffic page](images/panel-starttraffic.png) |
+
+| 4 Aircraft models | 5 X-Plane settings | 6 Every flight |
+|---|---|---|
+| ![Aircraft models page](images/panel-startmodels.png) | ![X-Plane settings page](images/panel-startxplane.png) | ![Every flight page](images/panel-startdone.png) |
+
+1. **Welcome.** What ClearanceLink is.
+2. **Folders.** ClearanceLink finds BeyondATC and X-Plane by itself. If a line says **NOT FOUND**, press **CHOOSE**
+   and pick the folder: the BeyondATC folder holds `BeyondATC.exe`, the X-Plane folder holds `X-Plane.exe`. Nothing
+   in these folders is changed.
+3. **BeyondATC's traffic.** BeyondATC creates and flies its own traffic. ClearanceLink's X-Plane plugin draws it in
+   X-Plane. Close X-Plane, then press **INSTALL**. Traffic is optional: skip it and ATC still works.
+4. **Aircraft models.** The plugin needs aircraft models to draw the traffic with. See
+   [Aircraft models for traffic](#aircraft-models-for-traffic). You can come back to this later.
+5. **X-Plane settings.** Three settings to turn down, explained [below](#x-plane-settings).
+6. **Every flight.** The order to start things in. Press **FINISH**.
 
 ## Every flight
-1. Plan your flight in [SimBrief](https://dispatch.simbrief.com/) and generate the flight plan (OFP). BeyondATC
-   loads your latest SimBrief plan itself, the same as with MSFS; X-Plane's own FMS plan isn't used.
+1. Plan your flight in [SimBrief](https://dispatch.simbrief.com/) and generate the flight plan. BeyondATC loads your
+   latest SimBrief plan itself, the same as with MSFS. X-Plane's own flight plan isn't used.
 2. Start X-Plane 12 and load your aircraft at the SimBrief departure airport, at a gate or parking spot.
 3. Double-click `ClearanceLink.exe` and leave its window open.
 4. Start BeyondATC and start your flight as usual.
 
-The bottom line of the STATUS page says what to do next, and shows **READY FOR CLEARANCE** when everything is
-connected. If MSFS is open it says CLOSE MSFS TO CONNECT (see [Flying MSFS as well](#flying-msfs-as-well)).
-When you've finished, close BeyondATC, then ClearanceLink.
+The bottom line of STATUS says what to do next: **START X-PLANE 12**, **START BEYONDATC**, **CLOSE MSFS TO CONNECT**
+(see [Flying MSFS as well](#flying-msfs-as-well)), and **READY FOR CLEARANCE** when everything is connected.
 
-Start ClearanceLink before BeyondATC. If you close or restart ClearanceLink during a flight, restart BeyondATC too: it
-doesn't reconnect by itself.
+Start ClearanceLink before BeyondATC. If you close or restart ClearanceLink during a flight, restart BeyondATC too:
+it doesn't reconnect by itself. When you've finished, close BeyondATC, then ClearanceLink.
+
+## X-Plane settings
+Change these in X-Plane, so only BeyondATC talks and only BeyondATC's traffic flies:
+
+| Where in X-Plane | Setting | Why |
+|---|---|---|
+| Settings > Sound | **Radios** slider to 0 | Otherwise X-Plane's own controllers and ATIS talk over BeyondATC. |
+| Settings > Graphics | **Draw parked aircraft** off | X-Plane would park its own aircraft at the gates where BeyondATC parks its traffic. |
+| Flight Configuration > **AI Aircraft** | Remove all AI aircraft (the X beside each) | X-Plane's AI flies aircraft BeyondATC doesn't know about. |
+
+ClearanceLink reads X-Plane through X-Plane's built-in Web API (port 8086), which is on by default. No X-Plane
+setting needs changing for that.
 
 ## Aircraft models for traffic
 BeyondATC's traffic (aircraft at gates, taxiing, departing and arriving) appears in X-Plane through ClearanceLink's
-X-Plane plugin, which draws each aircraft with a CSL model. X-Plane doesn't come with CSL models. Two libraries are
-tested and supported; either one is enough, and you can have both.
+X-Plane plugin. The plugin draws each aircraft with a **CSL model**, the kind of aircraft model X-Plane's online
+flying plugins use. X-Plane doesn't come with any. Two libraries are tested; either one is enough, and you can have
+both. Without models, BeyondATC's traffic still talks on frequency, but you won't see it.
 
-### Bluebell
-1. Download the **Bluebell OBJ8 CSL** packages (free, from the X-Plane.org forums; search for "Bluebell CSL").
-2. Unzip them into `X-Plane 12\Custom Data\CSL`, so you end up with folders like
-   `X-Plane 12\Custom Data\CSL\BB_Airbus`. A folder that holds the packages one level down also works.
-3. Welcome page 4 (or SETUP) shows how many packages ClearanceLink found.
+<img src="images/panel-startmodels-flying.png" width="330" alt="WELCOME page 4 with 13 Bluebell packages and 3,154 converted FSLTL liveries">
 
-### FSLTL
-If you have FSLTL (FS Live Traffic Liveries) installed in MSFS, ClearanceLink can convert its aircraft for X-Plane on
-your PC. The converted models stay on your PC and are never shared.
-1. On welcome page 4, the FSLTL line says FOUND IN MSFS when ClearanceLink finds `fsltl-traffic-base` in MSFS's
-   Community folder (through MSFS's own settings). If it says NOT FOUND, press CHOOSE and pick the
-   `fsltl-traffic-base` folder.
-2. Close X-Plane and press CONVERT. It runs in the background and can take a while; LIVE LOG on SUPPORT shows
-   progress. When it's done the line shows how many liveries were converted.
-3. The models go to `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`. After FSLTL updates, press UPDATE to convert
-   again.
+### Bluebell (free download)
+1. Download the **Bluebell OBJ8 CSL packages** from the X-Plane.org forums:
+   [forums.x-plane.org/index.php?/files/file/37041-bluebell-obj8-csl-packages/](https://forums.x-plane.org/index.php?/files/file/37041-bluebell-obj8-csl-packages/)
+   (a free X-Plane.org account is needed to download).
+2. Unzip the packages into `X-Plane 12\Custom Data\CSL`, so you end up with folders like
+   `X-Plane 12\Custom Data\CSL\BB_Airbus`. (Make the `CSL` folder if it isn't there. One extra folder level, such as
+   `CSL\Bluebell\BB_Airbus`, also works.)
+3. WELCOME page 4 shows how many packages ClearanceLink found. Restart X-Plane if it was running.
+
+### FSLTL (converted from your MSFS copy)
+If you have FSLTL (FS Live Traffic Liveries) installed for MSFS, ClearanceLink can convert its aircraft for X-Plane.
+The conversion runs on your PC and reads your FSLTL folder only. FSLTL's licence doesn't allow sharing the models, so
+the converted models stay on your PC: never upload or share them.
+1. On WELCOME page 4, the FSLTL line says **FOUND IN MSFS** when ClearanceLink finds the `fsltl-traffic-base` package
+   in your MSFS Community folder (MSFS 2024 or 2020, Microsoft Store or Steam). If it says **NOT FOUND**, press
+   **CHOOSE** and pick the `fsltl-traffic-base` folder yourself.
+2. Close X-Plane and press **CONVERT**. It runs in the background and takes several minutes; LIVE LOG on SUPPORT shows
+   progress. When it's done, the line shows how many liveries were converted (about 3,000) and the models take about
+   13 GB.
+3. The models go to `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`. After an FSLTL update, press **UPDATE** on page 4
+   to convert again.
 
 ### Other models
-The plugin also uses models already installed for LiveTraffic, xPilot, X-IvAp or swift. Each BeyondATC aircraft is
-drawn with the closest model and livery available; an airline without a matching livery gets another livery of the
-same type.
+The plugin also uses CSL models already installed for LiveTraffic, xPilot, X-IvAp or swift. Each BeyondATC aircraft
+is drawn with the closest model and livery there is; an airline without a matching livery gets another livery of the
+same aircraft type.
 
 The plugin lives in `X-Plane 12\Resources\plugins\ClearanceLink`. X-Plane locks it while running, so close X-Plane
-before installing or updating it from the SETUP page.
-
-## X-Plane settings
-Change these in X-Plane, so only BeyondATC talks and flies traffic:
-
-| Where | Setting | Why |
-|---|---|---|
-| Settings > Sound | **Radios** slider to 0 | Otherwise X-Plane's own controllers and ATIS talk over BeyondATC's. |
-| Settings > Graphics | **Draw parked aircraft** unticked | X-Plane parks aircraft at gates where BeyondATC parks its traffic. |
-| Your flight's set-up | No AI aircraft | X-Plane's AI flies its own aircraft, which BeyondATC doesn't know about. |
-
-ClearanceLink reads X-Plane through X-Plane's built-in Web API on port 8086, which is on by default.
+before installing or updating it from SETUP.
 
 ## BeyondATC settings
 Nothing needs changing. BeyondATC sees ClearanceLink as "MSFS 2024".
-- Your SimBrief account is set in BeyondATC, as for MSFS. BeyondATC loads your latest SimBrief flight plan itself
-  and takes only your position from X-Plane, so the plan's departure airport must be the one you're parked at.
-  A plan without a SID in its route gets cleared with "radar vectors".
-- If BeyondATC's traffic is on, it appears in X-Plane once you've installed the
-  [models](#aircraft-models-for-traffic). Without models it still talks on frequency, but you won't see it.
+- Your SimBrief account is set in BeyondATC, as for MSFS. BeyondATC loads your latest SimBrief flight plan itself and
+  takes only your position from X-Plane, so the plan's departure airport must be the one you're parked at. A plan
+  without a SID in its route gets cleared with "radar vectors".
+- BeyondATC's traffic setting works as in MSFS. The traffic appears in X-Plane once the plugin and
+  [models](#aircraft-models-for-traffic) are installed.
+- Use BeyondATC's own key bindings for push-to-talk and quick replies. Binding them inside X-Plane isn't supported
+  yet.
 
 ## Flying MSFS as well
-Nothing to switch. ClearanceLink answers BeyondATC on the connection MSFS uses, but only while MSFS is closed. Close
-ClearanceLink and start MSFS, and BeyondATC talks to MSFS as usual. If MSFS starts while ClearanceLink is running,
-ClearanceLink steps aside.
+Nothing to switch. ClearanceLink answers BeyondATC on the connection MSFS uses, but only while MSFS is closed. To fly
+MSFS, close ClearanceLink and start MSFS: BeyondATC talks to MSFS as usual. If MSFS starts while ClearanceLink is
+running, ClearanceLink steps aside and STATUS says **CLOSE MSFS TO CONNECT**.
 
-If you keep MSFS open while flying X-Plane, choose **ALWAYS ON** on the SETUP page. That adds two small config
-files to BeyondATC's folder so it always goes to ClearanceLink; choosing **AUTOMATIC** removes them again.
+If you want MSFS open while flying X-Plane, choose **ALWAYS ON** on SETUP. That adds two small files
+(`SimConnect.cfg`) to BeyondATC's folder so BeyondATC always goes to ClearanceLink; choosing **AUTOMATIC** removes them
+again. Switch back to AUTOMATIC before flying MSFS with BeyondATC.
 
 ## What works
-- Clearance, taxi routes from X-Plane's own taxiways, SIDs and STARs, frequencies and automatic COM tuning,
-  handoffs, approaches, altitudes and flight levels.
+- Clearance, taxi routes on X-Plane's own taxiways, SIDs and STARs, frequencies with automatic COM tuning, handoffs,
+  approaches, altitudes and flight levels.
 - BeyondATC's traffic, drawn in X-Plane with CSL models.
-- Airports without taxiways in X-Plane get a simple generated taxi network.
+- Airports whose X-Plane scenery has no taxiways get a simple generated taxi network.
+- STATUS shows the airport BeyondATC is using and which scenery it came from.
 
-Not yet: push-to-talk and quick-reply buttons bound inside the sim (use BeyondATC's own keys), and GSX.
+Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equivalent of (those are ignored).
 
 ## Problems
 | What you see | What to do |
 |---|---|
 | BeyondATC says "Flight Simulator is not running!" | Start ClearanceLink first, then BeyondATC. |
 | STATUS says CLOSE MSFS TO CONNECT | Close MSFS, or choose ALWAYS ON on SETUP. |
-| STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. |
-| A folder says NOT FOUND | On SETUP (or welcome page 2), press CHOOSE beside it and pick the folder. |
-| No traffic visible | Check SETUP shows the X-Plane plugin INSTALLED and welcome page 4 finds Bluebell packages or converted FSLTL liveries. |
-| X-Plane talks over BeyondATC | Set the Radios slider to 0 (X-Plane Settings > Sound). |
+| STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. Check X-Plane is 12.1.4 or later. |
+| STATUS says X-PLANE NOT CONNECTED | BeyondATC is connected but X-Plane isn't. Start X-Plane and load a flight. |
+| A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |
+| No traffic visible | On SETUP, the X-PLANE PLUGIN must say INSTALLED. On WELCOME page 4, Bluebell or FSLTL must show a count. Traffic must be on in BeyondATC. |
+| TRAFFIC on STATUS says SEE SETUP | The plugin isn't installed or needs updating. Close X-Plane and press INSTALL or UPDATE on SETUP. |
+| X-Plane talks over BeyondATC | In X-Plane, Settings > Sound, set the Radios slider to 0. |
+| OTHER ADD-ONS on STATUS shows a number | Other MSFS add-ons tried to connect while MSFS was closed. They are ignored; nothing to do. |
 
-**Reporting a problem:** on the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of ClearanceLink's recent
-logs, BeyondATC's log and the end of X-Plane's log, with your Windows user name blanked out, and shows it in
-Explorer. Send it with a few words on what went wrong, on the
-[ClearanceLink GitHub page](https://github.com/Nodeblue/ClearanceLink/issues).
+## Getting help
+On the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of ClearanceLink's recent logs, BeyondATC's log and
+the end of X-Plane's log, with your Windows user name blanked out, and shows it in Explorer. Send it with a few words
+on what went wrong, on the [ClearanceLink GitHub page](https://github.com/Nodeblue/ClearanceLink/issues).
 
-Logs stay in `%LOCALAPPDATA%\ClearanceLink` for 7 days. You can turn the session log off on SUPPORT, and LIVE LOG
-shows what ClearanceLink is doing right now.
-
-## Releases and updates
-Downloading, the Windows warning, update notices and updating: see [Download and install](install.md).
+Logs are kept in `%LOCALAPPDATA%\ClearanceLink` for 7 days. You can turn the session log off on SUPPORT, and
+**LIVE LOG** shows what ClearanceLink is doing right now.
 
 ## Commands
-For a command prompt in ClearanceLink's folder:
+Everything also works from a command prompt in ClearanceLink's folder, for example in a batch file:
 
 ```
 ClearanceLink.exe start          run in the command prompt instead of the window
 ClearanceLink.exe settings       show or change the folders, connection and log settings
 ClearanceLink.exe support        make the support zip
-ClearanceLink.exe plugin status  is the X-Plane plugin installed? (plugin install | remove)
+ClearanceLink.exe plugin status  is the X-Plane plugin installed? (also: plugin install, plugin remove)
+ClearanceLink.exe fsltl import   convert the FSLTL models (also: fsltl status)
 ClearanceLink.exe xplane-check   check ClearanceLink can read what it needs from a running X-Plane
+ClearanceLink.exe update         check for a newer release
 ClearanceLink.exe --help         all commands
 ```
