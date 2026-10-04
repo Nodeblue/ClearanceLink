@@ -9,7 +9,7 @@ Full help: https://github.com/Nodeblue/XPConnect/blob/main/docs/help.md
 
 First start
 -----------
-Double-click XPConnect.exe. The GETTING STARTED pages find BeyondATC and X-Plane, install the traffic
+Double-click XPConnect.exe. The WELCOME pages find BeyondATC and X-Plane, install the traffic
 add-on and list the X-Plane settings to turn down. Use the buttons beside each line, or keys 1-6 (left)
 and Shift+1-6 (right). You can open them again from the SUPPORT page.
 

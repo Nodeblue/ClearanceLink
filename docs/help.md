@@ -24,7 +24,7 @@ You don't need .NET or MSFS installed.
 1. Unzip XPConnect anywhere you like, for example `Documents\XPConnect`.
 2. Double-click `XPConnect.exe`. XPConnect isn't signed with a paid certificate yet, so Windows may warn you the
    first time. For downloading, updates and that warning, see [Releases and updates](#releases-and-updates).
-3. The window opens on **GETTING STARTED**. Use the buttons beside each line, or keys 1-6 (left) and Shift+1-6
+3. The window opens on five **WELCOME** pages. Use the buttons beside each line, or keys 1-6 (left) and Shift+1-6
    (right). It takes four steps:
    - **Folders.** XPConnect finds BeyondATC and X-Plane by itself. If a line says NOT FOUND, press CHOOSE and pick
      the folder (the BeyondATC folder is the one with `BeyondATC.exe`). Nothing in these folders is changed.
@@ -34,7 +34,7 @@ You don't need .NET or MSFS installed.
    - **X-Plane settings.** Three settings to turn down, explained [below](#x-plane-settings).
    - **Every flight.** The order to start things in, below.
 
-You can open GETTING STARTED again from the SUPPORT page.
+You can open the welcome pages again from the SUPPORT page.
 
 ## Every flight
 1. Close Microsoft Flight Simulator if it's open.
@@ -56,7 +56,7 @@ package once:
 1. Download the **Bluebell OBJ8 CSL** packages (free, from the X-Plane.org forums; search for "Bluebell CSL").
 2. Unzip them into `X-Plane 12\Custom Data\CSL`, so you end up with folders like
    `X-Plane 12\Custom Data\CSL\BB_Airbus`. A folder that holds the packages one level down also works.
-3. Start X-Plane. GETTING STARTED (step 3) shows how many packages it found.
+3. Start X-Plane. Welcome page 3 shows how many packages it found.
 
 The traffic add-on also uses models already installed for LiveTraffic, xPilot, X-IvAp or swift, so if you have one
 of those you may not need anything else. Each BeyondATC aircraft is drawn with the closest model and livery
@@ -105,8 +105,8 @@ Not yet: push-to-talk and quick-reply buttons bound inside the sim (use BeyondAT
 | BeyondATC says "Flight Simulator is not running!" | Start XPConnect first, then BeyondATC. |
 | STATUS says CLOSE MSFS TO CONNECT | Close MSFS, or choose ALWAYS ON on SETUP. |
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. |
-| A folder says NOT FOUND | On SETUP (or GETTING STARTED), press CHOOSE beside it and pick the folder. |
-| No traffic visible | Check SETUP shows the traffic add-on INSTALLED and GETTING STARTED step 3 finds model packages. |
+| A folder says NOT FOUND | On SETUP (or welcome page 2), press CHOOSE beside it and pick the folder. |
+| No traffic visible | Check SETUP shows the traffic add-on INSTALLED and welcome page 3 finds model packages. |
 | X-Plane talks over BeyondATC | Set X-Plane's ATC volume to 0 (Settings > Sound). |
 
 **Reporting a problem:** on the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of XPConnect's recent

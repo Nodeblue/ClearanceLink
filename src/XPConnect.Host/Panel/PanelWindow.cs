@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -18,6 +19,7 @@ public sealed class PanelWindow : Window
 
     private const double DataSize = 19;
     private const double LabelSize = 13.5;
+    private const double MessageSize = 15;
     private static readonly TimeSpan FlashTime = TimeSpan.FromSeconds(4);
 
     private static readonly IBrush Bezel = Brush("#2A2F33");
@@ -29,6 +31,7 @@ public sealed class PanelWindow : Window
     private readonly Func<PanelState> _state;
     private readonly TextBlock _title = Text(DataSize);
     private readonly TextBlock _scratch = Text(DataSize);
+    private readonly TextBlock _message = Text(MessageSize);
     private readonly TextBlock[] _labelLeft = new TextBlock[6];
     private readonly TextBlock[] _labelRight = new TextBlock[6];
     private readonly TextBlock[] _dataLeft = new TextBlock[6];
@@ -109,10 +112,35 @@ public sealed class PanelWindow : Window
             _lskRight[i].IsEnabled = row.KeyRight != CduKey.None;
         }
 
+        ShowMessage(page);
         Paint(_scratch, page.Scratchpad);
         foreach (var (key, button) in _pageKeys)
         {
             button.Foreground = key == Page ? Colour(CduColor.Green) : KeyText;
+        }
+    }
+
+    /// <summary>Draws the page's message over the empty rows at the top, one paragraph per cell.</summary>
+    private void ShowMessage(CduPage page)
+    {
+        var rows = page.Rows.TakeWhile(r => r == CduRow.Empty).Count();
+        _message.IsVisible = page.Message is { Count: > 0 } && rows > 0;
+        if (!_message.IsVisible)
+        {
+            return;
+        }
+
+        Grid.SetRowSpan(_message, rows * 2);
+        _message.Inlines!.Clear();
+        foreach (var (cell, i) in page.Message!.Select((c, i) => (c, i)))
+        {
+            if (i > 0)
+            {
+                _message.Inlines.Add(new LineBreak());
+                _message.Inlines.Add(new Run("\n") { FontSize = MessageSize / 2 });
+            }
+
+            _message.Inlines.Add(new Run(cell.Text) { Foreground = Colour(cell.Color) });
         }
     }
 
@@ -285,6 +313,15 @@ public sealed class PanelWindow : Window
             grid.Children.Add(_lskLeft[i]);
             grid.Children.Add(_lskRight[i]);
         }
+
+        // Messages (getting-started pages) start under the title and wrap to the 24-column width.
+        _message.TextWrapping = TextWrapping.Wrap;
+        _message.LineHeight = MessageSize * 1.35;
+        _message.Width = CharWidth() * CduPages.Width;
+        _message.Margin = new Thickness(16, 4, 16, 0);
+        Place(grid, _message, 1);
+        _message.VerticalAlignment = VerticalAlignment.Top;
+        _message.HorizontalAlignment = HorizontalAlignment.Left;
 
         // The divider sits at the top of the scratchpad row and the text below it, whatever the screen's scaling.
         var divider = new Border { BorderBrush = Brush("#1A2228"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(16, 0) };

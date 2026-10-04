@@ -107,14 +107,19 @@ public sealed class PanelTests
         foreach (var page in CduPages.StartPages)
         {
             var built = CduPages.Build(page, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled });
-            Assert.StartsWith("GETTING STARTED ", built.Title, StringComparison.Ordinal);
+            Assert.StartsWith("WELCOME ", built.Title, StringComparison.Ordinal);
+            Assert.NotEmpty(built.Message!);
             Assert.All(built.Rows, row => Assert.DoesNotContain("~", row.Left.Text + row.Right.Text, StringComparison.Ordinal));
             Assert.All(built.Rows, row => Assert.True(row.LabelLeft.Length + row.LabelRight.Length + (row.LabelRight.Length > 0 ? 1 : 0) <= CduPages.Width, row.LabelLeft));
         }
 
         var welcome = CduPages.Build(PanelPage.Welcome, Ready);
-        Assert.Contains(welcome.Rows, r => r.Left.Text == "ENDORSED BY BEYONDATC");
-        Assert.Contains(welcome.Rows, r => r.Left.Text == "USE AT YOUR OWN RISK");
+        Assert.Contains(welcome.Message!, m => m.Text.Contains("Not affiliated with or endorsed by BeyondATC.", StringComparison.Ordinal));
+        Assert.Contains(welcome.Message!, m => m.Text.Contains("no warranty", StringComparison.Ordinal));
+
+        // Advice is text, not rows that look selectable: the X-Plane settings page has keys only for help and paging.
+        var xplane = CduPages.Build(PanelPage.StartXPlane, Ready);
+        Assert.All(xplane.Rows.Take(4), r => Assert.Equal(CduRow.Empty, r));
 
         var missing = CduPages.Build(PanelPage.StartFolders, Ready with { XPlaneFolder = null });
         Assert.Contains(missing.Rows, r => r.KeyRight == CduKey.ChooseXPlaneFolder && r.Right.Text == "CHOOSE>");
@@ -124,6 +129,43 @@ public sealed class PanelTests
         Assert.Equal(CduKey.FinishGettingStarted, CduPages.Build(PanelPage.StartDone, Ready).Rows[5].KeyRight);
     }
 
+    [Theory]
+    [MemberData(nameof(AllPages))]
+    public void Messages_fit_above_the_first_row_with_content(PanelPage page)
+    {
+        foreach (var state in new[] { Ready, Ready with { BatcFolder = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled } })
+        {
+            var built = CduPages.Build(page, state);
+            if (built.Message is null)
+            {
+                continue;
+            }
+
+            // 15 px text wraps at 30 characters of the 24-column screen; a row (label + data) is 47 px, a text line 20 px.
+            var lines = built.Message.Sum(m => m.Text.Split('\n').Sum(WrappedLines)) + built.Message.Count - 1;
+            var room = built.Rows.TakeWhile(r => r == CduRow.Empty).Count() * 47 / 20;
+            Assert.True(lines <= room, $"{page}: {lines} lines, room for {room}");
+        }
+    }
+
+    private static int WrappedLines(string paragraph)
+    {
+        var lines = 1;
+        var used = 0;
+        foreach (var word in paragraph.Split(' '))
+        {
+            if (used > 0 && used + 1 + word.Length > 30)
+            {
+                lines++;
+                used = 0;
+            }
+
+            used += (used > 0 ? 1 : 0) + word.Length;
+        }
+
+        return lines;
+    }
+
     [AvaloniaFact]
     public void Getting_started_steps_forward_and_back_and_reopens_from_support()
     {
@@ -131,7 +173,7 @@ public sealed class PanelTests
         window.Show();
 
         Assert.Equal(PanelPage.Welcome, window.Page);
-        Assert.Equal("GETTING STARTED 1/5", window.Shown!.Title);
+        Assert.Equal("WELCOME 1/5", window.Shown!.Title);
         foreach (var expected in new[] { PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartXPlane, PanelPage.StartDone })
         {
             window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.Shift);
