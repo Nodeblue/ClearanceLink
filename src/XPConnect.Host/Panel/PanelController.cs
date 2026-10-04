@@ -69,7 +69,8 @@ public sealed class PanelController : IAsyncDisposable
             batc,
             xplane,
             addOn,
-            snapshot?.Plugin?.Aircraft);
+            snapshot?.Plugin?.Aircraft,
+            UpdateCheck.Available);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -106,6 +107,9 @@ public sealed class PanelController : IAsyncDisposable
                 return "OPENING LOG FOLDER";
             case CduKey.InstallTrafficAddOn:
                 return InstallTrafficAddOn();
+            case CduKey.OpenUpdatePage:
+                Cli.OpenInBrowser(UpdateCheck.Available?.PageUrl ?? UpdateCheck.ReleasesPage);
+                return "OPENING DOWNLOAD PAGE";
             case CduKey.OpenWebsite:
                 Cli.OpenInBrowser(CduPages.Website);
                 return "OPENING WEBSITE";
