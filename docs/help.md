@@ -15,7 +15,7 @@ X-Plane 12. BeyondATC talks to XPConnect as if it were MSFS, and XPConnect answe
 - Windows 10 or 11 (64-bit).
 - X-Plane 12.1.4 or later.
 - BeyondATC, installed as usual. It stays set up for MSFS too.
-- For traffic in X-Plane (optional): free CSL aircraft models such as Bluebell. See
+- For traffic in X-Plane (optional): Bluebell CSL models or an FSLTL install in MSFS. See
   [Aircraft models for traffic](#aircraft-models-for-traffic).
 
 You don't need .NET or MSFS installed.
@@ -24,13 +24,14 @@ You don't need .NET or MSFS installed.
 1. Unzip XPConnect anywhere you like, for example `Documents\XPConnect`.
 2. Double-click `XPConnect.exe`. XPConnect isn't signed with a paid certificate yet, so Windows may warn you the
    first time. For downloading, updates and that warning, see [Releases and updates](#releases-and-updates).
-3. The window opens on five **WELCOME** pages. Use the buttons beside each line, or keys 1-6 (left) and Shift+1-6
-   (right). It takes four steps:
+3. The window opens on six **WELCOME** pages. Use the buttons beside each line, or keys 1-6 (left) and Shift+1-6
+   (right). After the welcome message:
    - **Folders.** XPConnect finds BeyondATC and X-Plane by itself. If a line says NOT FOUND, press CHOOSE and pick
      the folder (the BeyondATC folder is the one with `BeyondATC.exe`). Nothing in these folders is changed.
-   - **Traffic.** Press INSTALL to add XPConnect's traffic add-on to X-Plane (close X-Plane first). It draws
-     BeyondATC's traffic with CSL models, so you also need some models; HOW TO opens
-     [that part of this page](#aircraft-models-for-traffic). Traffic is optional: skip it and ATC still works.
+   - **BeyondATC's traffic.** BeyondATC creates and flies its own traffic; XPConnect's X-Plane plugin draws it in
+     X-Plane. Press INSTALL (close X-Plane first). Traffic is optional: skip it and ATC still works.
+   - **Aircraft models.** The plugin draws traffic with Bluebell or FSLTL models, see
+     [Aircraft models for traffic](#aircraft-models-for-traffic).
    - **X-Plane settings.** Three settings to turn down, explained [below](#x-plane-settings).
    - **Every flight.** The order to start things in, below.
 
@@ -50,19 +51,32 @@ doesn't reconnect by itself.
 
 ## Aircraft models for traffic
 BeyondATC's traffic (aircraft at gates, taxiing, departing and arriving) appears in X-Plane through XPConnect's
-traffic add-on, which draws each aircraft with a CSL model. X-Plane doesn't come with CSL models, so install a
-package once:
+X-Plane plugin, which draws each aircraft with a CSL model. X-Plane doesn't come with CSL models. Two libraries are
+tested and supported; either one is enough, and you can have both.
 
+### Bluebell
 1. Download the **Bluebell OBJ8 CSL** packages (free, from the X-Plane.org forums; search for "Bluebell CSL").
 2. Unzip them into `X-Plane 12\Custom Data\CSL`, so you end up with folders like
    `X-Plane 12\Custom Data\CSL\BB_Airbus`. A folder that holds the packages one level down also works.
-3. Start X-Plane. Welcome page 3 shows how many packages it found.
+3. Welcome page 4 (or SETUP) shows how many packages XPConnect found.
 
-The traffic add-on also uses models already installed for LiveTraffic, xPilot, X-IvAp or swift, so if you have one
-of those you may not need anything else. Each BeyondATC aircraft is drawn with the closest model and livery
-available; an airline without a matching livery gets another livery of the same type.
+### FSLTL
+If you have FSLTL (FS Live Traffic Liveries) installed in MSFS, XPConnect can convert its aircraft for X-Plane on
+your PC. The converted models stay on your PC and are never shared.
+1. On welcome page 4, the FSLTL line says FOUND IN MSFS when XPConnect finds `fsltl-traffic-base` in MSFS's
+   Community folder (through MSFS's own settings). If it says NOT FOUND, press CHOOSE and pick the
+   `fsltl-traffic-base` folder.
+2. Close X-Plane and press CONVERT. It runs in the background and can take a while; LIVE LOG on SUPPORT shows
+   progress. When it's done the line shows how many liveries were converted.
+3. The models go to `X-Plane 12\Custom Data\CSL\XPConnect-FSLTL`. After FSLTL updates, press UPDATE to convert
+   again.
 
-The add-on lives in `X-Plane 12\Resources\plugins\XPConnect`. X-Plane locks it while running, so close X-Plane
+### Other models
+The plugin also uses models already installed for LiveTraffic, xPilot, X-IvAp or swift. Each BeyondATC aircraft is
+drawn with the closest model and livery available; an airline without a matching livery gets another livery of the
+same type.
+
+The plugin lives in `X-Plane 12\Resources\plugins\XPConnect`. X-Plane locks it while running, so close X-Plane
 before installing or updating it from the SETUP page.
 
 ## X-Plane settings
@@ -106,7 +120,7 @@ Not yet: push-to-talk and quick-reply buttons bound inside the sim (use BeyondAT
 | STATUS says CLOSE MSFS TO CONNECT | Close MSFS, or choose ALWAYS ON on SETUP. |
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. |
 | A folder says NOT FOUND | On SETUP (or welcome page 2), press CHOOSE beside it and pick the folder. |
-| No traffic visible | Check SETUP shows the traffic add-on INSTALLED and welcome page 3 finds model packages. |
+| No traffic visible | Check SETUP shows the X-Plane plugin INSTALLED and welcome page 4 finds Bluebell packages or converted FSLTL liveries. |
 | X-Plane talks over BeyondATC | Set X-Plane's ATC volume to 0 (Settings > Sound). |
 
 **Reporting a problem:** on the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of XPConnect's recent
@@ -127,7 +141,7 @@ For a command prompt in XPConnect's folder:
 XPConnect.exe start          run in the command prompt instead of the window
 XPConnect.exe settings       show or change the folders, connection and log settings
 XPConnect.exe support        make the support zip
-XPConnect.exe plugin status  is the traffic add-on installed? (plugin install | remove)
+XPConnect.exe plugin status  is the X-Plane plugin installed? (plugin install | remove)
 XPConnect.exe xplane-check   check XPConnect can read what it needs from a running X-Plane
 XPConnect.exe --help         all commands
 ```

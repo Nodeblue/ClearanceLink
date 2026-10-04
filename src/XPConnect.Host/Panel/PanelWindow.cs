@@ -170,6 +170,7 @@ public sealed class PanelWindow : Window
                 return;
             case CduKey.ChooseBatcFolder:
             case CduKey.ChooseXPlaneFolder:
+            case CduKey.ChooseFsltlFolder:
                 await ChooseFolderAsync(key);
                 return;
             case CduKey.ShowLiveLog:
@@ -208,10 +209,14 @@ public sealed class PanelWindow : Window
             return;
         }
 
-        var batc = key == CduKey.ChooseBatcFolder;
         var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = batc ? "Choose the BeyondATC folder (the one with BeyondATC.exe)" : "Choose the X-Plane 12 folder",
+            Title = key switch
+            {
+                CduKey.ChooseBatcFolder => "Choose the BeyondATC folder (the one with BeyondATC.exe)",
+                CduKey.ChooseFsltlFolder => "Choose FSLTL's fsltl-traffic-base folder (in MSFS's Community folder)",
+                _ => "Choose the X-Plane 12 folder",
+            },
             AllowMultiple = false,
         });
         if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)

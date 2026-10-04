@@ -19,8 +19,9 @@ public sealed class PanelController : IAsyncDisposable
     private CancellationTokenSource? _stop;
     private Task? _serve;
     private StatusBoard? _board;
-    private (string? Batc, string? XPlane, PluginInstall.State AddOn, int Csl, DateTime At) _folders;
+    private Found _folders = new();
     private bool _foldersChanged;
+    private volatile bool _fsltlConverting;
 
     public void Start()
     {
@@ -71,7 +72,10 @@ public sealed class PanelController : IAsyncDisposable
             xplane,
             addOn,
             snapshot?.Plugin?.Aircraft,
-            _folders.Csl);
+            _folders.Csl,
+            _folders.Fsltl,
+            _folders.FsltlLiveries,
+            _fsltlConverting);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -112,6 +116,8 @@ public sealed class PanelController : IAsyncDisposable
             case CduKey.OpenModelsHelp:
                 Cli.OpenInBrowser(CduPages.ModelsHelp);
                 return "OPENING HELP PAGE";
+            case CduKey.ConvertFsltl:
+                return ConvertFsltl();
             case CduKey.InstallTrafficAddOn:
                 return InstallTrafficAddOn();
             case CduKey.OpenWebsite:
@@ -126,6 +132,19 @@ public sealed class PanelController : IAsyncDisposable
     public string SetFolder(CduKey which, string folder)
     {
         var settings = AppSettings.Load(AppFolders.Default.Settings);
+        if (which == CduKey.ChooseFsltlFolder)
+        {
+            if (Fsltl.FsltlLocator.Find(folder) is null)
+            {
+                return "NOT AN FSLTL FOLDER";
+            }
+
+            settings.FsltlFolder = Path.GetFullPath(folder);
+            settings.Save(AppFolders.Default.Settings);
+            _folders = new();
+            return "FSLTL FOLDER SAVED";
+        }
+
         if (which == CduKey.ChooseBatcFolder)
         {
             if (BatcRedirect.FindInstallFolder(folder) is not { } found)
@@ -146,7 +165,7 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         settings.Save(AppFolders.Default.Settings);
-        _folders = default;
+        _folders = new();
         _foldersChanged = true;
         return which == CduKey.ChooseBatcFolder ? "BEYONDATC FOLDER SAVED" : "X-PLANE FOLDER SAVED";
     }
@@ -217,13 +236,18 @@ public sealed class PanelController : IAsyncDisposable
     ];
 
     /// <summary>CSL packages (folders with an xsb_aircraft.txt, up to three levels down) where the traffic add-on looks.</summary>
-    public static int CountCslPackages(string xplaneRoot) => CslFolders
+    public static int CountCslPackages(string xplaneRoot, string? except = null) => CslFolders
         .Select(f => Path.Combine([xplaneRoot, .. f.Split('\\')]))
         .Where(Directory.Exists)
-        .Sum(f => CountPackages(f, depth: 3));
+        .Sum(f => CountPackages(f, depth: 3, except is null ? null : Path.GetFullPath(except)));
 
-    private static int CountPackages(string folder, int depth)
+    private static int CountPackages(string folder, int depth, string? except)
     {
+        if (except is not null && string.Equals(Path.GetFullPath(folder), except, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
         if (File.Exists(Path.Combine(folder, "xsb_aircraft.txt")))
         {
             return 1;
@@ -231,7 +255,7 @@ public sealed class PanelController : IAsyncDisposable
 
         try
         {
-            return depth == 0 ? 0 : Directory.GetDirectories(folder).Sum(d => CountPackages(d, depth - 1));
+            return depth == 0 ? 0 : Directory.GetDirectories(folder).Sum(d => CountPackages(d, depth - 1, except));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -255,8 +279,8 @@ public sealed class PanelController : IAsyncDisposable
         try
         {
             new PluginInstall(xplane).Install().ToList().ForEach(l => PacketConsole.Info($"plugin: {l}"));
-            _folders = default;
-            return "TRAFFIC ADD-ON INSTALLED";
+            _folders = new();
+            return "PLUGIN INSTALLED";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -289,11 +313,77 @@ public sealed class PanelController : IAsyncDisposable
         {
             var none = new Options();
             var xplane = Cli.FindXPlane(none)?.Root;
-            var addOn = xplane is null ? PluginInstall.State.NotBundled : new PluginInstall(xplane).Check();
-            _folders = (Cli.BatcFolder(none), xplane, addOn, xplane is null ? 0 : CountCslPackages(xplane), DateTime.Now);
+            _folders = new Found
+            {
+                Batc = Cli.BatcFolder(none),
+                XPlane = xplane,
+                AddOn = xplane is null ? PluginInstall.State.NotBundled : new PluginInstall(xplane).Check(),
+                Csl = xplane is null ? 0 : CountCslPackages(xplane, except: Cli.FsltlOutput(xplane)),
+                Fsltl = Cli.FsltlFolder(none),
+                FsltlLiveries = xplane is null ? 0 : Fsltl.FsltlImporter.LoadCatalogue(Cli.FsltlOutput(xplane)).Count,
+                At = DateTime.Now,
+            };
         }
 
         return (_folders.Batc, _folders.XPlane);
+    }
+
+    /// <summary>Converts the user's FSLTL models into X-Plane's CSL folder in the background (it takes minutes).</summary>
+    private string ConvertFsltl()
+    {
+        Folders();
+        if (_folders.Fsltl is not { } package || _folders.XPlane is not { } xplane)
+        {
+            return _folders.XPlane is null ? "SET X-PLANE FOLDER" : "CHOOSE THE FSLTL FOLDER";
+        }
+
+        // Replacing files X-Plane has open can leave it drawing a mix of old and new models.
+        if (Process.GetProcessesByName("X-Plane").Length > 0)
+        {
+            return "CLOSE X-PLANE FIRST";
+        }
+
+        if (_fsltlConverting)
+        {
+            return "ALREADY CONVERTING";
+        }
+
+        _fsltlConverting = true;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var result = Fsltl.FsltlImporter.Import(new Fsltl.ImportOptions
+                {
+                    PackageRoot = package,
+                    Output = Cli.FsltlOutput(xplane),
+                    Log = line => PacketConsole.Info($"fsltl: {line}"),
+                });
+                PacketConsole.Info($"fsltl: imported {result.Liveries} liveries ({result.Models} models, {result.Skipped} skipped)");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                PacketConsole.Info($"fsltl: import failed: {ex.Message}");
+            }
+            finally
+            {
+                _fsltlConverting = false;
+                _folders = new();
+            }
+        });
+        return "CONVERTING FSLTL MODELS";
+    }
+
+    /// <summary>What was last found on disk; looked up at most every 10 s.</summary>
+    private sealed record Found
+    {
+        public string? Batc { get; init; }
+        public string? XPlane { get; init; }
+        public PluginInstall.State AddOn { get; init; }
+        public int Csl { get; init; }
+        public string? Fsltl { get; init; }
+        public int FsltlLiveries { get; init; }
+        public DateTime At { get; init; }
     }
 
     private async Task StopAsync()
