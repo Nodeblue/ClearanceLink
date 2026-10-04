@@ -23,6 +23,9 @@ public sealed class AppSettings
     /// <summary>X-Plane's folder when the user chose it; null to find it automatically.</summary>
     public string? XPlaneFolder { get; set; }
 
+    /// <summary>FSLTL's fsltl-traffic-base folder when the user chose it; null to find it through MSFS's settings.</summary>
+    public string? FsltlFolder { get; set; }
+
     /// <summary>How BeyondATC reaches XPConnect: the default MSFS connection (nothing changed in BeyondATC) or its config files.</summary>
     public ConnectionMode Connection { get; set; } = ConnectionMode.Automatic;
 
@@ -31,6 +34,9 @@ public sealed class AppSettings
 
     /// <summary>Session logs and recordings older than this are deleted at start-up.</summary>
     public int KeepDays { get; set; } = 7;
+
+    /// <summary>Set once the user has been through (or skipped) the window's getting-started pages.</summary>
+    public bool GettingStartedDone { get; set; }
 
     /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
     public bool CheckForUpdates { get; set; } = true;
