@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+# The product name in file names, the plugin folder and the release text. Change it here when the app is renamed.
+env:
+  APP: XPConnect
+
 jobs:
   zip:
     runs-on: windows-latest
@@ -50,8 +54,8 @@ jobs:
           if ($zip.Name -notlike "*-${{ steps.version.outputs.version }}-win-x64.zip") { throw "unexpected zip name $($zip.Name)" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $names = [IO.Compression.ZipFile]::OpenRead($zip.FullName).Entries.FullName | ForEach-Object { $_.Replace('\', '/') }
-          if (-not ($names -like 'X-Plane plugin/XPConnect/64/win.xpl')) { throw 'X-Plane plugin missing from the zip' }
-          if (-not ($names -contains 'XPConnect.exe')) { throw 'XPConnect.exe missing from the zip' }
+          if (-not ($names -like "X-Plane plugin/$env:APP/64/win.xpl")) { throw 'X-Plane plugin missing from the zip' }
+          if (-not ($names -contains "$env:APP.exe")) { throw "$env:APP.exe missing from the zip" }
           # Test data stays in the repository: recordings hold MSFS data, the test airports are GPL, and converted
           # FSLTL models may never be shipped.
           $banned = $names | Where-Object { $_ -match '\.jsonl$|(^|/)apt\.dat$|\.dds$|(^|/)xsb_aircraft\.txt$|(^|/)CSL/' }
@@ -61,7 +65,7 @@ jobs:
           Write-Host "$($zip.Name) $hash"
       - uses: actions/upload-artifact@v4
         with:
-          name: XPConnect-win-x64
+          name: ${{ env.APP }}-win-x64
           path: |
             publish/*.zip
             publish/*.sha256.txt
@@ -74,13 +78,13 @@ jobs:
           $zip = (Get-Item publish/*.zip).FullName
           $hash = (Get-Item publish/*.sha256.txt).FullName
           $notes = @"
-          **Experimental.** XPConnect is an independent project, not made, supported or endorsed by BeyondATC or Laminar Research.
+          **Experimental.** $env:APP is an independent project, not made, supported or endorsed by BeyondATC or Laminar Research.
 
           **New here?** Download the zip below and follow [Install and update](https://github.com/${{ github.repository }}/blob/$tag/docs/install.md). Windows may warn that the app is from an unknown publisher; the guide shows what to click.
 
-          **Updating?** Close XPConnect, unzip over your old XPConnect folder, then open the SETUP page: if it says the traffic add-on has a newer version, close X-Plane and press UPDATE.
+          **Updating?** Close $env:APP, unzip over your old $env:APP folder, then open the SETUP page: if it says the traffic add-on has a newer version, close X-Plane and press UPDATE.
 
           SHA-256 of the zip is in the .sha256.txt file.
           "@
           $pre = if ($tag.Contains('-')) { @('--prerelease') } else { @() }
-          gh release create $tag $zip $hash --draft --target $env:GITHUB_SHA --title "XPConnect $tag" --notes $notes --generate-notes @pre
+          gh release create $tag $zip $hash --draft --target $env:GITHUB_SHA --title "$env:APP $tag" --notes $notes --generate-notes @pre
