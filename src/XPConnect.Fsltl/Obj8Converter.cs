@@ -28,7 +28,9 @@ public static class Obj8Converter
 
     /// <param name="lods">The glTF files, most detailed first; at most two are used (the first and the last).</param>
     /// <param name="engineParts">Node names of engine blur discs and still blades (<see cref="AnimationRoles.EngineParts"/>).</param>
-    public static Obj8Result Convert(IReadOnlyList<GltfModel> lods, IReadOnlyDictionary<string, AnimationRole> roles, IReadOnlyDictionary<string, AnimationRoles.EnginePart>? engineParts = null)
+    /// <param name="usedNames">Animation names the model XML uses (<see cref="AnimationRoles.UsedNames"/>); others are not
+    /// played by MSFS and are left out, unless their name says they are gear or wheels. Null: every animation counts.</param>
+    public static Obj8Result Convert(IReadOnlyList<GltfModel> lods, IReadOnlyDictionary<string, AnimationRole> roles, IReadOnlyDictionary<string, AnimationRoles.EnginePart>? engineParts = null, IReadOnlySet<string>? usedNames = null)
     {
         var warnings = new List<string>();
         var used = lods.Count > 1 && lods[^1].Path != lods[0].Path ? new[] { lods[0], lods[^1] } : new[] { lods[0] };
@@ -45,7 +47,7 @@ public static class Obj8Converter
             var builder = new ObjBuilder();
             for (var l = 0; l < used.Length; l++)
             {
-                var scene = new SceneWalker(used[l], roles, engineParts ?? new Dictionary<string, AnimationRoles.EnginePart>(), baseColor, emissive, builder, warnings);
+                var scene = new SceneWalker(used[l], roles, engineParts ?? new Dictionary<string, AnimationRoles.EnginePart>(), usedNames, baseColor, emissive, builder, warnings);
                 if (!used[l].Roots.Any(scene.HasGeometry)) continue;  // e.g. windows that the low LOD paints on
                 builder.Command($"ATTR_LOD {Num(ranges[l].Item1)} {Num(ranges[l].Item2)}");
                 builder.ResetState();
@@ -125,7 +127,7 @@ public static class Obj8Converter
         private readonly Dictionary<int, bool> _hasGeometry = [];
         private readonly IReadOnlyDictionary<string, AnimationRoles.EnginePart> _engineParts;
 
-        public SceneWalker(GltfModel model, IReadOnlyDictionary<string, AnimationRole> roles, IReadOnlyDictionary<string, AnimationRoles.EnginePart> engineParts, string baseColor, string? emissive, ObjBuilder output, List<string> warnings)
+        public SceneWalker(GltfModel model, IReadOnlyDictionary<string, AnimationRole> roles, IReadOnlyDictionary<string, AnimationRoles.EnginePart> engineParts, IReadOnlySet<string>? usedNames, string baseColor, string? emissive, ObjBuilder output, List<string> warnings)
         {
             _model = model;
             _engineParts = engineParts;
@@ -136,6 +138,7 @@ public static class Obj8Converter
             foreach (var animation in model.Animations)
             {
                 var (role, key) = RoleFor(animation.Name, roles);
+                if (key is null && usedNames is not null && !IsUsed(animation.Name, usedNames)) continue;  // MSFS never plays it
                 // Blender splits one MSFS animation per node ("<name>_node30_anim_..."); its range covers every part.
                 // MSFS stretches ANIM_LENGTH over that range, which need not start at 0 (FSLTL's TFS A332 steering
                 // is keyed from frame 100 to 200).
@@ -150,6 +153,14 @@ public static class Obj8Converter
                     list.Add(new Driven(channel, role, start, end, model.Animations.IndexOf(animation)));
                 }
             }
+        }
+
+        /// <summary>Whether the XML uses the animation, also as Blender's per-node split ("name_node30_anim_...").</summary>
+        private static bool IsUsed(string name, IReadOnlySet<string> usedNames)
+        {
+            if (usedNames.Contains(name)) return true;
+            var node = name.IndexOf("_node", StringComparison.OrdinalIgnoreCase);
+            return node > 0 && usedNames.Contains(name[..node]);
         }
 
         private static (AnimationRole Role, string? Key) RoleFor(string name, IReadOnlyDictionary<string, AnimationRole> roles)
@@ -172,10 +183,15 @@ public static class Obj8Converter
             if (!HasGeometry(index)) return;
             var node = _model.Nodes[index];
             var channels = _channels.GetValueOrDefault(index) ?? [];
-            // Two animations on one part (FSLTL's TFS A332 nose leg has gear and steering): the later one in the file
-            // wins, as it is applied last.
+            // Two animations on one part: one that only holds a fixed pose loses to one that moves (the TFS A380 nose
+            // leg has its gear rotation and a constant "SIM_ON_GROUND_06" hold, which left the nose wheels inside the
+            // fuselage); between two that move (TFS A332 nose leg: gear and steering), the later one in the file wins,
+            // as it is applied last.
             Driven? Pick(string path) =>
-                channels.Where(c => c.Channel.Path == path).OrderByDescending(c => c.Order).FirstOrDefault();
+                channels.Where(c => c.Channel.Path == path)
+                    .OrderBy(c => c.Channel.Varies ? 0 : 1)
+                    .ThenByDescending(c => c.Order)
+                    .FirstOrDefault();
             // Steering only turns the wheel; a steering translation channel is posed straight like any still one.
             var translation = Pick("translation") is { Role.Kind: "steering" } steer ? steer with { Role = AnimationRole.Still with { PoseFrame = steer.Role.PoseFrame, PoseLength = steer.Role.PoseLength } } : Pick("translation");
             var rotation = Pick("rotation");
