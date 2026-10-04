@@ -1,5 +1,5 @@
 // Prints how the plugin fits each CSL model to the ground, as a CSV table, so the fit can be checked against a whole
-// CSL library without X-Plane (docs/protocol/plugin.md). Usage: xpconnect-groundfit <CSL folder>... > table.csv
+// CSL library without X-Plane (docs/protocol/plugin.md). Usage: clearancelink-groundfit <CSL folder>... > table.csv
 // Reads the models only; writes nothing but the table.
 #include "GroundFit.h"
 
@@ -30,17 +30,17 @@ std::string Csv(std::string text) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: xpconnect-groundfit <CSL folder>...\n");
+        std::fprintf(stderr, "usage: clearancelink-groundfit <CSL folder>...\n");
         return 2;
     }
     const std::vector<std::string> folders(argv + 1, argv + argc);
-    const auto packages = xpc::FindCslPackages(folders);
+    const auto packages = clink::FindCslPackages(folders);
     std::fprintf(stderr, "%zu CSL packages\n", packages.size());
 
     std::printf("package,model,icao,vert_offset_m,obj_files,points,gear_points,bogie_dataref,bogie_level,bogie_tilt_deg,fit,nose_above_mains_m,"
                 "pitch_deg,wheels_below_origin_m,why\n");
     // Liveries of one model share their .obj files; read each set once.
-    std::map<std::vector<std::string>, std::pair<xpc::PosedModel, std::optional<xpc::Wheels>>> read;
+    std::map<std::vector<std::string>, std::pair<clink::PosedModel, std::optional<clink::Wheels>>> read;
     std::map<std::vector<std::string>, std::string> reasons;
     int models = 0, fitted = 0;
 
@@ -52,12 +52,12 @@ int main(int argc, char** argv) {
         int start = 0;
         auto flush = [&]() {
             if (start == 0) return;
-            const auto files = xpc::ModelObjFiles(folder, start, packages);
+            const auto files = clink::ModelObjFiles(folder, start, packages);
             auto found = read.find(files);
             if (found == read.end()) {
-                xpc::PosedModel posed = xpc::PoseObjFiles(files);
+                clink::PosedModel posed = clink::PoseObjFiles(files);
                 std::string why;
-                auto wheels = xpc::FindWheels(posed, &why);
+                auto wheels = clink::FindWheels(posed, &why);
                 found = read.emplace(files, std::make_pair(std::move(posed), wheels)).first;
                 reasons[files] = files.empty() ? "no .obj file found" : why;
             }

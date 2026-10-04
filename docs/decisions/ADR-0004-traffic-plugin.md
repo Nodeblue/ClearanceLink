@@ -12,15 +12,15 @@ each aircraft. X-Plane's Web API cannot create extra aircraft, so drawing them n
    second, complex plugin, and LiveTraffic buffers positions by several seconds to smooth internet data, so traffic
    would lag what BATC's controllers say (an aircraft still on the runway after a landing clearance).
 2. **Our own plugin built on XPMP2** (MIT; the library LiveTraffic and xPilot use). Real time, can read X-Plane's
-   terrain height for BATC, installed by XPConnect itself. C++, built by GitHub Actions so no toolchain on the
+   terrain height for BATC, installed by ClearanceLink itself. C++, built by GitHub Actions so no toolchain on the
    user's PC.
 3. X-Plane's built-in AI aircraft. About 20 slots of full flyable .acf aircraft with X-Plane's own AI attached.
    Not suitable.
 
 ## Decision
-Option 2. `plugin/` holds the plugin; XPConnect talks to it over local UDP (`docs/protocol/plugin.md`), sends
-type, airline and position, and gets terrain height back. The release zip carries the plugin and XPConnect.exe
-installs it into `Resources/plugins/XPConnect`. Users install a CSL model package (Bluebell or one they already have
+Option 2. `plugin/` holds the plugin; ClearanceLink talks to it over local UDP (`docs/protocol/plugin.md`), sends
+type, airline and position, and gets terrain height back. The release zip carries the plugin and ClearanceLink.exe
+installs it into `Resources/plugins/ClearanceLink`. Users install a CSL model package (Bluebell or one they already have
 from LiveTraffic, xPilot or X-IvAp); none is shipped, as their licences do not allow redistribution.
 
 ## Consequences

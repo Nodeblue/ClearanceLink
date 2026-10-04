@@ -1,6 +1,6 @@
-# XPConnect
+# ClearanceLink
 
-**Use [BeyondATC](https://www.beyondatc.net/) with X-Plane 12.** BeyondATC is made for MSFS; XPConnect stands in for
+**Connect [BeyondATC](https://www.beyondatc.net/) to X-Plane 12.** BeyondATC is made for MSFS; ClearanceLink stands in for
 MSFS and answers from X-Plane, so you get BeyondATC's clearances, taxi routes, SIDs, STARs, approaches and traffic
 in X-Plane.
 
@@ -8,8 +8,8 @@ in X-Plane.
 
 ## Get started
 1. Download the latest zip and unzip it anywhere: see [Download and install](docs/install.md).
-2. Double-click `XPConnect.exe`. Its **WELCOME** pages find BeyondATC and X-Plane and set up traffic.
-3. Every flight: close MSFS, start X-Plane 12, keep XPConnect open, then start BeyondATC.
+2. Double-click `ClearanceLink.exe`. Its **WELCOME** pages find BeyondATC and X-Plane and set up traffic.
+3. Every flight: close MSFS, start X-Plane 12, keep ClearanceLink open, then start BeyondATC.
 
 You need Windows 10/11, X-Plane 12.1.4+ and BeyondATC. For traffic, add
 [aircraft models](docs/help.md#aircraft-models-for-traffic): Bluebell, or FSLTL converted from MSFS.
@@ -22,5 +22,5 @@ You need Windows 10/11, X-Plane 12.1.4+ and BeyondATC. For traffic, add
 [docs/architecture.md](docs/architecture.md). Coding agents: [AGENTS.md](AGENTS.md).
 
 ## Licence
-MIT, see [LICENSE](LICENSE). Test data under other terms ([X-Plane Scenery Gateway excerpts](tests/XPConnect.Airports.Tests/fixtures/README.md),
+MIT, see [LICENSE](LICENSE). Test data under other terms ([X-Plane Scenery Gateway excerpts](tests/ClearanceLink.Airports.Tests/fixtures/README.md),
 [MSFS recordings](recordings/samples/README.md)) is not part of the release.

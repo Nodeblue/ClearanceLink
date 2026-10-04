@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClearanceLink.Fsltl.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- BCnEncoder.NET (MIT): decodes MSFS's BC7 textures and re-encodes them as DXT5 for X-Plane. -->
+    <PackageReference Include="BCnEncoder.Net" Version="2.3.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,5 @@
-XPConnect - use BeyondATC with X-Plane 12
-=========================================
+ClearanceLink - Connect BeyondATC to X-Plane 12
+===============================================
 
 Experimental hobby project by Nodeblue. Not affiliated with, endorsed by or supported by BeyondATC,
 Microsoft or Laminar Research. Free software under the MIT licence (LICENSE.txt).
@@ -9,7 +9,7 @@ Full help: https://github.com/Nodeblue/XPConnect/blob/main/docs/help.md
 
 First start
 -----------
-Double-click XPConnect.exe. The WELCOME pages find BeyondATC and X-Plane, install the X-Plane
+Double-click ClearanceLink.exe. The WELCOME pages find BeyondATC and X-Plane, install the X-Plane
 plugin that draws BeyondATC's traffic, set up aircraft models and list the X-Plane settings to turn down. Use the buttons beside each line, or keys 1-6 (left)
 and Shift+1-6 (right). You can open them again from the SUPPORT page.
 
@@ -20,15 +20,15 @@ Every flight
 ------------
 1. Close Microsoft Flight Simulator if it is open.
 2. Start X-Plane 12 and load your aircraft.
-3. Double-click XPConnect.exe and leave its window open.
+3. Double-click ClearanceLink.exe and leave its window open.
 4. Start BeyondATC. The STATUS page says READY FOR CLEARANCE when all is connected.
 
-If XPConnect is closed or restarted during a flight, restart BeyondATC too.
+If ClearanceLink is closed or restarted during a flight, restart BeyondATC too.
 
 
 Traffic
 -------
-BeyondATC's traffic is drawn by XPConnect's X-Plane plugin with CSL aircraft models. Two libraries are
+BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin with CSL aircraft models. Two libraries are
 tested: Bluebell (free from the X-Plane.org forums, unzip into X-Plane 12\Custom Data\CSL) and FSLTL
 (if installed in MSFS, press CONVERT on welcome page 4 with X-Plane closed; converted on your PC).
 Close X-Plane before installing or updating the plugin from the SETUP page.
@@ -43,5 +43,5 @@ Turn X-Plane's ATC volume to 0 (Settings > Sound), and turn off X-Plane's AI air
 Problems
 --------
 On the SUPPORT page, press CREATE SUPPORT FILE and send the zip with a few words on what went wrong.
-It holds XPConnect's recent logs, BeyondATC's log and the end of X-Plane's log, with your Windows user
+It holds ClearanceLink's recent logs, BeyondATC's log and the end of X-Plane's log, with your Windows user
 name blanked out. More fixes are on the help page.

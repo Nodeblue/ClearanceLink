@@ -12,7 +12,7 @@
 #include <fstream>
 #include <future>
 
-namespace xpc {
+namespace clink {
 namespace {
 
 constexpr double FeetPerMeter = 3.28083989501;
@@ -129,10 +129,10 @@ const Wheels* TrafficAircraft::ModelWheels() {
                               result.bogieDataref.c_str(), result.bogieLevel);
             }
             std::snprintf(text, sizeof(text),
-                          "XPConnect: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, wheels %.2f m below the model origin (CSL offset %.2f m)%s\n",
+                          "ClearanceLink: ground fit %s: nose wheel %.2f m above mains, pitch %.2f deg, wheels %.2f m below the model origin (CSL offset %.2f m)%s\n",
                           fit_->name.c_str(), w.noseY - w.mainY, w.LevelPitchDeg(), w.GroundHeightM(w.LevelPitchDeg()), GetVertOfs(), bogies);
         } else {
-            std::snprintf(text, sizeof(text), "XPConnect: ground fit %s: none (%s), drawn level\n", fit_->name.c_str(), result.why.c_str());
+            std::snprintf(text, sizeof(text), "ClearanceLink: ground fit %s: none (%s), drawn level\n", fit_->name.c_str(), result.why.c_str());
         }
         XPLMDebugString(text);
     }
@@ -167,7 +167,7 @@ TrafficAircraft::~TrafficAircraft() {
 }
 
 void TrafficAircraft::ChangeTo(const Add& add) {
-    // XPConnect re-sends add every few seconds so a restarted plugin gets everything; only a new model re-matches.
+    // ClearanceLink re-sends add every few seconds so a restarted plugin gets everything; only a new model re-matches.
     if (Requested(add) != requested_) {
         ChangeModel(add.icaoType, add.icaoAirline, add.livery);
         requested_ = Requested(add);
@@ -225,7 +225,7 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
     if (ProbeGround(p.onGround, now) && p.onGround) {
         // Park the model on its own wheels: pitched so nose and main wheels both touch, at the height that puts them
         // on the ground, both read from its .obj files with the gear down. Models that could not be read get
-        // XPConnect's per-type pitch and height on XPMP2's vertical offset. Above taxi speed `pos` carries BATC's
+        // ClearanceLink's per-type pitch and height on XPMP2's vertical offset. Above taxi speed `pos` carries BATC's
         // pitch (take-off rotation, flare) and the wheels still set the height, so the main gear stays down.
         const Wheels* wheels = ModelWheels();
         float pitch = p.pitch;
@@ -293,4 +293,4 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
     SetPropRotAngle(engineAngle_);
 }
 
-}  // namespace xpc
+}  // namespace clink

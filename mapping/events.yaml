@@ -1,4 +1,4 @@
-# MSFS client event -> X-Plane 12, read by XPConnect.Server (MappingSet).
+# MSFS client event -> X-Plane 12, read by ClearanceLink.Server (MappingSet).
 # Events come from BATC's MapClientEventToSimEvent calls. Only events sent to the user aircraft are applied;
 # BATC's events to its AI aircraft (lights, throttle, gear) are ignored.
 #

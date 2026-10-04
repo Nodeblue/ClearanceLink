@@ -23,7 +23,7 @@ is built once and cached.
 
 ## Alternatives
 - **Replay MSFS data only.** Exact for recorded airports, useless elsewhere, and wrong for X-Plane scenery.
-- **A prebuilt database shipped with XPConnect.** Faster per request but goes stale with each navdata cycle and
+- **A prebuilt database shipped with ClearanceLink.** Faster per request but goes stale with each navdata cycle and
   scenery install, and CIFP/Gateway licensing makes redistribution awkward.
 - **Navigraph or other online APIs.** Needs accounts and network; X-Plane already has the data locally.
 
@@ -31,4 +31,4 @@ is built once and cached.
 - Generated taxi networks are much sparser than MSFS's and carry no taxiway names at airports X-Plane has no
   network for; BATC's taxi instructions there are simple.
 - Enum and unit conventions are reverse-engineered from MSFS's answers; mistakes show up as odd BATC behaviour and
-  are fixed in `XPConnect.Airports` with a test.
+  are fixed in `ClearanceLink.Airports` with a test.

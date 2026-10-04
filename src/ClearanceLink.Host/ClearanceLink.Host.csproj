@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClearanceLink.Airports\ClearanceLink.Airports.csproj" />
+    <ProjectReference Include="..\ClearanceLink.Protocol\ClearanceLink.Protocol.csproj" />
+    <ProjectReference Include="..\ClearanceLink.Recorder\ClearanceLink.Recorder.csproj" />
+    <ProjectReference Include="..\ClearanceLink.Server\ClearanceLink.Server.csproj" />
+    <ProjectReference Include="..\ClearanceLink.XPlane\ClearanceLink.XPlane.csproj" />
+    <!-- Builds FlightSimulator2024(.exe) next to ClearanceLink for the serve command to start. -->
+    <ProjectReference Include="..\ClearanceLink.SimStub\ClearanceLink.SimStub.csproj" />
+    <ProjectReference Include="..\ClearanceLink.Fsltl\ClearanceLink.Fsltl.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- WinExe: double-clicking opens only the window; commands attach to the prompt's console (Panel/ConsoleAttach). -->
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ClearanceLink</AssemblyName>
+    <RootNamespace>ClearanceLink.Host</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Panel\Fonts\*.ttf" />
+    <None Include="Panel\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="B612-OFL.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Status\status.html" LogicalName="ClearanceLink.Host.Status.status.html" />
+  </ItemGroup>
+
+</Project>

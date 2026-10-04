@@ -1,7 +1,7 @@
 {
-  "name": "xpconnect-node-client",
+  "name": "clearancelink-node-client",
   "private": true,
-  "description": "Independent SimConnect client (node-simconnect) used to smoke-test XPConnect's server side.",
+  "description": "Independent SimConnect client (node-simconnect) used to smoke-test ClearanceLink's server side.",
   "type": "commonjs",
   "scripts": {
     "smoke": "node smoke.js"
