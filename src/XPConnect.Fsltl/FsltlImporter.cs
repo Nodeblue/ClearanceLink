@@ -42,6 +42,9 @@ public static class FsltlImporter
 {
     public const string ExportName = "XPConnect_FSLTL";
     public const string CatalogueFile = "fsltl-catalogue.json";
+
+    /// <summary>Models more lopsided than this (<see cref="Obj8Converter.Asymmetry"/>) are left out.</summary>
+    public const float MaxAsymmetry = 0.08f;
     private const string ObjectsFolder = "objects";
 
     public static ImportResult Import(ImportOptions options)
@@ -77,6 +80,14 @@ public static class FsltlImporter
                 if (lods.Count == 0)
                 {
                     problems.Add($"{modelName}: every LOD has more than {options.MaxTriangles} triangles; left out");
+                    skipped += model.Count();
+                    continue;
+                }
+
+                // A lopsided model is drawn wrong (parts off where they belong); Bluebell draws those liveries instead.
+                if (Obj8Converter.Asymmetry(lods[0]) is var lopsided and > MaxAsymmetry)
+                {
+                    problems.Add($"{modelName}: left and right sides differ by {lopsided:P0} of its span; left out (Bluebell draws it)");
                     skipped += model.Count();
                     continue;
                 }
