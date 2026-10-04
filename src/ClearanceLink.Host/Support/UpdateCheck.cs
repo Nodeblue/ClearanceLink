@@ -15,7 +15,7 @@ public sealed record UpdateInfo(string Version, string PageUrl);
 public static class UpdateCheck
 {
     /// <summary>The GitHub repository releases are published in. GitHub redirects the old name if it is renamed.</summary>
-    public const string Repository = "Nodeblue/XPConnect";
+    public const string Repository = "Nodeblue/ClearanceLink";
 
     public static readonly Uri LatestRelease = new($"https://api.github.com/repos/{Repository}/releases/latest");
 

@@ -4,7 +4,7 @@ ClearanceLink is experimental, and an independent project: it is not made, suppo
 Laminar Research.
 
 ## Download
-1. Open the [latest release](https://github.com/Nodeblue/XPConnect/releases/latest) and download
+1. Open the [latest release](https://github.com/Nodeblue/ClearanceLink/releases/latest) and download
    `ClearanceLink-<version>-win-x64.zip` (under **Assets**). If your browser says the file isn't commonly downloaded,
    choose **Keep**.
 2. **Before unzipping**, right-click the zip, choose **Properties**, tick **Unblock** at the bottom and press **OK**.

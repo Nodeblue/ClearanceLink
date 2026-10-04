@@ -126,7 +126,7 @@ Not yet: push-to-talk and quick-reply buttons bound inside the sim (use BeyondAT
 **Reporting a problem:** on the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of ClearanceLink's recent
 logs, BeyondATC's log and the end of X-Plane's log, with your Windows user name blanked out, and shows it in
 Explorer. Send it with a few words on what went wrong, on the
-[ClearanceLink GitHub page](https://github.com/Nodeblue/XPConnect/issues).
+[ClearanceLink GitHub page](https://github.com/Nodeblue/ClearanceLink/issues).
 
 Logs stay in `%LOCALAPPDATA%\ClearanceLink` for 7 days. You can turn the session log off on SUPPORT, and LIVE LOG
 shows what ClearanceLink is doing right now.
