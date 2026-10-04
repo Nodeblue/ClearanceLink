@@ -128,7 +128,7 @@ public static class CduPages
         PanelPage.StartTraffic => StartTraffic(s, flash),
         PanelPage.StartModels => StartModels(s, flash),
         PanelPage.StartXPlane => StartXPlane(flash),
-        PanelPage.StartDone => StartDone(s, flash),
+        PanelPage.StartDone => StartDone(flash),
         _ => Status(s, flash),
     };
 
@@ -336,9 +336,8 @@ public static class CduPages
         return new(StartTitle(PanelPage.StartXPlane), rows, new(flash ?? ""), message);
     }
 
-    private static CduPage StartDone(PanelState s, string? flash)
+    private static CduPage StartDone(string? flash)
     {
-        var automatic = s.Connection == ConnectionMode.Automatic;
         var rows = new[]
         {
             CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
@@ -348,7 +347,7 @@ public static class CduPages
         CduCell[] message =
         [
             Say("You're all set", CduColor.Green),
-            Say($"Every flight:\n1. Plan it in SimBrief\n2. {(automatic ? "Close MSFS" : "MSFS can stay open")}\n3. Start X-Plane 12 at the SimBrief departure\n4. Keep {ProductName} open\n5. Start BeyondATC", CduColor.Cyan),
+            Say($"Every flight:\n1. Plan it in SimBrief\n2. Start X-Plane 12 at the SimBrief departure\n3. Keep {ProductName} open\n4. Start BeyondATC", CduColor.Cyan),
         ];
         return new(StartTitle(PanelPage.StartDone), rows, new(flash ?? "REOPEN ON SUPPORT PAGE"), message);
     }

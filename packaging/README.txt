@@ -19,10 +19,10 @@ You need Windows 10/11 (64-bit), X-Plane 12.1.4 or later and BeyondATC. Nothing 
 Every flight
 ------------
 1. Plan your flight in SimBrief. BeyondATC loads your latest SimBrief plan itself.
-2. Close Microsoft Flight Simulator if it is open.
-3. Start X-Plane 12 and load your aircraft at the SimBrief departure airport.
-4. Double-click ClearanceLink.exe and leave its window open.
-5. Start BeyondATC. The STATUS page says READY FOR CLEARANCE when all is connected.
+2. Start X-Plane 12 and load your aircraft at the SimBrief departure airport.
+3. Double-click ClearanceLink.exe and leave its window open.
+4. Start BeyondATC. The STATUS page says READY FOR CLEARANCE when all is connected, or CLOSE MSFS TO
+   CONNECT if Microsoft Flight Simulator is open.
 
 If ClearanceLink is closed or restarted during a flight, restart BeyondATC too.
 
