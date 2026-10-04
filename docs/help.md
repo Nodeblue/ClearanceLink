@@ -23,7 +23,7 @@ You don't need .NET or MSFS installed.
 ## First start
 1. Unzip XPConnect anywhere you like, for example `Documents\XPConnect`.
 2. Double-click `XPConnect.exe`. XPConnect isn't signed with a paid certificate yet, so Windows may warn you the
-   first time. For downloading, updates and that warning, see [Releases and updates](#releases-and-updates).
+   first time. For downloading, updates and that warning, see [Download and install](install.md).
 3. The window opens on six **WELCOME** pages. Use the buttons beside each line, or keys 1-6 (left) and Shift+1-6
    (right). After the welcome message:
    - **Folders.** XPConnect finds BeyondATC and X-Plane by itself. If a line says NOT FOUND, press CHOOSE and pick
@@ -132,7 +132,7 @@ Logs stay in `%LOCALAPPDATA%\XPConnect` for 7 days. You can turn the session log
 shows what XPConnect is doing right now.
 
 ## Releases and updates
-See the [Releases page](https://github.com/Nodeblue/XPConnect/releases).
+Downloading, the Windows warning, update notices and updating: see [Download and install](install.md).
 
 ## Commands
 For a command prompt in XPConnect's folder:
