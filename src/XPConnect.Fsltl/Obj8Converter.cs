@@ -64,8 +64,29 @@ public static class Obj8Converter
         return new Obj8Result(parts, warnings.Distinct().ToList(), size);
     }
 
+    /// <summary>
+    /// How lopsided the model's still geometry is left to right: the difference between how far it reaches to each side
+    /// over its span (0 for a symmetric aircraft). Aircraft are symmetric, so a large value means the model's node
+    /// transforms do not compose the way it was authored (FSLTL's SF34 stretches parts with uneven scales: left wing
+    /// 4 m longer than the right, elevators off their tailplane).
+    /// </summary>
+    public static float Asymmetry(GltfModel model)
+    {
+        var (min, max) = Extent(model);
+        var span = max.X - min.X;
+        return span < 5 ? 0 : MathF.Abs(max.X + min.X) / span;  // smaller than any aircraft: not checked
+    }
+
     /// <summary>The largest dimension of the model's still geometry, in metres.</summary>
     public static float Size(GltfModel model)
+    {
+        var (min, max) = Extent(model);
+        if (min.X > max.X) return 0;
+        var extent = max - min;
+        return MathF.Max(extent.X, MathF.Max(extent.Y, extent.Z));
+    }
+
+    private static (Vector3 Min, Vector3 Max) Extent(GltfModel model)
     {
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
@@ -90,9 +111,7 @@ public static class Obj8Converter
         }
 
         foreach (var r in model.Roots) Walk(r, Matrix4x4.Identity);
-        if (min.X > max.X) return 0;
-        var extent = max - min;
-        return MathF.Max(extent.X, MathF.Max(extent.Y, extent.Z));
+        return (min, max);
     }
 
     internal static Matrix4x4 Local(GltfNode node) =>
