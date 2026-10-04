@@ -13,7 +13,7 @@
 #include <unistd.h>
 #endif
 
-namespace xpc {
+namespace clink {
 namespace {
 
 #ifdef _WIN32
@@ -55,7 +55,7 @@ bool UdpSocket::Open(uint16_t port, std::string& error) {
         return false;
     }
     socket_ = s;
-    // Room for a few seconds of XPConnect's updates (64 aircraft is about 75 KB a second): the socket is only read
+    // Room for a few seconds of ClearanceLink's updates (64 aircraft is about 75 KB a second): the socket is only read
     // once a frame, and X-Plane stalls for a second or more loading scenery. The default is 64 KB on Windows.
     int receiveBuffer = 4 * 1024 * 1024;
     ::setsockopt(s, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&receiveBuffer), sizeof(receiveBuffer));
@@ -68,7 +68,7 @@ bool UdpSocket::Open(uint16_t port, std::string& error) {
 #ifdef _WIN32
     u_long nonBlocking = 1;
     ioctlsocket(s, FIONBIO, &nonBlocking);
-    // Without this, a send to a closed port (XPConnect not running) makes the next recv fail with WSAECONNRESET.
+    // Without this, a send to a closed port (ClearanceLink not running) makes the next recv fail with WSAECONNRESET.
     BOOL reportReset = FALSE;
     DWORD returned = 0;
     WSAIoctl(s, _WSAIOW(IOC_VENDOR, 12), &reportReset, sizeof(reportReset), nullptr, 0, &returned, nullptr, nullptr);
@@ -111,4 +111,4 @@ bool UdpSocket::Send(uint16_t port, const std::string& text) {
     return n == static_cast<decltype(n)>(text.size());
 }
 
-}  // namespace xpc
+}  // namespace clink

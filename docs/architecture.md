@@ -1,7 +1,7 @@
 # Architecture
 
 ```
-BATC (Unity) --WebSocket--> simconnect_ws.exe --SimConnect pipe/TCP--> XPConnect --Web API--> X-Plane 12
+BATC (Unity) --WebSocket--> simconnect_ws.exe --SimConnect pipe/TCP--> ClearanceLink --Web API--> X-Plane 12
                                                                           |
                                                                           +--files--> apt.dat, CIFP (Phase 2)
                                                                           +--plugin--> AI traffic (Phase 4)

@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClearanceLink.Airports/ClearanceLink.Airports.csproj" />
+    <Project Path="src/ClearanceLink.Fsltl/ClearanceLink.Fsltl.csproj" />
+    <Project Path="src/ClearanceLink.Host/ClearanceLink.Host.csproj" />
+    <Project Path="src/ClearanceLink.Protocol/ClearanceLink.Protocol.csproj" />
+    <Project Path="src/ClearanceLink.Recorder/ClearanceLink.Recorder.csproj" />
+    <Project Path="src/ClearanceLink.Server/ClearanceLink.Server.csproj" />
+    <Project Path="src/ClearanceLink.XPlane/ClearanceLink.XPlane.csproj" />
+    <Project Path="src/ClearanceLink.SimStub/ClearanceLink.SimStub.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClearanceLink.Airports.Tests/ClearanceLink.Airports.Tests.csproj" />
+    <Project Path="tests/ClearanceLink.Fsltl.Tests/ClearanceLink.Fsltl.Tests.csproj" />
+    <Project Path="tests/ClearanceLink.Host.Tests/ClearanceLink.Host.Tests.csproj" />
+    <Project Path="tests/ClearanceLink.Protocol.Tests/ClearanceLink.Protocol.Tests.csproj" />
+    <Project Path="tests/ClearanceLink.Server.Tests/ClearanceLink.Server.Tests.csproj" />
+  </Folder>
+</Solution>

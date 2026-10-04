@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace xpc {
+namespace clink {
 
 // A point of a model in OBJ8 coordinates (metres): x right, y up, z aft (the nose points to -z).
 struct Vertex {
@@ -81,4 +81,4 @@ CslPackages FindCslPackages(const std::vector<std::string>& folders);
 // each from the first of its package's folders that has it.
 std::vector<std::string> ModelObjFiles(const std::string& xsbFolder, int line, const CslPackages& packages);
 
-}  // namespace xpc
+}  // namespace clink

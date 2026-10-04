@@ -1,4 +1,4 @@
-# BATC traffic model title -> ICAO aircraft type and airline, read by XPConnect.Host (TrafficModels).
+# BATC traffic model title -> ICAO aircraft type and airline, read by ClearanceLink.Host (TrafficModels).
 # The X-Plane plugin (docs/protocol/plugin.md) hands both to XPMP2, which picks the closest CSL model and livery it has.
 #
 # BATC's titles come from MSFS's model list (mapping/liveries.json), e.g.

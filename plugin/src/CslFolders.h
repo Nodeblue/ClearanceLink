@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace xpc {
+namespace clink {
 
 // Candidate folders in load order. `xplaneRoot` ends with a path separator (as XPLMGetSystemPath returns it);
 // `extraLines` are the lines of csl_paths.txt. Only folders for which `exists` returns true are returned,
@@ -17,4 +17,4 @@ std::vector<std::string> CslFolders(const std::string& xplaneRoot,
 // Folders other traffic plugins keep their CSL packages in, relative to the X-Plane folder.
 const std::vector<std::string>& KnownCslFolders();
 
-}  // namespace xpc
+}  // namespace clink

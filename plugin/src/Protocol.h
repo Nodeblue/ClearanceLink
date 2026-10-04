@@ -1,4 +1,4 @@
-// Text protocol between XPConnect and this plugin. See docs/protocol/plugin.md.
+// Text protocol between ClearanceLink and this plugin. See docs/protocol/plugin.md.
 // Pure C++ (no X-Plane SDK), so it is unit-tested on its own.
 #pragma once
 
@@ -8,10 +8,10 @@
 #include <variant>
 #include <vector>
 
-namespace xpc {
+namespace clink {
 
-constexpr uint16_t PluginPort = 49710;     // XPConnect -> plugin
-constexpr uint16_t XPConnectPort = 49711;  // plugin -> XPConnect
+constexpr uint16_t PluginPort = 49710;     // ClearanceLink -> plugin
+constexpr uint16_t ClearanceLinkPort = 49711;  // plugin -> ClearanceLink
 
 enum Lights : unsigned { LightNav = 1, LightBeacon = 2, LightStrobe = 4, LightLanding = 8, LightTaxi = 16 };
 
@@ -37,7 +37,7 @@ struct Pos {
 struct Del { uint32_t id = 0; };
 
 // Raise (+) or lower (-) aircraft `id` by this many feet when it is drawn on the ground, and (0.4.0+, optional) the
-// pitch to park it at when its model's wheels could not be read (XPConnect's per-type tuning).
+// pitch to park it at when its model's wheels could not be read (ClearanceLink's per-type tuning).
 struct Offset { uint32_t id = 0; float groundFt = 0; std::optional<float> groundPitch; };
 
 struct Clear {};
@@ -54,4 +54,4 @@ std::string FormatStatus(const std::string& version, size_t aircraft, int models
 std::string FormatGround(uint32_t id, double elevationFt);
 std::string FormatError(uint32_t id, const std::string& message);
 
-}  // namespace xpc
+}  // namespace clink
