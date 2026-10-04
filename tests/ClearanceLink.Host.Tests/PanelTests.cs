@@ -118,9 +118,20 @@ public sealed class PanelTests
         Assert.Contains(welcome.Message!, m => m.Text.Contains("Not affiliated with or endorsed by BeyondATC.", StringComparison.Ordinal));
         Assert.Contains(welcome.Message!, m => m.Text.Contains("no warranty", StringComparison.Ordinal));
 
-        // Advice is text, not rows that look selectable: the X-Plane settings page has keys only for help and paging.
+        // Advice is text, not rows that look selectable: the X-Plane settings page has keys only for paging.
         var xplane = CduPages.Build(PanelPage.StartXPlane, Ready);
-        Assert.All(xplane.Rows.Take(4), r => Assert.Equal(CduRow.Empty, r));
+        Assert.All(xplane.Rows.Take(5), r => Assert.Equal(CduRow.Empty, r));
+        Assert.Contains(xplane.Message!, m => m.Text.Contains("Sound: Radios to 0", StringComparison.Ordinal) && m.Text.Contains("Draw parked aircraft off", StringComparison.Ordinal));
+
+        // BeyondATC flies the user's latest SimBrief plan from where they are parked, so that comes first.
+        var done = CduPages.Build(PanelPage.StartDone, Ready);
+        Assert.Contains(done.Message!, m => m.Text.Contains("1. Plan it in SimBrief", StringComparison.Ordinal) && m.Text.Contains("SimBrief departure", StringComparison.Ordinal));
+
+        // ABOUT is a message too; only the keys are rows.
+        var about = CduPages.Build(PanelPage.About, Ready);
+        Assert.All(about.Rows.Take(5), r => Assert.Equal(CduRow.Empty, r));
+        Assert.Contains(about.Message!, m => m.Text.Contains("Not affiliated with BeyondATC.", StringComparison.Ordinal));
+        Assert.Contains(CduPages.Build(PanelPage.Status, Ready).Rows, r => r.LabelLeft == "ATC AIRPORT" && r.LabelRight == "SCENERY");
 
         var missing = CduPages.Build(PanelPage.StartFolders, Ready with { XPlaneFolder = null });
         Assert.Contains(missing.Rows, r => r.KeyRight == CduKey.ChooseXPlaneFolder && r.Right.Text == "CHOOSE>");
@@ -142,7 +153,7 @@ public sealed class PanelTests
     [MemberData(nameof(AllPages))]
     public void Messages_fit_above_the_first_row_with_content(PanelPage page)
     {
-        foreach (var state in new[] { Ready, Ready with { BatcFolder = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled } })
+        foreach (var state in new[] { Ready, Ready with { BatcFolder = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }, Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://example.invalid/") } })
         {
             var built = CduPages.Build(page, state);
             if (built.Message is null)
