@@ -32,6 +32,9 @@ public sealed class AppSettings
     /// <summary>Session logs and recordings older than this are deleted at start-up.</summary>
     public int KeepDays { get; set; } = 7;
 
+    /// <summary>Set once the user has been through (or skipped) the window's getting-started pages.</summary>
+    public bool GettingStartedDone { get; set; }
+
     /// <summary>Reads the file; a missing file gives the defaults, a damaged one is kept as .bad and gives the defaults.</summary>
     public static AppSettings Load(string file)
     {

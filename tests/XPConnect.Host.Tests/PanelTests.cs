@@ -40,11 +40,10 @@ public sealed class PanelTests
         BatcFolder: @"C:\BeyondATC",
         XPlaneFolder: @"C:\X-Plane 12");
 
+    public static TheoryData<PanelPage> AllPages => new(Enum.GetValues<PanelPage>());
+
     [Theory]
-    [InlineData(PanelPage.Status)]
-    [InlineData(PanelPage.Setup)]
-    [InlineData(PanelPage.Support)]
-    [InlineData(PanelPage.About)]
+    [MemberData(nameof(AllPages))]
     public void Every_line_fits_the_24_column_screen(PanelPage page)
     {
         var long_ = Ready with { BatcFolder = @"D:\Games\Flight Sim Add-ons\BeyondATC Install", LastAirportSource = "Global Airports (X-Plane 12 default scenery)" };
@@ -103,6 +102,79 @@ public sealed class PanelTests
     }
 
     [Fact]
+    public void Getting_started_pages_are_whole_and_say_the_project_is_unofficial()
+    {
+        foreach (var page in CduPages.StartPages)
+        {
+            var built = CduPages.Build(page, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled });
+            Assert.StartsWith("GETTING STARTED ", built.Title, StringComparison.Ordinal);
+            Assert.All(built.Rows, row => Assert.DoesNotContain("~", row.Left.Text + row.Right.Text, StringComparison.Ordinal));
+            Assert.All(built.Rows, row => Assert.True(row.LabelLeft.Length + row.LabelRight.Length + (row.LabelRight.Length > 0 ? 1 : 0) <= CduPages.Width, row.LabelLeft));
+        }
+
+        var welcome = CduPages.Build(PanelPage.Welcome, Ready);
+        Assert.Contains(welcome.Rows, r => r.Left.Text == "ENDORSED BY BEYONDATC");
+        Assert.Contains(welcome.Rows, r => r.Left.Text == "USE AT YOUR OWN RISK");
+
+        var missing = CduPages.Build(PanelPage.StartFolders, Ready with { XPlaneFolder = null });
+        Assert.Contains(missing.Rows, r => r.KeyRight == CduKey.ChooseXPlaneFolder && r.Right.Text == "CHOOSE>");
+        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready).Rows, r => r.Left.Text == "NONE FOUND" && r.KeyRight == CduKey.OpenModelsHelp);
+        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready with { CslPackages = 13 }).Rows, r => r.Left.Text == "13 PACKAGES");
+        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
+        Assert.Equal(CduKey.FinishGettingStarted, CduPages.Build(PanelPage.StartDone, Ready).Rows[5].KeyRight);
+    }
+
+    [AvaloniaFact]
+    public void Getting_started_steps_forward_and_back_and_reopens_from_support()
+    {
+        var window = new PanelWindow(() => Ready) { StartWithGettingStarted = true };
+        window.Show();
+
+        Assert.Equal(PanelPage.Welcome, window.Page);
+        Assert.Equal("GETTING STARTED 1/5", window.Shown!.Title);
+        foreach (var expected in new[] { PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartXPlane, PanelPage.StartDone })
+        {
+            window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.Shift);
+            Assert.Equal(expected, window.Page);
+        }
+
+        window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.None);
+        Assert.Equal(PanelPage.StartXPlane, window.Page);
+        window.KeyPress(Key.F3, RawInputModifiers.None, PhysicalKey.F3, null);
+        window.KeyPressQwerty(PhysicalKey.Digit5, RawInputModifiers.None);
+        Assert.Equal(PanelPage.Welcome, window.Page);
+
+        // SKIP on the first page (no server behind this window, so it just goes to STATUS).
+        window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.None);
+        Assert.Equal(PanelPage.Status, window.Page);
+        window.Close();
+    }
+
+    [Fact]
+    public void Csl_packages_are_counted_where_the_traffic_add_on_looks()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "xpc-csl-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, PanelController.CountCslPackages(root));
+            // Bluebell unzipped into one folder holding its packages, plus a package straight in the add-on's folder.
+            foreach (var package in new[] { Path.Combine(root, "Custom Data", "CSL", "BB", "BB_Airbus"), Path.Combine(root, "Custom Data", "CSL", "BB", "BB_Boeing"),
+                Path.Combine(root, "Resources", "plugins", "XPConnect", "Resources", "CSL", "Extra") })
+            {
+                Directory.CreateDirectory(package);
+                File.WriteAllText(Path.Combine(package, "xsb_aircraft.txt"), "EXPORT_NAME test");
+            }
+
+            Directory.CreateDirectory(Path.Combine(root, "Custom Data", "CSL", "Empty"));
+            Assert.Equal(3, PanelController.CountCslPackages(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Long_folders_keep_the_drive_and_the_last_folder()
     {
         Assert.Equal(@"C:\BeyondATC", CduPages.ShortPath(@"C:\BeyondATC\", 18));
@@ -123,6 +195,7 @@ public sealed class PanelTests
         window.KeyPress(Key.F3, RawInputModifiers.None, PhysicalKey.F3, null);
         Assert.Equal(PanelPage.Support, window.Page);
         Assert.Equal("<CREATE SUPPORT FILE", window.Shown!.Rows[2].Left.Text);
+        Assert.Equal(CduKey.ShowGettingStarted, window.Shown!.Rows[4].KeyLeft);
         window.Close();
     }
 

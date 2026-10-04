@@ -24,7 +24,10 @@ public sealed class PanelApp : Application
         {
             var controller = new PanelController();
             controller.Start();
-            desktop.MainWindow = new PanelWindow(controller);
+            desktop.MainWindow = new PanelWindow(controller)
+            {
+                StartWithGettingStarted = !Support.AppSettings.Load(Support.AppFolders.Default.Settings).GettingStartedDone,
+            };
             desktop.Exit += (_, _) => controller.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
 

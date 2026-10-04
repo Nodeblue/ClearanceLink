@@ -70,6 +70,18 @@ public sealed class PanelWindow : Window
 
     public PanelPage Page { get; private set; } = PanelPage.Status;
 
+    /// <summary>Opens on the getting-started pages instead of STATUS (first run).</summary>
+    public bool StartWithGettingStarted
+    {
+        init
+        {
+            if (value)
+            {
+                ShowPage(CduPages.StartPages[0]);
+            }
+        }
+    }
+
     /// <summary>The page as last drawn (tests read it).</summary>
     public CduPage? Shown => _shown;
 
@@ -134,6 +146,23 @@ public sealed class PanelWindow : Window
                 return;
             case CduKey.ShowLiveLog:
                 ShowLiveLog();
+                return;
+            case CduKey.ShowGettingStarted:
+                ShowPage(CduPages.StartPages[0]);
+                return;
+            case CduKey.Next:
+            case CduKey.Back:
+                var at = CduPages.StartPages.IndexOf(Page);
+                var to = at + (key == CduKey.Next ? 1 : -1);
+                ShowPage(at < 0 || to < 0 ? PanelPage.Status : CduPages.StartPages[Math.Min(to, CduPages.StartPages.Length - 1)]);
+                return;
+            case CduKey.FinishGettingStarted:
+                ShowPage(PanelPage.Status);
+                if (_controller is not null)
+                {
+                    Flash(await _controller.FinishGettingStartedAsync());
+                }
+
                 return;
         }
 
@@ -265,7 +294,7 @@ public sealed class PanelWindow : Window
         _scratch.Margin = new Thickness(16, 6, 16, 0);
 
         var keys = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 14) };
-        foreach (var page in Enum.GetValues<PanelPage>())
+        foreach (var page in CduPages.MainPages)
         {
             var button = new Button
             {
