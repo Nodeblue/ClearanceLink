@@ -32,6 +32,9 @@ public sealed class AppSettings
     /// <summary>Session logs and recordings older than this are deleted at start-up.</summary>
     public int KeepDays { get; set; } = 7;
 
+    /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     /// <summary>Reads the file; a missing file gives the defaults, a damaged one is kept as .bad and gives the defaults.</summary>
     public static AppSettings Load(string file)
     {

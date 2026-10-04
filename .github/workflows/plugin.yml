@@ -10,22 +10,17 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    # Windows only: BeyondATC runs only on Windows, so nobody can use a Linux or Mac build of the plugin.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then cmake -S plugin -B build/plugin -A x64; else cmake -S plugin -B build/plugin -DCMAKE_BUILD_TYPE=Release; fi
+        run: cmake -S plugin -B build/plugin -A x64
       - name: Build
         run: cmake --build build/plugin --config Release --parallel
       - name: Test
         run: ctest --test-dir build/plugin -C Release --output-on-failure
       - uses: actions/upload-artifact@v4
         with:
-          name: xpconnect-plugin-${{ runner.os }}
+          name: xpconnect-plugin-Windows
           path: build/plugin/XPConnect

@@ -43,6 +43,7 @@ public enum CduKey
     OpenLogFolder,
     OpenWebsite,
     InstallTrafficAddOn,
+    OpenUpdatePage,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -76,7 +77,8 @@ public sealed record PanelState(
     string? BatcFolder,
     string? XPlaneFolder,
     PluginInstall.State TrafficAddOn = PluginInstall.State.NotBundled,
-    int? TrafficAircraft = null);
+    int? TrafficAircraft = null,
+    UpdateInfo? Update = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -176,7 +178,9 @@ public static class CduPages
             Row("", "", new("CONNECT BEYONDATC TO"), new("")),
             Row("", "", new("X-PLANE 12"), new("")),
             Row("VERSION", "LICENCE", new($"{s.Version} EXPERIMENTAL"), new("MIT")),
-            Row("MADE BY", "", new("NODEBLUE", CduColor.Cyan), new("")),
+            s.Update is { } update
+                ? Row("MADE BY", "NEW VERSION", new("NODEBLUE", CduColor.Cyan), new($"{update.Version}>", CduColor.Magenta), CduKey.None, CduKey.OpenUpdatePage)
+                : Row("MADE BY", "", new("NODEBLUE", CduColor.Cyan), new("")),
             Row("NOT AFFILIATED WITH", "", new("BEYONDATC", CduColor.Amber), new("")),
             Row("", "", new("<STATUS"), new("WEBSITE>"), CduKey.GoStatus, CduKey.OpenWebsite),
         };

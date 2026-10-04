@@ -1,7 +1,14 @@
 name: Release
 
-# Builds the Windows zip (XPConnect.exe, stub, X-Plane plugin, docs). Run it by hand from the Actions tab, or push
-# a tag like v0.4.0 to also attach the zip to a GitHub release.
+# Makes a GitHub release with the Windows zip (XPConnect.exe, stub, X-Plane plugin, docs).
+#
+# To release: set <Version> in Directory.Build.props (merged into main), then Actions > Release > Run workflow on
+# main. It builds and tests, tags v<Version> and creates a DRAFT release with the zip. Check it on the Releases page
+# and press Publish: only then do users (and XPConnect's update check) see it. A version with a dash
+# (0.6.0-beta.1) becomes a pre-release, which the update check never offers. See docs/releasing.md.
+#
+# Pushing a tag v<Version> yourself does the same. Without a matching version it stops, so a zip never carries
+# the wrong version.
 on:
   workflow_dispatch:
   push:
@@ -18,20 +25,62 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
+            throw "Tag $env:GITHUB_REF_NAME does not match <Version>$version</Version> in Directory.Build.props"
+          }
+          if ($env:GITHUB_REF_TYPE -ne 'tag' -and (git ls-remote --tags origin "refs/tags/$tag")) {
+            throw "$tag is already released. Raise <Version> in Directory.Build.props first."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
       - run: dotnet test --nologo
       - name: Build the zip
         shell: pwsh
         run: ./scripts/publish.ps1
-      - name: Check the plugin is in it
+      - name: Check what is in the zip
         shell: pwsh
-        run: if (-not (Test-Path 'publish/XPConnect/X-Plane plugin/XPConnect/64/win.xpl')) { throw 'plugin missing from the package' }
+        run: |
+          $zip = Get-Item publish/*.zip
+          if ($zip.Name -notlike "*-${{ steps.version.outputs.version }}-win-x64.zip") { throw "unexpected zip name $($zip.Name)" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $names = [IO.Compression.ZipFile]::OpenRead($zip.FullName).Entries.FullName | ForEach-Object { $_.Replace('\', '/') }
+          if (-not ($names -like 'X-Plane plugin/XPConnect/64/win.xpl')) { throw 'X-Plane plugin missing from the zip' }
+          if (-not ($names -contains 'XPConnect.exe')) { throw 'XPConnect.exe missing from the zip' }
+          # Test data stays in the repository: recordings hold MSFS data, the test airports are GPL, and converted
+          # FSLTL models may never be shipped.
+          $banned = $names | Where-Object { $_ -match '\.jsonl$|(^|/)apt\.dat$|\.dds$|(^|/)xsb_aircraft\.txt$|(^|/)CSL/' }
+          if ($banned) { throw "files that must not ship: $($banned -join ', ')" }
+          $hash = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($zip.Name)" | Set-Content -Encoding ascii "publish/$($zip.BaseName).sha256.txt"
+          Write-Host "$($zip.Name) $hash"
       - uses: actions/upload-artifact@v4
         with:
           name: XPConnect-win-x64
-          path: publish/*.zip
-      - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/')
+          path: |
+            publish/*.zip
+            publish/*.sha256.txt
+      - name: Draft the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" (Get-ChildItem publish/*.zip).FullName --title "XPConnect ${{ github.ref_name }}" --generate-notes
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          $zip = (Get-Item publish/*.zip).FullName
+          $hash = (Get-Item publish/*.sha256.txt).FullName
+          $notes = @"
+          **Experimental.** XPConnect is an independent project, not made, supported or endorsed by BeyondATC or Laminar Research.
+
+          **New here?** Download the zip below and follow [Install and update](https://github.com/${{ github.repository }}/blob/$tag/docs/install.md). Windows may warn that the app is from an unknown publisher; the guide shows what to click.
+
+          **Updating?** Close XPConnect, unzip over your old XPConnect folder, then open the SETUP page: if it says the traffic add-on has a newer version, close X-Plane and press UPDATE.
+
+          SHA-256 of the zip is in the .sha256.txt file.
+          "@
+          $pre = if ($tag.Contains('-')) { @('--prerelease') } else { @() }
+          gh release create $tag $zip $hash --draft --target $env:GITHUB_SHA --title "XPConnect $tag" --notes $notes --generate-notes @pre
