@@ -38,13 +38,15 @@ You don't need .NET or MSFS installed.
 You can open the welcome pages again from the SUPPORT page.
 
 ## Every flight
-1. Close Microsoft Flight Simulator if it's open.
-2. Start X-Plane 12 and load your aircraft.
+1. Plan your flight in [SimBrief](https://dispatch.simbrief.com/) and generate the flight plan (OFP). BeyondATC
+   loads your latest SimBrief plan itself, the same as with MSFS; X-Plane's own FMS plan isn't used.
+2. Start X-Plane 12 and load your aircraft at the SimBrief departure airport, at a gate or parking spot.
 3. Double-click `ClearanceLink.exe` and leave its window open.
 4. Start BeyondATC and start your flight as usual.
 
 The bottom line of the STATUS page says what to do next, and shows **READY FOR CLEARANCE** when everything is
-connected. When you've finished, close BeyondATC, then ClearanceLink.
+connected. If MSFS is open it says CLOSE MSFS TO CONNECT (see [Flying MSFS as well](#flying-msfs-as-well)).
+When you've finished, close BeyondATC, then ClearanceLink.
 
 Start ClearanceLink before BeyondATC. If you close or restart ClearanceLink during a flight, restart BeyondATC too: it
 doesn't reconnect by itself.
@@ -80,20 +82,21 @@ The plugin lives in `X-Plane 12\Resources\plugins\ClearanceLink`. X-Plane locks 
 before installing or updating it from the SETUP page.
 
 ## X-Plane settings
-Turn these down in X-Plane's settings, so only BeyondATC talks and flies traffic:
+Change these in X-Plane, so only BeyondATC talks and flies traffic:
 
-| Setting | Set to | Why |
+| Where | Setting | Why |
 |---|---|---|
-| ATC volume (Settings > Sound) | 0 | Otherwise X-Plane's own controllers and ATIS talk over BeyondATC's. |
-| AI aircraft | Off | X-Plane's AI flies its own aircraft, which BeyondATC doesn't know about. |
-| Parked (static) aircraft | Off | X-Plane parks aircraft at gates where BeyondATC parks its traffic. |
+| Settings > Sound | **Radios** slider to 0 | Otherwise X-Plane's own controllers and ATIS talk over BeyondATC's. |
+| Settings > Graphics | **Draw parked aircraft** unticked | X-Plane parks aircraft at gates where BeyondATC parks its traffic. |
+| Your flight's set-up | No AI aircraft | X-Plane's AI flies its own aircraft, which BeyondATC doesn't know about. |
 
 ClearanceLink reads X-Plane through X-Plane's built-in Web API on port 8086, which is on by default.
 
 ## BeyondATC settings
 Nothing needs changing. BeyondATC sees ClearanceLink as "MSFS 2024".
-- BeyondATC loads your latest SimBrief flight plan itself and takes only your position from X-Plane, so the
-  plan's departure airport must be the one you're parked at.
+- Your SimBrief account is set in BeyondATC, as for MSFS. BeyondATC loads your latest SimBrief flight plan itself
+  and takes only your position from X-Plane, so the plan's departure airport must be the one you're parked at.
+  A plan without a SID in its route gets cleared with "radar vectors".
 - If BeyondATC's traffic is on, it appears in X-Plane once you've installed the
   [models](#aircraft-models-for-traffic). Without models it still talks on frequency, but you won't see it.
 
@@ -121,7 +124,7 @@ Not yet: push-to-talk and quick-reply buttons bound inside the sim (use BeyondAT
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. |
 | A folder says NOT FOUND | On SETUP (or welcome page 2), press CHOOSE beside it and pick the folder. |
 | No traffic visible | Check SETUP shows the X-Plane plugin INSTALLED and welcome page 4 finds Bluebell packages or converted FSLTL liveries. |
-| X-Plane talks over BeyondATC | Set X-Plane's ATC volume to 0 (Settings > Sound). |
+| X-Plane talks over BeyondATC | Set the Radios slider to 0 (X-Plane Settings > Sound). |
 
 **Reporting a problem:** on the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of ClearanceLink's recent
 logs, BeyondATC's log and the end of X-Plane's log, with your Windows user name blanked out, and shows it in
