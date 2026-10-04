@@ -13,6 +13,7 @@ public enum PanelPage
     Welcome,
     StartFolders,
     StartTraffic,
+    StartModels,
     StartXPlane,
     StartDone,
 }
@@ -55,6 +56,8 @@ public enum CduKey
     ShowGettingStarted,
     OpenHelp,
     OpenModelsHelp,
+    ChooseFsltlFolder,
+    ConvertFsltl,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -90,7 +93,10 @@ public sealed record PanelState(
     string? XPlaneFolder,
     PluginInstall.State TrafficAddOn = PluginInstall.State.NotBundled,
     int? TrafficAircraft = null,
-    int CslPackages = 0);
+    int CslPackages = 0,
+    string? FsltlFolder = null,
+    int FsltlLiveries = 0,
+    bool FsltlConverting = false);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -108,7 +114,7 @@ public static class CduPages
     public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.Setup, PanelPage.Support, PanelPage.About];
 
     /// <summary>The getting-started pages in order.</summary>
-    public static readonly ImmutableArray<PanelPage> StartPages = [PanelPage.Welcome, PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartXPlane, PanelPage.StartDone];
+    public static readonly ImmutableArray<PanelPage> StartPages = [PanelPage.Welcome, PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartModels, PanelPage.StartXPlane, PanelPage.StartDone];
 
     public static CduPage Build(PanelPage page, PanelState s, string? flash = null) => page switch
     {
@@ -118,6 +124,7 @@ public static class CduPages
         PanelPage.Welcome => Welcome(flash),
         PanelPage.StartFolders => StartFolders(s, flash),
         PanelPage.StartTraffic => StartTraffic(s, flash),
+        PanelPage.StartModels => StartModels(s, flash),
         PanelPage.StartXPlane => StartXPlane(flash),
         PanelPage.StartDone => StartDone(s, flash),
         _ => Status(s, flash),
@@ -231,9 +238,9 @@ public static class CduPages
         };
         CduCell[] message =
         [
-            Say($"Welcome to {ProductName}.", CduColor.Green),
-            Say("BeyondATC's controllers and traffic, in X-Plane 12."),
-            Say("Free and experimental, provided as is, with no warranty. Not affiliated with or endorsed by BeyondATC.", CduColor.Cyan),
+            Say($"Welcome to {ProductName}", CduColor.Green),
+            Say("It links BeyondATC to X-Plane 12, so its controllers and traffic work in X-Plane."),
+            Say("Free and experimental, with no warranty. Not affiliated with or endorsed by BeyondATC.", CduColor.Cyan),
         ];
         return new(StartTitle(PanelPage.Welcome), rows, new(flash ?? "BY NODEBLUE"), message);
     }
@@ -257,21 +264,53 @@ public static class CduPages
 
     private static CduPage StartTraffic(PanelState s, string? flash)
     {
-        var addOn = TrafficAddOn(s);
+        var bundled = s.TrafficAddOn != PluginInstall.State.NotBundled;
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            bundled ? TrafficAddOn(s) : CduRow.Empty,
+            StartNav(),
+        };
+        CduCell[] message = bundled
+            ?
+            [
+                Say("BeyondATC's traffic in X-Plane", CduColor.Green),
+                Say($"BeyondATC flies its own traffic; {ProductName}'s plugin draws it in X-Plane."),
+                Say("Optional. Close X-Plane to install."),
+            ]
+            :
+            [
+                Say("BeyondATC's traffic in X-Plane", CduColor.Green),
+                Say("This copy has no X-Plane plugin, so BeyondATC's traffic won't be drawn. ATC still works."),
+            ];
+        return new(StartTitle(PanelPage.StartTraffic), rows, new(flash ?? ""), message);
+    }
+
+    private static CduPage StartModels(PanelState s, string? flash)
+    {
+        var fsltl = s switch
+        {
+            { FsltlConverting: true } => Row("FSLTL", "", new("CONVERTING...", CduColor.Amber), new("")),
+            { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
+                CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
+            { FsltlFolder: not null } => Row("FSLTL", "", new("FOUND IN MSFS", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
+            _ => Row("FSLTL", "", new("NOT FOUND"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
+        };
         var rows = new[]
         {
             CduRow.Empty, CduRow.Empty, CduRow.Empty,
-            addOn == CduRow.Empty ? Row("TRAFFIC ADD-ON", "", new("NOT INCLUDED", CduColor.Amber), new("")) : addOn,
-            Row("AIRCRAFT MODELS", "", s.CslPackages > 0 ? new($"{s.CslPackages} PACKAGES", CduColor.Green) : new("NONE FOUND", CduColor.Amber),
+            Row("BLUEBELL", "", s.CslPackages > 0 ? new($"{s.CslPackages} PACKAGES", CduColor.Green) : new("NOT FOUND"),
                 new("HOW TO>"), CduKey.None, CduKey.OpenModelsHelp),
+            fsltl,
             StartNav(),
         };
         CduCell[] message =
         [
-            Say("Traffic (optional)", CduColor.Green),
-            Say("To see BeyondATC's traffic in X-Plane, install the add-on (with X-Plane closed) and free models such as Bluebell."),
+            Say("Aircraft models", CduColor.Green),
+            Say("Either tested library works. FSLTL is converted from your MSFS copy."),
         ];
-        return new(StartTitle(PanelPage.StartTraffic), rows, new(flash ?? ""), message);
+        var help = s.FsltlFolder is not null && s.FsltlLiveries == 0 && !s.FsltlConverting ? "CLOSE X-PLANE TO CONVERT" : "";
+        return new(StartTitle(PanelPage.StartModels), rows, new(flash ?? help), message);
     }
 
     private static CduPage StartXPlane(string? flash)
@@ -317,12 +356,12 @@ public static class CduPages
         _ => new("-"),
     };
 
-    /// <summary>The X-Plane plugin that draws BATC's traffic, shown to users as the traffic add-on.</summary>
+    /// <summary>The X-Plane plugin that draws BATC's traffic, shown to users as the X-Plane plugin.</summary>
     private static CduRow TrafficAddOn(PanelState s) => s.TrafficAddOn switch
     {
-        PluginInstall.State.NotInstalled => Row("TRAFFIC ADD-ON", "", new("NOT INSTALLED", CduColor.Amber), new("INSTALL>"), CduKey.None, CduKey.InstallTrafficAddOn),
-        PluginInstall.State.Outdated => Row("TRAFFIC ADD-ON", "", new("NEWER VERSION", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.InstallTrafficAddOn),
-        PluginInstall.State.Installed => Row("TRAFFIC ADD-ON", "", new("INSTALLED", CduColor.Green), new("")),
+        PluginInstall.State.NotInstalled => Row("X-PLANE PLUGIN", "", new("NOT INSTALLED", CduColor.Amber), new("INSTALL>"), CduKey.None, CduKey.InstallTrafficAddOn),
+        PluginInstall.State.Outdated => Row("X-PLANE PLUGIN", "", new("NEWER VERSION", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.InstallTrafficAddOn),
+        PluginInstall.State.Installed => Row("X-PLANE PLUGIN", "", new("INSTALLED", CduColor.Green), new("")),
         _ => CduRow.Empty,
     };
 

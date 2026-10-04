@@ -244,6 +244,21 @@ namespace XPConnect.Host
             return (saved is null ? null : BatcRedirect.FindInstallFolder(saved)) ?? BatcRedirect.FindInstallFolder();
         }
 
+        /// <summary>--fsltl when given, else the folder saved in settings when it is still FSLTL, else found through MSFS's settings.</summary>
+        internal static string? FsltlFolder(Options options)
+        {
+            if (options.Get("fsltl") is { } given)
+            {
+                return FsltlLocator.Find(given);
+            }
+
+            var saved = AppSettings.Load(AppFolders.Default.Settings).FsltlFolder;
+            return (saved is null ? null : FsltlLocator.Find(saved)) ?? FsltlLocator.Find();
+        }
+
+        /// <summary>Where `fsltl import` writes the converted models.</summary>
+        internal static string FsltlOutput(string xplaneRoot) => Path.Combine(xplaneRoot, "Custom Data", "CSL", "XPConnect-FSLTL");
+
         /// <summary>--xplane-root when given, else the folder saved in settings when it is still X-Plane, else found automatically.</summary>
         internal static XPlaneInstall? FindXPlane(Options options)
         {
@@ -795,8 +810,8 @@ namespace XPConnect.Host
                 return Fail("X-Plane folder not found; pass --xplane-root <dir>");
             }
 
-            var output = options.Get("out") ?? Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL");
-            var package = FsltlLocator.Find(options.Get("fsltl"));
+            var output = options.Get("out") ?? FsltlOutput(xplane.Root);
+            var package = FsltlFolder(options);
             switch (action)
             {
                 case "status":

@@ -123,9 +123,17 @@ public sealed class PanelTests
 
         var missing = CduPages.Build(PanelPage.StartFolders, Ready with { XPlaneFolder = null });
         Assert.Contains(missing.Rows, r => r.KeyRight == CduKey.ChooseXPlaneFolder && r.Right.Text == "CHOOSE>");
-        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready).Rows, r => r.Left.Text == "NONE FOUND" && r.KeyRight == CduKey.OpenModelsHelp);
-        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready with { CslPackages = 13 }).Rows, r => r.Left.Text == "13 PACKAGES");
-        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
+        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }).Rows, r => r.LabelLeft == "X-PLANE PLUGIN" && r.KeyRight == CduKey.InstallTrafficAddOn);
+        Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready).Message!, m => m.Text.Contains("no X-Plane plugin", StringComparison.Ordinal));
+
+        // Both tested model libraries: Bluebell (count, help) and FSLTL (choose, convert, converted).
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready).Rows, r => r.LabelLeft == "BLUEBELL" && r.Left.Text == "NOT FOUND" && r.KeyRight == CduKey.OpenModelsHelp);
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready with { CslPackages = 13 }).Rows, r => r.Left.Text == "13 PACKAGES");
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready).Rows, r => r.LabelLeft == "FSLTL" && r.KeyRight == CduKey.ChooseFsltlFolder);
+        var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl).Rows, r => r.Left.Text == "FOUND IN MSFS" && r.KeyRight == CduKey.ConvertFsltl);
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "UPDATE>");
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlConverting = true }).Rows, r => r.Left.Text == "CONVERTING..." && r.KeyRight == CduKey.None);
         Assert.Equal(CduKey.FinishGettingStarted, CduPages.Build(PanelPage.StartDone, Ready).Rows[5].KeyRight);
     }
 
@@ -141,9 +149,9 @@ public sealed class PanelTests
                 continue;
             }
 
-            // 15 px text wraps at 30 characters of the 24-column screen; a row (label + data) is 47 px, a text line 20 px.
+            // 15 px text wraps at about 28 characters of the 24-column screen; a row (label + data) is 47 px, a text line 20.25 px, under a 4 px margin.
             var lines = built.Message.Sum(m => m.Text.Split('\n').Sum(WrappedLines)) + built.Message.Count - 1;
-            var room = built.Rows.TakeWhile(r => r == CduRow.Empty).Count() * 47 / 20;
+            var room = (int)(((built.Rows.TakeWhile(r => r == CduRow.Empty).Count() * 47) - 4) / 20.25);
             Assert.True(lines <= room, $"{page}: {lines} lines, room for {room}");
         }
     }
@@ -154,7 +162,7 @@ public sealed class PanelTests
         var used = 0;
         foreach (var word in paragraph.Split(' '))
         {
-            if (used > 0 && used + 1 + word.Length > 30)
+            if (used > 0 && used + 1 + word.Length > 28)
             {
                 lines++;
                 used = 0;
@@ -173,8 +181,8 @@ public sealed class PanelTests
         window.Show();
 
         Assert.Equal(PanelPage.Welcome, window.Page);
-        Assert.Equal("WELCOME 1/5", window.Shown!.Title);
-        foreach (var expected in new[] { PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartXPlane, PanelPage.StartDone })
+        Assert.Equal("WELCOME 1/6", window.Shown!.Title);
+        foreach (var expected in new[] { PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartModels, PanelPage.StartXPlane, PanelPage.StartDone })
         {
             window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.Shift);
             Assert.Equal(expected, window.Page);
@@ -209,6 +217,12 @@ public sealed class PanelTests
 
             Directory.CreateDirectory(Path.Combine(root, "Custom Data", "CSL", "Empty"));
             Assert.Equal(3, PanelController.CountCslPackages(root));
+
+            // Converted FSLTL models are counted on their own, not as Bluebell-style packages.
+            var fsltl = Path.Combine(root, "Custom Data", "CSL", "XPConnect-FSLTL");
+            Directory.CreateDirectory(fsltl);
+            File.WriteAllText(Path.Combine(fsltl, "xsb_aircraft.txt"), "EXPORT_NAME XPConnect_FSLTL");
+            Assert.Equal(3, PanelController.CountCslPackages(root, except: fsltl));
         }
         finally
         {
@@ -245,7 +259,10 @@ public sealed class PanelTests
     public void Panel_renders_every_page()
     {
         var folder = Environment.GetEnvironmentVariable("XPCONNECT_SCREENSHOTS");
-        var window = new PanelWindow(() => Ready);
+
+        // A typical first run: plugin not yet installed, Bluebell installed, FSLTL found but not converted.
+        var firstRun = Ready with { TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
+        var window = new PanelWindow(() => firstRun);
         window.Show();
         foreach (var page in Enum.GetValues<PanelPage>())
         {

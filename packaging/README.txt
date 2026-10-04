@@ -9,8 +9,8 @@ Full help: https://github.com/Nodeblue/XPConnect/blob/main/docs/help.md
 
 First start
 -----------
-Double-click XPConnect.exe. The WELCOME pages find BeyondATC and X-Plane, install the traffic
-add-on and list the X-Plane settings to turn down. Use the buttons beside each line, or keys 1-6 (left)
+Double-click XPConnect.exe. The WELCOME pages find BeyondATC and X-Plane, install the X-Plane
+plugin that draws BeyondATC's traffic, set up aircraft models and list the X-Plane settings to turn down. Use the buttons beside each line, or keys 1-6 (left)
 and Shift+1-6 (right). You can open them again from the SUPPORT page.
 
 You need Windows 10/11 (64-bit), X-Plane 12.1.4 or later and BeyondATC. Nothing else.
@@ -28,9 +28,10 @@ If XPConnect is closed or restarted during a flight, restart BeyondATC too.
 
 Traffic
 -------
-BeyondATC's traffic is drawn with CSL aircraft models. Download the free Bluebell OBJ8 CSL packages
-(X-Plane.org forums) and unzip them into X-Plane 12\Custom Data\CSL. Close X-Plane before installing
-or updating the traffic add-on from the SETUP page.
+BeyondATC's traffic is drawn by XPConnect's X-Plane plugin with CSL aircraft models. Two libraries are
+tested: Bluebell (free from the X-Plane.org forums, unzip into X-Plane 12\Custom Data\CSL) and FSLTL
+(if installed in MSFS, press CONVERT on welcome page 4 with X-Plane closed; converted on your PC).
+Close X-Plane before installing or updating the plugin from the SETUP page.
 
 
 X-Plane settings

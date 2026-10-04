@@ -11,8 +11,8 @@ in X-Plane.
 2. Double-click `XPConnect.exe`. Its **WELCOME** pages find BeyondATC and X-Plane and set up traffic.
 3. Every flight: close MSFS, start X-Plane 12, keep XPConnect open, then start BeyondATC.
 
-You need Windows 10/11, X-Plane 12.1.4+ and BeyondATC. For traffic, add free
-[CSL models](docs/help.md#aircraft-models-for-traffic) such as Bluebell.
+You need Windows 10/11, X-Plane 12.1.4+ and BeyondATC. For traffic, add
+[aircraft models](docs/help.md#aircraft-models-for-traffic): Bluebell, or FSLTL converted from MSFS.
 
 **[Help page](docs/help.md)**: X-Plane settings, flying MSFS as well, problems and support files.
 

@@ -23,6 +23,9 @@ public sealed class AppSettings
     /// <summary>X-Plane's folder when the user chose it; null to find it automatically.</summary>
     public string? XPlaneFolder { get; set; }
 
+    /// <summary>FSLTL's fsltl-traffic-base folder when the user chose it; null to find it through MSFS's settings.</summary>
+    public string? FsltlFolder { get; set; }
+
     /// <summary>How BeyondATC reaches XPConnect: the default MSFS connection (nothing changed in BeyondATC) or its config files.</summary>
     public ConnectionMode Connection { get; set; } = ConnectionMode.Automatic;
 
