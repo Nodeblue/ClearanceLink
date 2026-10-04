@@ -161,8 +161,22 @@ public static class CduPages
         return new($"{AppName} STATUS", rows, flash is null ? Advice(s) : new(flash));
     }
 
-    /// <summary>The scratchpad on the status page: what works, or the next thing to do.</summary>
+    /// <summary>
+    /// The scratchpad on the status page: what works, or the next thing to do. Before a flight, a newer release takes
+    /// turns with it every few seconds; never while something needs fixing (amber) or once BeyondATC is talking.
+    /// </summary>
     public static CduCell Advice(PanelState s)
+    {
+        var advice = NextStep(s);
+        return s.Update is { } update && advice.Color == CduColor.White && s.Serving && (int)(s.Uptime.TotalSeconds / UpdateTurnSeconds) % 2 == 1
+            ? new(Fit($"NEW VERSION {update.Version}", Width), CduColor.Magenta)
+            : advice;
+    }
+
+    /// <summary>How long the next step and the new-version notice each stay on the status page's bottom line.</summary>
+    public const int UpdateTurnSeconds = 4;
+
+    private static CduCell NextStep(PanelState s)
     {
         var batc = s.BatcHelper || s.BatcApp;
         return s switch
