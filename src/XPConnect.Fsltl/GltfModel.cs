@@ -237,6 +237,20 @@ public sealed record GltfChannel(int Node, string Path, float[] Times, float[] V
 {
     public float MaxTime => Times.Length == 0 ? 0 : Times[^1];
 
+    /// <summary>Whether the keys move the part at all (some channels only hold one pose for the whole animation).</summary>
+    public bool Varies
+    {
+        get
+        {
+            for (var k = Width; k < Values.Length; k++)
+            {
+                if (MathF.Abs(Values[k] - Values[k % Width]) > 1e-4f) return true;
+            }
+
+            return false;
+        }
+    }
+
     public Vector3 Vec3At(int key) => new(Values[key * 3], Values[key * 3 + 1], Values[key * 3 + 2]);
 
     public Quaternion QuatAt(int key) => Quaternion.Normalize(new Quaternion(Values[key * 4], Values[key * 4 + 1], Values[key * 4 + 2], Values[key * 4 + 3]));

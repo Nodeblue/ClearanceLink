@@ -57,6 +57,33 @@ public static class AnimationRoles
         return roles;
     }
 
+    /// <summary>
+    /// Animation names the model XML uses at all: template ANIM_NAMEs and legacy <c>&lt;Animation name="..."&gt;</c>
+    /// declarations. MSFS never plays an animation nothing uses, so its keys must not pose the part (the TFS A380 has an
+    /// unused "custom_anim_SIM_ON_GROUND_06" holding its nose leg up).
+    /// </summary>
+    public static HashSet<string> UsedNames(string xmlPath)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        XDocument doc;
+        try
+        {
+            doc = XDocument.Load(xmlPath);
+        }
+        catch (Exception ex) when (ex is System.Xml.XmlException or IOException)
+        {
+            return names;
+        }
+
+        foreach (var e in doc.Descendants())
+        {
+            if (e.Name.LocalName == "ANIM_NAME" && e.Value.Trim().Length > 0) names.Add(e.Value.Trim());
+            if (e.Name.LocalName == "Animation" && e.Attribute("name")?.Value is { Length: > 0 } declared) names.Add(declared.Trim());
+        }
+
+        return names;
+    }
+
     /// <summary>Nodes the engine templates show or hide by engine speed (their NODE_NAME parameter).</summary>
     public static Dictionary<string, EnginePart> EngineParts(string xmlPath)
     {
