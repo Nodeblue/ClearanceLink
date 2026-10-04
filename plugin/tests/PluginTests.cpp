@@ -231,6 +231,16 @@ void ReadsOnlyTrianglePoints() {
     CHECK(model.gear.empty());
 }
 
+void ReadsOnlyTheNearestLod() {
+    // Vertices come before the commands, so a far LOD's points are in the file but drawn only after its ATTR_LOD.
+    std::istringstream obj("I\n800\nOBJ\nTEXTURE a.dds\nPOINT_COUNTS 2 0 0 2\nVT 0 -2 0 0 1 0 0 0\nVT 0 -3 0 0 1 0 0 0\n"
+                           "IDX 0\nIDX 1\nATTR_LOD 0 2000\nTRIS 0 1\nATTR_LOD 2000 30000\nTRIS 1 1\n");
+    xpc::PosedModel model;
+    xpc::ReadPosedObj(obj, model);
+    CHECK(model.all.size() == 1);
+    CHECK(!model.all.empty() && model.all[0].y == -2);
+}
+
 void FindsModelObjFiles() {
     namespace fs = std::filesystem;
     const auto root = fs::temp_directory_path() / "xpconnect-plugin-tests";
@@ -271,6 +281,33 @@ xpc::Pos At(double lat, double altFt, float heading, float pitch, float gsKt = 0
     p.pitch = pitch;
     p.groundSpeedKt = gsKt;
     return p;
+}
+
+void EasesHeightAcrossLiftOff() {
+    xpc::Smoothed h;
+    CHECK(h.Next(10, 0.1f, false, false) == 10);                  // first value: as is
+    const float atSwitch = h.Next(14, 0.0f, true, false);         // source changed: carries on from 10
+    CHECK(std::fabs(atSwitch - 10) < 1e-4f);
+    float v = atSwitch;
+    for (int i = 0; i < 20; ++i) v = h.Next(14, 0.1f, false, false);  // 2 s later: 95% of the way
+    CHECK(std::fabs(v - 14) < 0.25f);
+    CHECK(h.Next(100, 0.1f, true, true) == 100);                   // placed: snaps
+}
+
+void SteersTheNoseWheelAlongTheTurn() {
+    // 15 m wheelbase, 10 kt (5.14 m/s), turning right at 10 deg/s: atan(15 x 0.1745 / 5.14) = 27 deg right.
+    CHECK(std::fabs(xpc::SteeringAngleDeg(10, 10, 15) - 27.0f) < 0.5f);
+    CHECK(std::fabs(xpc::SteeringAngleDeg(-10, 10, 15) + 27.0f) < 0.5f);  // left turn
+    CHECK(xpc::SteeringAngleDeg(10, 0.2f, 15) == 0);                       // parked: straight
+    CHECK(xpc::SteeringAngleDeg(90, 2, 30) == 70);                          // capped
+    CHECK(std::fabs(xpc::HeadingDelta(350, 10) - 20) < 1e-4f);
+    CHECK(std::fabs(xpc::HeadingDelta(10, 350) + 20) < 1e-4f);
+}
+
+void TurnsPropellersAndWheels() {
+    CHECK(std::fabs(xpc::AdvanceAngle(350, 10, 0.5f, 1000) - 20) < 1e-3);    // 10 rpm = 60 deg/s, wraps past 360
+    CHECK(std::fabs(xpc::AdvanceAngle(0, 1000, 0.1f, 1500) - 150) < 1e-3);   // capped at 1500 deg/s
+    CHECK(xpc::AdvanceAngle(42, 0, 1, 1500) == 42);                          // stopped engine stays put
 }
 
 void BlendsBetweenUpdates() {
@@ -477,6 +514,7 @@ int main() {
     LeavesOddModelsLevel();
     PosesGearDown();
     ReadsOnlyTrianglePoints();
+    ReadsOnlyTheNearestLod();
     FindsObjFilesInSplitPackages();
     LevelsTiltingBogies();
     LevelsWorldTrafficBogies();
@@ -488,6 +526,9 @@ int main() {
     ReadsAnimationsKeyedHighToLow();
     FindsModelObjFiles();
     BlendsBetweenUpdates();
+    TurnsPropellersAndWheels();
+    SteersTheNoseWheelAlongTheTurn();
+    EasesHeightAcrossLiftOff();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);

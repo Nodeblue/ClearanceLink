@@ -8,6 +8,7 @@
     <ProjectReference Include="..\XPConnect.XPlane\XPConnect.XPlane.csproj" />
     <!-- Builds FlightSimulator2024(.exe) next to XPConnect for the serve command to start. -->
     <ProjectReference Include="..\XPConnect.SimStub\XPConnect.SimStub.csproj" />
+    <ProjectReference Include="..\XPConnect.Fsltl\XPConnect.Fsltl.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

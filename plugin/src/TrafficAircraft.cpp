@@ -212,7 +212,7 @@ bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     return true;
 }
 
-void TrafficAircraft::UpdatePosition(float, int) {
+void TrafficAircraft::UpdatePosition(float elapsed, int) {
     if (!track_.HasState()) return;
 
     const float now = XPLMGetElapsedTime();
@@ -241,6 +241,20 @@ void TrafficAircraft::UpdatePosition(float, int) {
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
         SetPitch(pitch + slope_.value_or(0.0f));
     }
+    // Lift-off and touchdown: on the ground the height comes from the terrain and the model's wheels, in the air from
+    // BATC's altitude, and the two rarely agree, so the aircraft jumped up or down as it rotated or touched down
+    // (2026-10-04). The drawn height eases from one to the other instead; a big move (BATC placing the aircraft)
+    // still snaps.
+    {
+        const float dx = float(drawInfo.x) - lastX_, dz = float(drawInfo.z) - lastZ_;
+        const bool placed = !hasLast_ || dx * dx + dz * dz > 200.0f * 200.0f;
+        drawInfo.y = height_.Next(float(drawInfo.y), elapsed, hasLast_ && p.onGround != wasOnGround_, placed);
+        lastX_ = float(drawInfo.x);
+        lastZ_ = float(drawInfo.z);
+        wasOnGround_ = p.onGround;
+        hasLast_ = true;
+    }
+
     // Drawn with the bogie value the wheels were measured with: levels tilting bogies on the ground; unloaded in the
     // air, so they tilt.
     SetBogies(p.onGround);
@@ -257,8 +271,26 @@ void TrafficAircraft::UpdatePosition(float, int) {
     SetLightsStrobe(p.lights & LightStrobe);
     SetLightsLanding(p.lights & LightLanding);
     SetLightsTaxi(p.lights & LightTaxi);
-    SetTireRotRpm(p.onGround ? p.groundSpeedKt * 4.5f : 0.0f);
-    SetEngineRotRpm(p.thrust > 0.01f || p.groundSpeedKt > 1 ? 1000.0f + 4000.0f * p.thrust : 0.0f);
+    const float tireRpm = p.onGround ? p.groundSpeedKt * 4.5f : 0.0f;
+    const float engineRpm = p.thrust > 0.01f || p.groundSpeedKt > 1 ? 1000.0f + 4000.0f * p.thrust : 0.0f;
+    SetTireRotRpm(tireRpm);
+    SetEngineRotRpm(engineRpm);
+    tireAngle_ = AdvanceAngle(tireAngle_, tireRpm, elapsed, 2000.0f);
+    engineAngle_ = AdvanceAngle(engineAngle_, engineRpm, elapsed, 1500.0f);
+    SetTireRotAngle(tireAngle_);
+
+    // Steer the nose wheel along the turn, from the turn rate of the drawn heading (smoothed over about a third of a
+    // second) and the wheelbase measured from the model's own wheels (15 m when it could not be read).
+    if (elapsed > 0 && lastHeading_) {
+        const float yaw = HeadingDelta(*lastHeading_, p.heading) / elapsed;
+        yawRate_ += (yaw - yawRate_) * std::min(1.0f, elapsed * 3.0f);
+    }
+    lastHeading_ = p.heading;
+    const Wheels* steerWheels = ModelWheels();
+    const float wheelbase = steerWheels ? std::fabs(steerWheels->mainZ - steerWheels->noseZ) : 15.0f;
+    SetNoseWheelAngle(p.onGround ? SteeringAngleDeg(yawRate_, p.groundSpeedKt, wheelbase) : 0.0f);
+    SetEngineRotAngle(engineAngle_);
+    SetPropRotAngle(engineAngle_);
 }
 
 }  // namespace xpc

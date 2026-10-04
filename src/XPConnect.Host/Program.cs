@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using XPConnect.Airports;
+using XPConnect.Fsltl;
 using XPConnect.Host;
 using XPConnect.Host.Status;
 using XPConnect.Host.Support;
@@ -53,6 +54,17 @@ namespace XPConnect.Host
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
               xpconnect plugin install|remove|status [--xplane-root <dir>]
                   Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
+              xpconnect showcase [--airport YBBN] [--runway <end, e.g. 01R>] [--taxiway <name>] [--per-group 9] [--taxiers 8]
+                    [--gap 25] [--speed 15] [--variants-runway <end>|none] [--xplane-root <dir>]
+                  Traffic check without BeyondATC (close XPConnect first; X-Plane running with the plugin): lines up
+                  aircraft from small to heavy nose to tail on a runway, grouped by size, and keeps some taxiing up and
+                  down a taxiway. With imported FSLTL liveries, also lines up one aircraft per model not shown (engine
+                  variants, freighters, other makers) on the parallel runway. Ctrl+C removes them.
+              xpconnect fsltl import|status [--fsltl <fsltl-traffic-base folder>] [--xplane-root <dir>] [--size 1024|2048|4096]
+                    [--only <text>] [--force] [--out <dir>]
+                  Convert your own FSLTL install (MSFS Community folder) into an X-Plane CSL package for the traffic
+                  plugin, in <X-Plane>/Custom Data/CSL/XPConnect-FSLTL. Only reads FSLTL. --size caps textures (default
+                  2048); --only imports liveries whose title or folder contains the text. Restart X-Plane afterwards.
               xpconnect batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at XPConnect (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
               xpconnect serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
@@ -120,6 +132,8 @@ namespace XPConnect.Host
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
                     "plugin" => Plugin(options),
+                    "fsltl" => Fsltl(options),
+                    "showcase" => await ShowcaseAsync(options),
                     _ => Fail($"Unknown command '{args[0]}'"),
                 };
             }
@@ -614,6 +628,216 @@ namespace XPConnect.Host
             Console.WriteLine();
         }
 
+        private static async Task<int> ShowcaseAsync(Options options)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (FindXPlane(options) is not { } xplane)
+            {
+                return Fail("X-Plane folder not found; pass --xplane-root <dir>");
+            }
+
+            var icao = (options.Get("airport") ?? "YBBN").ToUpperInvariant();
+            var airport = AptDatIndex.Build(xplane.AirportFiles()).Load(icao);
+            if (airport is null || airport.Runways.Count == 0) return Fail($"{icao}: no airport with runways in {xplane.Root}");
+
+            // Runway: the end asked for (line up from it), else the longest runway from its first end.
+            var wanted = options.Get("runway");
+            var (from, to) = wanted is null
+                ? airport.Runways.MaxBy(r => r.LengthMeters) is { } longest ? (longest.End1, longest.End2) : default
+                : airport.Runways.SelectMany(r => new[] { (r.End1, r.End2), (r.End2, r.End1) })
+                    .FirstOrDefault(e => e.Item1.Number.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+            if (from is null) return Fail($"{icao}: no runway end {wanted}");
+
+            var (taxiway, route) = Showcase.TaxiRoute(airport, options.Get("taxiway"));
+            var imported = FsltlImporter.LoadCatalogue(Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL"))
+                .Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline, e.Model)).ToList();
+            var aircraft = Showcase.Pick(imported, int.Parse(options.Get("per-group") ?? "9", inv));
+            var gap = double.Parse(options.Get("gap") ?? "25", inv);
+            var lineUp = Showcase.LineUp(aircraft, from, to, gap);
+
+            // Model variants on the parallel runway (the other runway within 10 degrees of this one), one per imported
+            // model not in the main line-up.
+            var variantsWanted = options.Get("variants-runway");
+            var parallel = airport.Runways.SelectMany(r => new[] { (r.End1, r.End2), (r.End2, r.End1) })
+                .Where(e => e.Item1 != from && e.Item1 != to)
+                .FirstOrDefault(e => variantsWanted is not null
+                    ? e.Item1.Number.Equals(variantsWanted, StringComparison.OrdinalIgnoreCase)
+                    : Math.Abs(Showcase.Turn(Geo.BearingDegrees(e.Item1.Latitude, e.Item1.Longitude, e.Item2.Latitude, e.Item2.Longitude),
+                        Geo.BearingDegrees(from.Latitude, from.Longitude, to.Latitude, to.Longitude))) < 10);
+            var variants = parallel.Item1 is null || imported.Count == 0 || options.Get("variants-runway") == "none"
+                ? []
+                : Showcase.PickVariants(imported, aircraft.Select(a => a.Model),
+                    Geo.DistanceMeters(parallel.Item1.Latitude, parallel.Item1.Longitude, parallel.Item2.Latitude, parallel.Item2.Longitude) - 300, gap);
+            var variantLineUp = parallel.Item1 is null ? [] : Showcase.LineUp(variants, parallel.Item1, parallel.Item2, gap);
+            var lineUpLength = lineUp.Count == 0 ? 0 : Geo.DistanceMeters(from.Latitude, from.Longitude, lineUp[^1].Latitude, lineUp[^1].Longitude);
+            var runwayLength = Geo.DistanceMeters(from.Latitude, from.Longitude, to.Latitude, to.Longitude);
+            if (lineUpLength > runwayLength) Console.WriteLine($"Note: the line-up ({lineUpLength:0} m) is longer than the runway ({runwayLength:0} m); use --per-group or --gap to shorten it.");
+            var taxiers = Math.Min(int.Parse(options.Get("taxiers") ?? "8", inv), route.Count >= 2 ? aircraft.Count : 0);
+            // Taxiers: one from each group in turn, so every size class turns corners.
+            var moving = aircraft.Select((a, i) => (a, i)).GroupBy(x => x.a.Group)
+                .SelectMany(g => g.Select((x, k) => (x.a, k))).OrderBy(x => x.k).Take(taxiers).Select(x => x.a).ToList();
+            var speedKt = double.Parse(options.Get("speed") ?? "15", inv);
+
+            Console.WriteLine($"Showcase at {icao}: {aircraft.Count} aircraft lined up on runway {from.Number} towards {to.Number} " +
+                $"({(imported.Count > 0 ? "imported FSLTL liveries" : "CSL models by type")}), {moving.Count} taxiing " +
+                (route.Count >= 2 ? $"up and down taxiway {taxiway} ({Showcase.Length(route):0} m)" : "(no named taxiway found)") + ". Ctrl+C to stop.");
+            foreach (var g in aircraft.GroupBy(a => a.Group))
+            {
+                Console.WriteLine($"  {g.Key}: {string.Join(", ", g.Select(a => a.IcaoType + (a.IcaoAirline is null ? "" : " " + a.IcaoAirline)))}");
+            }
+
+            if (variants.Count > 0)
+            {
+                Console.WriteLine($"Model variants on runway {parallel.Item1!.Number}: {variants.Count} aircraft, one per model not shown above:");
+                foreach (var g in variants.GroupBy(a => a.Group))
+                {
+                    Console.WriteLine($"  {g.Key}: {string.Join(", ", g.Select(a => $"{a.IcaoType} {a.IcaoAirline ?? "-"} ({a.Model})"))}");
+                }
+            }
+
+            PluginLink link;
+            try
+            {
+                link = new PluginLink(Version, Console.WriteLine);
+                link.Start();
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                return Fail($"Cannot listen on 127.0.0.1:{PluginLink.XPConnectPort} ({ex.Message}). Close XPConnect first.");
+            }
+
+            await using var _ = link;
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            const uint FirstId = 900_000;
+            var elevation = airport.ElevationFeet;
+            var allIds = new List<uint>();
+            void AddAll()
+            {
+                for (var i = 0; i < aircraft.Count; i++)
+                {
+                    var a = aircraft[i];
+                    link.Add(FirstId + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"{a.Group} {a.IcaoType}");
+                    allIds.Add(FirstId + (uint)i);
+                }
+
+                for (var i = 0; i < moving.Count; i++)
+                {
+                    var a = moving[i];
+                    link.Add(FirstId + 1000 + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"taxi {a.IcaoType}");
+                    allIds.Add(FirstId + 1000 + (uint)i);
+                }
+
+                for (var i = 0; i < variants.Count; i++)
+                {
+                    var a = variants[i];
+                    link.Add(FirstId + 2000 + (uint)i, a.IcaoType, a.IcaoAirline, a.Livery, $"{a.IcaoType} {a.Model}");
+                    allIds.Add(FirstId + 2000 + (uint)i);
+                }
+            }
+
+            var parked = TrafficLights.Nav;
+            var taxiing = TrafficLights.Nav | TrafficLights.Beacon | TrafficLights.Taxi;
+            var started = DateTime.UtcNow;
+            var lastAdd = DateTime.MinValue;
+            var loop = 2 * Showcase.Length(route);
+            try
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    var now = DateTime.UtcNow;
+                    if (now - lastAdd > TimeSpan.FromSeconds(10))
+                    {
+                        AddAll();  // again now and then: a plugin that (re)started later still gets them
+                        lastAdd = now;
+                        for (var i = 0; i < lineUp.Count; i++)
+                        {
+                            var p = lineUp[i];
+                            link.Update(FirstId + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, 0, true, 1, 0, 0, 0, parked));
+                        }
+
+                        for (var i = 0; i < variantLineUp.Count; i++)
+                        {
+                            var p = variantLineUp[i];
+                            link.Update(FirstId + 2000 + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, 0, true, 1, 0, 0, 0, parked));
+                        }
+                    }
+
+                    var travelled = (now - started).TotalSeconds * speedKt * 0.514444;
+                    for (var i = 0; i < moving.Count; i++)
+                    {
+                        var p = Showcase.Along(route, travelled + i * loop / moving.Count);
+                        link.Update(FirstId + 1000 + (uint)i, new TrafficState(p.Latitude, p.Longitude, elevation, p.Heading, 0, 0, speedKt, true, 1, 0, 0, 0.15, taxiing));
+                    }
+
+                    await Task.Delay(100, cts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            foreach (var id in allIds.Distinct()) link.Remove(id);
+            Console.WriteLine("Showcase stopped; aircraft removed.");
+            return 0;
+        }
+
+        private static int Fsltl(Options options)
+        {
+            var action = options.Positional.FirstOrDefault() ?? "status";
+            if (FindXPlane(options) is not { } xplane)
+            {
+                return Fail("X-Plane folder not found; pass --xplane-root <dir>");
+            }
+
+            var output = options.Get("out") ?? Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL");
+            var package = FsltlLocator.Find(options.Get("fsltl"));
+            switch (action)
+            {
+                case "status":
+                    Console.WriteLine(package is null ? "FSLTL: not found (pass --fsltl <folder>)" : $"FSLTL: {package}");
+                    var catalogue = FsltlImporter.LoadCatalogue(output);
+                    Console.WriteLine(catalogue.Count == 0 ? $"Imported: none ({output})" : $"Imported: {catalogue.Count} liveries in {output}");
+                    return 0;
+                case "import":
+                    if (package is null)
+                    {
+                        return Fail(options.Get("fsltl") is { } given
+                            ? $"No FSLTL package (SimObjects/Airplanes) in {given}"
+                            : "FSLTL not found in the MSFS Community folder; pass --fsltl <fsltl-traffic-base folder>");
+                    }
+
+                    if (options.Get("out") is null && System.Diagnostics.Process.GetProcessesByName("X-Plane").Length > 0)
+                    {
+                        // Replacing objects and textures X-Plane has open can leave it drawing a mix of old and new files.
+                        return Fail("Close X-Plane before importing; it reads the CSL files while it runs");
+                    }
+
+                    var only = options.Get("only");
+                    var result = FsltlImporter.Import(new ImportOptions
+                    {
+                        PackageRoot = package,
+                        Output = output,
+                        MaxTextureSize = int.Parse(options.Get("size") ?? "2048", System.Globalization.CultureInfo.InvariantCulture),
+                        Force = options.Has("force"),
+                        Filter = only is null ? null : l => l.Title.Contains(only, StringComparison.OrdinalIgnoreCase)
+                            || Path.GetFileName(l.Folder).Contains(only, StringComparison.OrdinalIgnoreCase),
+                        Log = Console.WriteLine,
+                    });
+                    foreach (var problem in result.Problems) Console.WriteLine($"FSLTL problem: {problem}");
+                    Console.WriteLine($"FSLTL: imported {result.Liveries} liveries ({result.Models} models, {result.Textures} textures, {result.Skipped} skipped) into {output}");
+                    Console.WriteLine("Restart X-Plane (or reload plugins) so the traffic plugin loads them.");
+                    return result.Liveries > 0 ? 0 : 1;
+                default:
+                    return Fail($"Unknown fsltl action '{action}' (import, status)");
+            }
+        }
+
         private static int Plugin(Options options)
         {
             var action = options.Positional.FirstOrDefault() ?? "status";
@@ -721,7 +945,15 @@ namespace XPConnect.Host
                 return TrafficModels.Empty;
             }
 
-            return TrafficModels.Load(path);
+            var models = TrafficModels.Load(path);
+            if (FindXPlane(options) is { } xplane)
+            {
+                var imported = Path.Combine(xplane.Root, "Custom Data", "CSL", "XPConnect-FSLTL");
+                models.UseImported(FsltlImporter.LoadCatalogue(imported).Select(e => (e.Title, e.Key, e.IcaoType, e.IcaoAirline)));
+                if (models.ImportedCount > 0) PacketConsole.Info($"Traffic: {models.ImportedCount} imported FSLTL liveries from {imported}");
+            }
+
+            return models;
         }
 
         private static MappingSet LoadMappings(Options options)
@@ -875,7 +1107,7 @@ namespace XPConnect.Host
                 }
 
                 var key = arg[2..];
-                options._named[key] = key is "quiet" or "no-stub" or "no-status" or "open-status" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
+                options._named[key] = key is "quiet" or "no-stub" or "no-status" or "open-status" or "force" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
             }
 
             return options;
