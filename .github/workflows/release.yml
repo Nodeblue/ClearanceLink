@@ -82,7 +82,7 @@ jobs:
 
           **New here?** Download the zip below and follow [Install and update](https://github.com/${{ github.repository }}/blob/$tag/docs/install.md). Windows may warn that the app is from an unknown publisher; the guide shows what to click.
 
-          **Updating?** Close $env:APP, unzip over your old $env:APP folder, then open the SETUP page: if the X-PLANE PLUGIN line says NEWER VERSION, close X-Plane and press UPDATE.
+          **Updating?** Close $env:APP, unzip over your old $env:APP folder, then open the SETUP page: if the X-PLANE PLUGIN line says NEWER VERSION, close X-Plane and press UPDATE. Coming from XPConnect (the old name)? Unzip into a new folder and delete the old XPConnect folder.
 
           SHA-256 of the zip is in the .sha256.txt file.
           "@
