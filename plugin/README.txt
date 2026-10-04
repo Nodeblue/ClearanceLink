@@ -10,5 +10,5 @@ csl_paths.txt (one folder per line) next to this file.
 
 Log lines start with "ClearanceLink:" in X-Plane's Log.txt.
 
-Part of ClearanceLink, free software under the GNU GPL version 3. Uses XPMP2 by Birger Hoppe (MIT licence,
+Part of ClearanceLink, free software under the GNU GPL version 3 with a permission to link with X-Plane. Uses XPMP2 by Birger Hoppe (MIT licence,
 XPMP2-LICENSE.txt) and the X-Plane SDK (XPLM-SDK-LICENSE.txt).
