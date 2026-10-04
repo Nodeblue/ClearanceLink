@@ -17,6 +17,9 @@ public sealed class PanelWindow : Window
 {
     public static readonly FontFamily CduFont = new("avares://ClearanceLink/Panel/Fonts#B612 Mono");
 
+    /// <summary>The same icon as the exe (Assets/ClearanceLink.ico), for the title bar and taskbar.</summary>
+    public static WindowIcon AppIcon() => new(Avalonia.Platform.AssetLoader.Open(new Uri("avares://ClearanceLink/Assets/ClearanceLink.ico")));
+
     private const double DataSize = 19;
     private const double LabelSize = 13.5;
     private const double MessageSize = 15;
@@ -56,6 +59,7 @@ public sealed class PanelWindow : Window
     {
         _state = state;
         Title = "ClearanceLink";
+        Icon = AppIcon();
         CanResize = false;
         SizeToContent = SizeToContent.WidthAndHeight;
         Background = Bezel;
