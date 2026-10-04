@@ -28,7 +28,7 @@ The X-Plane plugin has its own version (`plugin/CMakeLists.txt`). Raise it when 
 Without a signature, Windows SmartScreen warns on first start (users click **More info > Run anyway**, or tick
 **Unblock** on the zip first; see install.md), and Windows 11's Smart App Control may block the app outright.
 Some antivirus tools also flag unsigned single-file .NET apps. Ways to sign without buying a certificate yourself:
-- **SignPath Foundation**: free signing for open-source projects with an OSI licence (MIT qualifies) and a public
+- **SignPath Foundation**: free signing for open-source projects with an OSI licence (GPLv3 qualifies) and a public
   repository, from GitHub Actions. Needs an application and their review.
 - **Azure Artifact Signing** (formerly Trusted Signing): a low monthly fee, identity checked by Microsoft;
   check whether individuals in your country are accepted.
