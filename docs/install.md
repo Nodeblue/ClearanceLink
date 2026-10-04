@@ -33,8 +33,11 @@ installs anything itself. To stop the check: `ClearanceLink.exe settings update-
 2. Download the new zip and **Unblock** it as above.
 3. Unzip it into your ClearanceLink folder and choose **Replace the files**. Your settings and logs are kept (they are in
    `%LOCALAPPDATA%\ClearanceLink`, not in this folder).
-4. Start ClearanceLink. If **SETUP** shows the traffic add-on as **NEWER VERSION**, close X-Plane and press **UPDATE**
-   (X-Plane keeps the add-on locked while it runs).
+4. Start ClearanceLink. If **SETUP** shows the X-PLANE PLUGIN as **NEWER VERSION**, close X-Plane and press **UPDATE**
+   (X-Plane keeps the plugin locked while it runs).
+
+**Coming from XPConnect** (ClearanceLink's old name)? Unzip ClearanceLink into a new folder and delete the old
+XPConnect folder. ClearanceLink picks up your settings, and pressing UPDATE on SETUP replaces the old XPConnect plugin.
 
 ## Removing ClearanceLink
 1. On **SETUP**, if CONNECTION is **ALWAYS ON**, choose **AUTOMATIC** first, so BeyondATC goes back to MSFS.

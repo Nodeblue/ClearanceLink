@@ -881,11 +881,12 @@ namespace ClearanceLink.Host
                         return Fail("Close X-Plane before importing; it reads the CSL files while it runs");
                     }
 
+                    output = options.Get("out") ?? FsltlOutput(xplane.Root, moveOld: true);
                     var only = options.Get("only");
                     var result = FsltlImporter.Import(new ImportOptions
                     {
                         PackageRoot = package,
-                        Output = options.Get("out") ?? FsltlOutput(xplane.Root, moveOld: true),
+                        Output = output,
                         MaxTextureSize = int.Parse(options.Get("size") ?? "2048", System.Globalization.CultureInfo.InvariantCulture),
                         Force = options.Has("force"),
                         Filter = only is null ? null : l => l.Title.Contains(only, StringComparison.OrdinalIgnoreCase)

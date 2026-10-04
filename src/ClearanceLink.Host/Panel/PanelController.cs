@@ -274,8 +274,8 @@ public sealed class PanelController : IAsyncDisposable
             return "SET X-PLANE FOLDER";
         }
 
-        // X-Plane keeps the plugin file open while it runs.
-        if (_board?.Snapshot().XPlane.Connected == true)
+        // X-Plane keeps the plugin file open while it runs (also before its Web API answers).
+        if (_board?.Snapshot().XPlane.Connected == true || Process.GetProcessesByName("X-Plane").Length > 0)
         {
             return "CLOSE X-PLANE FIRST";
         }
