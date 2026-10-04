@@ -6,7 +6,7 @@ Output: `docs/research/batc-call-inventory.md`, with the go/no-go findings at th
 ## 0. Setup
 ```powershell
 winget install Microsoft.DotNet.SDK.10
-git clone https://github.com/Nodeblue/XPConnect; cd XPConnect
+git clone https://github.com/Nodeblue/ClearanceLink; cd ClearanceLink
 ./scripts/test.ps1
 ```
 

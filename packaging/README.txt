@@ -4,7 +4,7 @@ ClearanceLink - Connect BeyondATC to X-Plane 12
 Experimental hobby project by Nodeblue. Not affiliated with, endorsed by or supported by BeyondATC,
 Microsoft or Laminar Research. Free software under the MIT licence (LICENSE.txt).
 
-Full help: https://github.com/Nodeblue/XPConnect/blob/main/docs/help.md
+Full help: https://github.com/Nodeblue/ClearanceLink/blob/main/docs/help.md
 
 
 First start
