@@ -39,6 +39,42 @@ double DistanceMeters(const Pos& a, const Pos& b) {
 
 }  // namespace
 
+float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond) {
+    const float degPerSecond = std::min(std::fabs(rpm) * 6.0f, maxDegPerSecond);
+    float next = std::fmod(deg + degPerSecond * std::max(seconds, 0.0f), 360.0f);
+    if (next < 0) next += 360.0f;
+    return next;
+}
+
+float SteeringAngleDeg(float yawDegPerSecond, float speedKt, float wheelbaseM, float maxDeg) {
+    constexpr float MetersPerSecondPerKnot = 0.514444f;
+    const float speed = speedKt * MetersPerSecondPerKnot;
+    if (speed < 0.5f || wheelbaseM <= 0) return 0;
+    const float yaw = yawDegPerSecond * 3.14159265f / 180.0f;
+    const float deg = std::atan(wheelbaseM * yaw / speed) * 180.0f / 3.14159265f;
+    return std::clamp(deg, -maxDeg, maxDeg);
+}
+
+float Smoothed::Next(float target, float elapsed, bool sourceChanged, bool snap, float seconds) {
+    if (!has_ || snap) {
+        offset_ = 0;
+    } else {
+        if (sourceChanged) offset_ = last_ - target;  // carry on from where it was drawn
+        offset_ *= std::exp(-3.0f * std::max(elapsed, 0.0f) / std::max(seconds, 0.01f));
+        if (std::fabs(offset_) < 0.001f) offset_ = 0;
+    }
+    has_ = true;
+    last_ = target + offset_;
+    return last_;
+}
+
+float HeadingDelta(float from, float to) {
+    float d = std::fmod(to - from, 360.0f);
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return d;
+}
+
 Pos Blend(const Pos& a, const Pos& b, float f) {
     Pos p = b;
     p.lat = Lerp(a.lat, b.lat, f);

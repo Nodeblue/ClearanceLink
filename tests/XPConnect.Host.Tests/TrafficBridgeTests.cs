@@ -33,6 +33,27 @@ public sealed class TrafficBridgeTests
         Assert.Equal(new TrafficModel(type, airline), Models.Match(title));
 
     [Fact]
+    public void Imported_fsltl_titles_are_drawn_with_their_own_livery()
+    {
+        var models = TrafficModels.Load(RepoFile("mapping", "traffic-models.yaml"));
+        models.UseImported([("FSLTL_B738_Qantas", "FSLTL_B738_QFA", "B738", "QFA"), ("FSLTL_B738_ZZZZ", "FSLTL_B738", "B738", "")]);
+
+        Assert.Equal(new TrafficModel("B738", "QFA", "FSLTL_B738_QFA"), models.Match("FSLTL_B738_Qantas"));
+        Assert.Equal(new TrafficModel("B738", null, "FSLTL_B738"), models.Match("FSLTL_B738_ZZZZ"));
+        Assert.Equal(new TrafficModel("B738", "VOZ"), models.Match("FSLTL_B738_Virgin Australia")); // not imported: the rules
+
+        var time = new ManualTime();
+        var registry = new TrafficRegistry(time);
+        var plugin = new FakePlugin { Status = Connected() };
+        var bridge = new TrafficBridge(registry, plugin, models, null, _ => { }, time);
+        var qantas = registry.Create(2, TrafficKind.Aircraft, "FSLTL_B738_Qantas", "", "VHXZE", new InitPosition(-27.39, 153.12, 13, 0, 0, 13, true, 0));
+
+        bridge.Sync();
+
+        Assert.Equal([$"add {bridge.PluginId(qantas.ObjectId)} B738 QFA FSLTL_B738_QFA VHXZE"], plugin.Adds);
+    }
+
+    [Fact]
     public void Sends_aircraft_to_the_plugin_but_not_tugs_and_removes_them_when_gone()
     {
         var time = new ManualTime();
@@ -284,7 +305,7 @@ public sealed class TrafficBridgeTests
         public Dictionary<uint, double> Ground { get; } = [];
 
         public void Add(uint id, string icaoType, string? icaoAirline, string? livery, string label) =>
-            Adds.Add($"add {id} {icaoType} {icaoAirline ?? "-"} {label}");
+            Adds.Add($"add {id} {icaoType} {icaoAirline ?? "-"}{(livery is null ? "" : " " + livery)} {label}");
 
         public void Update(uint id, TrafficState state) => Updates.Add((id, state));
 

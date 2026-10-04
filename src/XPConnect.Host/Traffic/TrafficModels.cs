@@ -4,8 +4,11 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace XPConnect.Host.Traffic;
 
-/// <summary>What the plugin is asked to draw for one BATC model title: an ICAO type and, when known, an ICAO airline.</summary>
-public readonly record struct TrafficModel(string IcaoType, string? IcaoAirline);
+/// <summary>
+/// What the plugin is asked to draw for one BATC model title: an ICAO type and, when known, an ICAO airline and the
+/// CSL livery key of an imported FSLTL livery (an exact match in XPMP2).
+/// </summary>
+public readonly record struct TrafficModel(string IcaoType, string? IcaoAirline, string? Livery = null);
 
 /// <summary>
 /// Turns BATC's MSFS model titles (FSLTL_B738_Qantas, Asobo PassiveAircraft King Air 350i) into an ICAO type and
@@ -55,8 +58,26 @@ public sealed partial class TrafficModels
     /// <summary>Feet to raise (+) or lower (-) a model of this type when it is drawn on the ground.</summary>
     public double GroundOffsetFeet(string icaoType) => _groundOffset.GetValueOrDefault(icaoType, _groundOffset.GetValueOrDefault("default"));
 
+    private Dictionary<string, TrafficModel> _imported = new(StringComparer.Ordinal);
+
+    /// <summary>Titles of imported FSLTL liveries (xpconnect fsltl import) match their own CSL livery exactly.</summary>
+    public void UseImported(IEnumerable<(string Title, string Key, string IcaoType, string IcaoAirline)> liveries)
+    {
+        var imported = new Dictionary<string, TrafficModel>(StringComparer.Ordinal);
+        foreach (var l in liveries)
+        {
+            if (l.IcaoType.Length == 0) continue;
+            imported[l.Title] = new TrafficModel(l.IcaoType, l.IcaoAirline.Length > 0 ? l.IcaoAirline : null, l.Key);
+        }
+
+        _imported = imported;
+    }
+
+    public int ImportedCount => _imported.Count;
+
     public TrafficModel Match(string title)
     {
+        if (_imported.TryGetValue(title, out var exact)) return exact;
         if (title.StartsWith(AsoboPrefix, StringComparison.OrdinalIgnoreCase))
         {
             var rest = title[AsoboPrefix.Length..];

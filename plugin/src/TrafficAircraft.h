@@ -75,6 +75,16 @@ private:
     float probeX_ = 0, probeZ_ = 0, probeTime_ = -1000, probeY_ = 0;
     float probeHeading_ = 0;
     std::optional<float> slope_;
+    // Propeller and wheel angles the plugin turns each frame (XPMP2 does not turn them from rpm itself).
+    float engineAngle_ = 0, tireAngle_ = 0;
+    // Nose wheel steering: the drawn heading last frame and the turn rate measured from it, smoothed (deg/s).
+    std::optional<float> lastHeading_;
+    float yawRate_ = 0;
+    // Height drawn, eased across lift-off and touchdown, and the frame's position to spot BATC placing the aircraft.
+    Smoothed height_;
+    bool wasOnGround_ = false;
+    float lastX_ = 0, lastZ_ = 0;
+    bool hasLast_ = false;
 };
 
 }  // namespace xpc

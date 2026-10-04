@@ -204,10 +204,14 @@ struct Obj {
 
 Obj ReadObj(std::istream& in) {
     Obj obj;
+    int lods = 0;
     for (std::string line; GetLine(in, line);) {
         if (line.size() < 3) continue;
         auto tokens = Tokens(line);
         if (tokens.empty()) continue;
+        // Only the nearest LOD is what sits on the ground up close: a far LOD's simpler gear can hang lower (FSLTL's
+        // B738 low LOD has its main wheels 0.4 m below the detailed ones), which would lift the drawn model.
+        if (tokens[0] == "ATTR_LOD" && ++lods > 1) break;
         if (tokens[0] == "VT") {
             if (tokens.size() >= 4) obj.vt.push_back({float(Number(tokens, 1)), float(Number(tokens, 2)), float(Number(tokens, 3))});
         } else if (tokens[0] == "IDX10" || tokens[0] == "IDX") {
