@@ -273,12 +273,19 @@ public static class FsltlImporter
         return jobs.Count - failures.Count;
     }
 
-    /// <summary>The catalogue written by an import, or empty if there is none.</summary>
+    /// <summary>The catalogue written by an import, or empty if there is none, it is damaged or it is being written.</summary>
     public static List<CatalogueEntry> LoadCatalogue(string packageFolder)
     {
         var path = Path.Combine(packageFolder, CatalogueFile);
         if (!File.Exists(path)) return [];
-        return JsonSerializer.Deserialize<List<CatalogueEntry>>(File.ReadAllText(path), CatalogueJson.Options) ?? [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<CatalogueEntry>>(File.ReadAllText(path), CatalogueJson.Options) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 }
 

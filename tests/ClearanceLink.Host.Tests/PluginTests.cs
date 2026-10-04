@@ -122,6 +122,39 @@ public sealed class PluginTests : IDisposable
         Assert.Equal(PluginInstall.State.Installed, install.Check());
     }
 
+    [Fact]
+    public void Installing_while_xplane_has_the_old_plugin_loaded_changes_nothing()
+    {
+        var bundled = Path.Combine(_dir, "package", "X-Plane plugin", "ClearanceLink");
+        Directory.CreateDirectory(Path.Combine(bundled, "64"));
+        File.WriteAllText(Path.Combine(bundled, "64", "win.xpl"), "new");
+        var install = new PluginInstall(Path.Combine(_dir, "X-Plane 12"), bundled);
+        Directory.CreateDirectory(Path.Combine(install.OldTarget, "64"));
+        var oldXpl = Path.Combine(install.OldTarget, "64", "win.xpl");
+        File.WriteAllText(oldXpl, "old");
+
+        using (new FileStream(oldXpl, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.ThrowsAny<IOException>(() => install.Install());
+        }
+
+        Assert.False(Directory.Exists(install.Target));
+        Assert.True(File.Exists(oldXpl));
+    }
+
+    [Fact]
+    public void Removing_shows_the_csl_list_from_the_old_xpconnect_plugin()
+    {
+        var install = new PluginInstall(Path.Combine(_dir, "X-Plane 12"), Path.Combine(_dir, "none"));
+        Directory.CreateDirectory(install.OldTarget);
+        File.WriteAllText(Path.Combine(install.OldTarget, PluginInstall.UserFile), "D:\\Bluebell");
+
+        var lines = install.Remove();
+
+        Assert.False(Directory.Exists(install.OldTarget));
+        Assert.Contains(lines, l => l.Contains("D:\\Bluebell", StringComparison.Ordinal));
+    }
+
     private static int FreePort()
     {
         using var probe = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
