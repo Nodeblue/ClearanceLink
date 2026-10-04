@@ -108,7 +108,7 @@ public static class CduPages
 
     /// <summary>The product name in sentences (getting-started messages).</summary>
     public const string ProductName = "ClearanceLink";
-    public const string Website = "https://github.com/Nodeblue/XPConnect";
+    public const string Website = "https://github.com/Nodeblue/ClearanceLink";
     public const string HelpPage = Website + "/blob/main/docs/help.md";
     public const string ModelsHelp = HelpPage + "#aircraft-models-for-traffic";
 
