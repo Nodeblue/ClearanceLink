@@ -21,7 +21,7 @@ public static class PanelTestApp
 public sealed class PanelTests
 {
     private static readonly PanelState Ready = new(
-        Version: "0.4.0",
+        Version: "0.5.0",
         Serving: true,
         XPlaneConnected: true,
         XPlaneVersion: "12.4.3",
@@ -302,6 +302,22 @@ public sealed class PanelTests
             {
                 Directory.CreateDirectory(folder);
                 frame.Save(Path.Combine(folder, $"panel-{page.ToString().ToLowerInvariant()}.png"));
+            }
+        }
+
+        // The same pages once everything is set up and a flight is on: the plugin installed and drawing traffic.
+        var flying = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154 };
+        window.Close();
+        window = new PanelWindow(() => flying);
+        window.Show();
+        foreach (var page in new[] { PanelPage.Status, PanelPage.Setup, PanelPage.StartModels })
+        {
+            window.ShowPage(page);
+            var frame = window.CaptureRenderedFrame();
+            Assert.NotNull(frame);
+            if (folder is not null)
+            {
+                frame!.Save(Path.Combine(folder, $"panel-{page.ToString().ToLowerInvariant()}-flying.png"));
             }
         }
 
