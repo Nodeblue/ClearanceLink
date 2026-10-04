@@ -45,6 +45,7 @@ namespace XPConnect.Host
               xpconnect start
                   The same in this console window instead: check BeyondATC's set-up, then serve.
               xpconnect settings [connection automatic|always-on] [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
+                    [update-check on|off]
                   Show or change saved settings (%LOCALAPPDATA%\XPConnect\settings.json). connection automatic (default):
                   serve answers on MSFS's default connection while MSFS is closed, nothing changed in BeyondATC;
                   always-on: BeyondATC's SimConnect.cfg files point at XPConnect's TCP port. Folders set here are used
@@ -52,6 +53,9 @@ namespace XPConnect.Host
               xpconnect support
                   Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
+              xpconnect update
+                  Ask GitHub whether a newer XPConnect release exists and print where to download it. The window does
+                  this on its own at start-up (ABOUT page) unless update-check is off. Nothing is downloaded.
               xpconnect plugin install|remove|status [--xplane-root <dir>]
                   Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
               xpconnect showcase [--airport YBBN] [--runway <end, e.g. 01R>] [--taxiway <name>] [--per-group 9] [--taxiers 8]
@@ -131,6 +135,7 @@ namespace XPConnect.Host
                     "batc" => Batc(options),
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
+                    "update" => await UpdateCommandAsync(),
                     "plugin" => Plugin(options),
                     "fsltl" => Fsltl(options),
                     "showcase" => await ShowcaseAsync(options),
@@ -309,13 +314,21 @@ namespace XPConnect.Host
                             _ => throw new ArgumentException("session-log takes on or off"),
                         };
                         break;
+                    case "update-check":
+                        settings.CheckForUpdates = value switch
+                        {
+                            "on" => true,
+                            "off" => false,
+                            _ => throw new ArgumentException("update-check takes on or off"),
+                        };
+                        break;
                     case "keep-days":
                         settings.KeepDays = int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var days) && days > 0
                             ? days
                             : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
                         break;
                     default:
-                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log or keep-days.");
+                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days or update-check.");
                 }
             }
 
@@ -331,6 +344,7 @@ namespace XPConnect.Host
             Console.WriteLine($"  Connection        {(settings.Connection == ConnectionMode.Automatic ? "automatic (MSFS's default connection; close MSFS before flying X-Plane)" : "always on (BeyondATC's config files point at XPConnect)")}");
             Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
+            Console.WriteLine($"  Update check      {(settings.CheckForUpdates ? "on (asks GitHub for a newer release at start-up)" : "off")}");
             return 0;
         }
 
@@ -507,6 +521,12 @@ namespace XPConnect.Host
             await cts.CancelAsync();
             await run;
             return missing.Count == 0 ? 0 : 3;
+        }
+
+        private static async Task<int> UpdateCommandAsync()
+        {
+            Console.WriteLine(UpdateCheck.Describe(Version, await UpdateCheck.FindAsync(Version)));
+            return 0;
         }
 
         internal static string Version =>
