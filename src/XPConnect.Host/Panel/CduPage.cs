@@ -239,7 +239,7 @@ public static class CduPages
         CduCell[] message =
         [
             Say($"Welcome to {ProductName}", CduColor.Green),
-            Say("It links BeyondATC to X-Plane 12, so its controllers and traffic work in X-Plane."),
+            Say("Bring BeyondATC to X-Plane 12: clearances, handoffs and traffic, right in your sim."),
             Say("Free and experimental, with no warranty. Not affiliated with or endorsed by BeyondATC.", CduColor.Cyan),
         ];
         return new(StartTitle(PanelPage.Welcome), rows, new(flash ?? "BY NODEBLUE"), message);
