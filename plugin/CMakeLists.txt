@@ -97,7 +97,8 @@ set_target_properties(ClearanceLinkPlugin PROPERTIES
 add_custom_command(TARGET ClearanceLinkPlugin POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${xpmp2_SOURCE_DIR}/Resources" "${CMAKE_BINARY_DIR}/ClearanceLink/Resources"
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/README.txt" "${CMAKE_BINARY_DIR}/ClearanceLink/README.txt"
-    COMMAND ${CMAKE_COMMAND} -E copy "${xpmp2_SOURCE_DIR}/LICENSE" "${CMAKE_BINARY_DIR}/ClearanceLink/XPMP2-LICENSE.txt")
+    COMMAND ${CMAKE_COMMAND} -E copy "${xpmp2_SOURCE_DIR}/LICENSE" "${CMAKE_BINARY_DIR}/ClearanceLink/XPMP2-LICENSE.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy "${xpmp2_SOURCE_DIR}/lib/SDK/license.txt" "${CMAKE_BINARY_DIR}/ClearanceLink/XPLM-SDK-LICENSE.txt")
 
 # Tests for the X-Plane-independent parts. Run: ctest --test-dir build/plugin -C Release
 enable_testing()

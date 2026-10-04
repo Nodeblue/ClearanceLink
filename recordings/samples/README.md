@@ -8,4 +8,4 @@ used as test fixtures (the facility encoder is checked byte for byte against the
   procedures for YBBN, YTWB and surrounding airports).
 
 The airport and procedure values in these files were produced by MSFS 2024 and its navigation data. They are not
-covered by this repository's MIT licence. They are used only by the tests and are not part of the ClearanceLink release.
+covered by this repository's GPLv3 licence. They are used only by the tests and are not part of the ClearanceLink release.
