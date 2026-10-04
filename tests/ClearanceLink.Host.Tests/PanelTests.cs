@@ -63,6 +63,25 @@ public sealed class PanelTests
         }
     }
 
+    [Fact]
+    public void A_new_release_takes_turns_with_the_next_step_before_a_flight_only()
+    {
+        var update = new UpdateInfo("0.6.0", "https://github.com/Nodeblue/ClearanceLink/releases/tag/v0.6.0");
+        var waiting = Ready with { BatcHelper = false, BatcApp = false, Update = update };
+        var turn = TimeSpan.FromSeconds(CduPages.UpdateTurnSeconds);
+
+        Assert.Equal("START BEYONDATC", CduPages.Advice(waiting with { Uptime = turn * 2 }).Text);
+        var notice = CduPages.Advice(waiting with { Uptime = turn * 3 });
+        Assert.Equal("NEW VERSION 0.6.0", notice.Text);
+        Assert.Equal(CduColor.Magenta, notice.Color);
+
+        // Never over something to fix, and not once BeyondATC is connected (green).
+        Assert.Equal("CLOSE MSFS TO CONNECT", CduPages.Advice(waiting with { MsfsRunning = true, Uptime = turn * 3 }).Text);
+        Assert.Equal("READY FOR CLEARANCE", CduPages.Advice(Ready with { Update = update, Uptime = turn * 3 }).Text);
+        // Fits the screen with the longest version the tests use elsewhere.
+        Assert.True(CduPages.Advice(waiting with { Uptime = turn * 3, Update = update with { Version = "10.12.13-beta.4" } }).Text.Length <= CduPages.Width);
+    }
+
     [Theory]
     [InlineData(false, true, false, false, false, "STARTING...")]
     [InlineData(true, true, false, false, false, "CLOSE MSFS TO CONNECT")]
