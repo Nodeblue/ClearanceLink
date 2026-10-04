@@ -17,6 +17,8 @@ What you get:
 - **Taxiing:** 8 of them (one per group in turn) going up and down a taxiway at 15 kt with engines running, turning
   round at each end: wheels roll, propellers turn, nose wheels steer.
 
+- **Model variants (parallel runway):** with imported FSLTL liveries, one aircraft per converted model the main line-up does not show (engine and winglet variants, freighters, other model makers; at most 2 per type, per-livery model copies counted once), on the other runway within 10 degrees, e.g. 01L at YBBN. The console lists each with its model name.
+
 ## Options
 | Option | Default | |
 |---|---|---|
@@ -27,5 +29,6 @@ What you get:
 | `--taxiers` | 8 | aircraft taxiing |
 | `--gap` | 25 | metres between aircraft (3x between groups) |
 | `--speed` | 15 | taxi speed in knots |
+| `--variants-runway` | the parallel runway | runway end for the model variants, or `none` |
 
 The console lists every aircraft by group, type and airline, so what you see can be matched to a model.

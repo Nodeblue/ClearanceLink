@@ -30,7 +30,8 @@ public sealed record ImportOptions
 public sealed record ImportResult(int Liveries, int Models, int Textures, int Skipped, List<string> Problems);
 
 /// <summary>One catalogue entry: how XPConnect finds the CSL livery for a title BeyondATC asks for.</summary>
-public sealed record CatalogueEntry(string Title, string Key, string IcaoType, string IcaoAirline);
+/// <param name="Model">The converted model the livery is drawn with (several liveries share one).</param>
+public sealed record CatalogueEntry(string Title, string Key, string IcaoType, string IcaoAirline, string Model = "");
 
 /// <summary>
 /// Converts the user's own FSLTL install into an X-Plane CSL package that XPMP2 (the XPConnect plugin) loads:
@@ -152,7 +153,7 @@ public static class FsltlImporter
                 entries.Append("OBJ8_AIRCRAFT ").Append(livery.Key).Append('\n')
                     .Append(lines)
                     .Append("LIVERY ").Append(type).Append(' ').Append(livery.IcaoAirline.Length > 0 ? livery.IcaoAirline : "-").Append(' ').Append(livery.Key).Append("\n\n");
-                catalogue.Add(new CatalogueEntry(livery.Title, livery.Key, livery.IcaoType, livery.IcaoAirline));
+                catalogue.Add(new CatalogueEntry(livery.Title, livery.Key, livery.IcaoType, livery.IcaoAirline, modelName));
             }
 
             options.Log($"FSLTL: {modelName}: {converted.Parts.Count} object(s), {converted.Parts.Sum(p => p.Triangles)} triangles, {model.Count()} liveries");

@@ -8,21 +8,25 @@ public sealed class ShowcaseTests
     [Fact]
     public void Picks_real_airline_liveries_preferring_local_airlines_and_different_ones()
     {
-        var liveries = new List<(string, string, string, string)>
+        var liveries = new List<(string, string, string, string, string)>
         {
-            ("FSLTL_B738_ZZZZ", "FSLTL_B738", "B738", ""),
-            ("FSLTL_B738_ABC-STUB", "FSLTL_B738_ABC", "B738", "ABC"),
-            ("FSLTL_B738_KLM", "FSLTL_B738_KLM", "B738", "KLM"),
-            ("FSLTL_B738_Qantas", "FSLTL_B738_QFA", "B738", "QFA"),
-            ("FSLTL_A20N_Qantas", "FSLTL_A20N_QFA", "A20N", "QFA"),
-            ("FSLTL_A20N_Jetstar", "FSLTL_A20N_JST", "A20N", "JST"),
+            ("FSLTL_B738_ZZZZ", "FSLTL_B738", "B738", "", "B738_W"),
+            ("FSLTL_B738_ABC-STUB", "FSLTL_B738_ABC", "B738", "ABC", "B738_W"),
+            ("FSLTL_B738_KLM", "FSLTL_B738_KLM", "B738", "KLM", "B738_S"),
+            ("FSLTL_B738_Qantas", "FSLTL_B738_QFA", "B738", "QFA", "B738_W"),
+            ("FSLTL_A20N_Qantas", "FSLTL_A20N_QFA", "A20N", "QFA", "A20N_CFM"),
+            ("FSLTL_A20N_Jetstar", "FSLTL_A20N_JST", "A20N", "JST", "A20N_PW"),
         };
 
         var picked = Showcase.Pick(liveries, 9);
 
         Assert.Equal(
-            [new ShowcaseAircraft("Narrow body", "B738", "QFA", "FSLTL_B738_QFA", 40), new ShowcaseAircraft("Narrow body", "A20N", "JST", "FSLTL_A20N_JST", 38)],
+            [new ShowcaseAircraft("Narrow body", "B738", "QFA", "FSLTL_B738_QFA", 40, "B738_W"), new ShowcaseAircraft("Narrow body", "A20N", "JST", "FSLTL_A20N_JST", 38, "A20N_PW")],
             picked);
+
+        // The parallel runway: the models not shown yet (scimitar 737, CFM A320neo), each in its own livery.
+        var variants = Showcase.PickVariants(liveries, picked.Select(a => a.Model), 3000, 25);
+        Assert.Equal([("A20N", "A20N_CFM"), ("B738", "B738_S")], variants.Select(v => (v.IcaoType, v.Model!)).Order());
     }
 
     [Fact]
