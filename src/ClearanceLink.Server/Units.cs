@@ -3,7 +3,8 @@ namespace ClearanceLink.Server;
 /// <summary>
 /// Converts between the unit names SimConnect clients use ("feet", "knots", "MHz", "bco16"...) and the units a mapping
 /// declares for its X-Plane source. Each unit belongs to a dimension with a base unit; conversion goes through the base.
-/// Unknown unit names pass values through unchanged and are reported via <see cref="IsKnown"/>.
+/// Unknown unit names, and pairs from different dimensions, pass values through unchanged; they are reported via
+/// <see cref="IsKnown"/> and through the optional callback of <see cref="Convert"/> so callers can log them once.
 /// </summary>
 public static class Units
 {
@@ -62,8 +63,13 @@ public static class Units
     public static bool IsKnown(string unit) =>
         Plain.Contains(Normalize(unit)) || Linear.ContainsKey(Normalize(unit)) || IsBco16(unit);
 
-    /// <summary>Converts <paramref name="value"/> from <paramref name="from"/> units to <paramref name="to"/> units.</summary>
-    public static double Convert(double value, string from, string to)
+    /// <summary>
+    /// Converts <paramref name="value"/> from <paramref name="from"/> units to <paramref name="to"/> units. When the pair
+    /// cannot be converted (an unknown name, or two dimensions such as feet and knots) the value passes through
+    /// unchanged and <paramref name="passedThrough"/> is called with the pair (not for two unit-less names, nor when
+    /// either name is empty).
+    /// </summary>
+    public static double Convert(double value, string from, string to, Action<string, string>? passedThrough = null)
     {
         var f = Normalize(from);
         var t = Normalize(to);
@@ -91,6 +97,12 @@ public static class Units
         if (IsBool(t))
         {
             return value != 0 ? 1 : 0;
+        }
+
+        // An empty name means "the default units" (BATC asks for COM VOLUME and WING SPAN that way), so is not reported.
+        if (f.Length > 0 && t.Length > 0 && !(Plain.Contains(f) && Plain.Contains(t)))
+        {
+            passedThrough?.Invoke(from, to);
         }
 
         return value;

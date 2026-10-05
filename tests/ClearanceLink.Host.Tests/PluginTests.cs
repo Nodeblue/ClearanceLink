@@ -68,6 +68,112 @@ public sealed class PluginTests : IDisposable
     }
 
     [Fact]
+    public async Task Finds_the_plugin_on_whichever_port_it_opened_and_then_writes_only_there()
+    {
+        // The plugin takes the first of its ports Windows lets it open (some can be reserved), so ClearanceLink tries
+        // them all until it answers, then sticks to the port it answered from.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var unused = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        using var plugin = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        int Port(UdpClient c) => ((IPEndPoint)c.Client.LocalEndPoint!).Port;
+        await using var link = new PluginLink("0.5.3", _ => { }, pluginPorts: [Port(unused), Port(plugin)]);
+        link.Start();
+
+        link.Add(1, "B738", "QFA", null, "ONE");
+        Assert.Contains("add 1 B738 QFA - ONE", await Lines(unused, "add 1", cts.Token));
+        Assert.Contains("add 1 B738 QFA - ONE", await Lines(plugin, "add 1", cts.Token));
+
+        await plugin.SendAsync(Encoding.UTF8.GetBytes("status 0.5.3 0 900 -\n"), new IPEndPoint(IPAddress.Loopback, link.ListenPort), cts.Token);
+        while (link.Status is null)
+        {
+            await Task.Delay(20, cts.Token);
+        }
+
+        link.Add(2, "A320", "JST", null, "TWO");
+        Assert.Contains("add 2 A320 JST - TWO", await Lines(plugin, "add 2", cts.Token));
+        await Task.Delay(200, cts.Token);
+        var late = new List<string>(); // hellos sent before the plugin answered may still be waiting
+        while (unused.Available > 0)
+        {
+            late.AddRange(Encoding.UTF8.GetString((await unused.ReceiveAsync(cts.Token)).Buffer).Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        Assert.DoesNotContain(late, l => l.StartsWith("add 2", StringComparison.Ordinal)); // only the plugin's port now
+    }
+
+    private static async Task<List<string>> Lines(UdpClient socket, string until, CancellationToken cancel)
+    {
+        var lines = new List<string>();
+        while (!lines.Any(l => l.StartsWith(until, StringComparison.Ordinal)))
+        {
+            var datagram = await socket.ReceiveAsync(cancel);
+            lines.AddRange(Encoding.UTF8.GetString(datagram.Buffer).Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        return lines;
+    }
+
+    [Fact]
+    public async Task Sends_a_flight_plan_to_the_plugin_only_when_it_is_connected_and_hears_its_answer()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var plugin = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var pluginPort = ((IPEndPoint)plugin.Client.LocalEndPoint!).Port;
+        await using var link = new PluginLink("0.5.3", _ => { }, listenPort: 0, pluginPort: pluginPort);
+        var answers = new List<string?>();
+        link.FmsAnswered += answers.Add;
+        link.Start();
+        Assert.False(link.LoadFms(@"C:\X-Plane 12\Output\FMS plans\YBBNYSSY.fms")); // no plugin heard yet
+
+        await plugin.SendAsync(Encoding.UTF8.GetBytes("status 0.5.3 0 900 -\n"), new IPEndPoint(IPAddress.Loopback, link.ListenPort), cts.Token);
+        while (link.Status is null)
+        {
+            await Task.Delay(20, cts.Token);
+        }
+
+        Assert.True(link.LoadFms(@"C:\X-Plane 12\Output\FMS plans\YBBNYSSY.fms"));
+        var lines = new List<string>();
+        while (!lines.Contains(@"fms C:\X-Plane 12\Output\FMS plans\YBBNYSSY.fms"))
+        {
+            var datagram = await plugin.ReceiveAsync(cts.Token);
+            lines.AddRange(Encoding.UTF8.GetString(datagram.Buffer).Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        link.Handle("fms ok");
+        link.Handle("fms error this X-Plane cannot load flight plans from plugins");
+        Assert.Equal([null, "this X-Plane cannot load flight plans from plugins"], answers);
+    }
+
+    [Fact]
+    public void Install_failures_tell_x_plane_running_from_missing_permissions()
+    {
+        Assert.Equal(PluginInstall.Failure.XPlaneRunning, PluginInstall.Classify(new PluginInUseException("win.xpl", new IOException())));
+        Assert.Equal(PluginInstall.Failure.XPlaneRunning, PluginInstall.Classify(new IOException("sharing", unchecked((int)0x80070020))));
+        Assert.Equal(PluginInstall.Failure.NoPermission, PluginInstall.Classify(new UnauthorizedAccessException("Access denied")));
+        Assert.Equal(PluginInstall.Failure.Other, PluginInstall.Classify(new IOException("There is not enough space on the disk.", unchecked((int)0x80070070))));
+
+        var install = new PluginInstall(Path.Combine(_dir, "X-Plane 12"), _dir);
+        Assert.StartsWith("no permission to write in ", install.Describe(new UnauthorizedAccessException("Access denied")));
+        Assert.Contains("Close X-Plane", install.Describe(new PluginInUseException("win.xpl", new IOException())));
+    }
+
+    [Fact]
+    public void Installing_while_the_plugin_is_loaded_throws_plugin_in_use()
+    {
+        var bundled = Path.Combine(_dir, "package", "X-Plane plugin", "ClearanceLink");
+        Directory.CreateDirectory(Path.Combine(bundled, "64"));
+        File.WriteAllText(Path.Combine(bundled, "64", "win.xpl"), "v1");
+        var install = new PluginInstall(Path.Combine(_dir, "X-Plane 12"), bundled);
+        install.Install();
+
+        // X-Plane holding the binary open stands in for a loaded plugin.
+        using var loaded = new FileStream(Path.Combine(install.Target, "64", "win.xpl"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var ex = Assert.ThrowsAny<IOException>(() => install.Install());
+
+        Assert.Equal(PluginInstall.Failure.XPlaneRunning, PluginInstall.Classify(ex));
+    }
+
+    [Fact]
     public void Installs_updates_and_removes_the_plugin_keeping_the_users_csl_list()
     {
         var bundled = Path.Combine(_dir, "package", "X-Plane plugin", "ClearanceLink");

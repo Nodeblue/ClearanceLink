@@ -25,19 +25,40 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
     private readonly ConcurrentDictionary<long, JsonElement> _values = new();
     private readonly ConcurrentDictionary<long, byte> _subscribed = new();
     private readonly SemaphoreSlim _newWatches = new(0);
+    private readonly TimeProvider _time;
     private int _requestId;
     private volatile bool _connected;
+    private long _lastUpdate;
 
-    public XPlaneWebApiClient(Uri baseUri, Action<string> log, HttpMessageHandler? handler = null)
+    public XPlaneWebApiClient(Uri baseUri, Action<string> log, HttpMessageHandler? handler = null, TimeProvider? time = null)
     {
         _baseUri = baseUri;
         _log = log;
+        _time = time ?? TimeProvider.System;
+        _lastUpdate = _time.GetTimestamp();
         _http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
         _http.BaseAddress = baseUri;
         _http.Timeout = TimeSpan.FromSeconds(5);
     }
 
     public bool IsConnected => _connected;
+
+    /// <summary>
+    /// How long the WebSocket may stay silent while subscribed before the client checks that X-Plane still answers
+    /// (REST). X-Plane only pushes values that changed, so a paused sim can be quiet for a long time; the check tells a
+    /// paused sim (answers) from a hung or half-open one (does not answer, which is a disconnect and a reconnect).
+    /// </summary>
+    public TimeSpan StaleAfter { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>Time since the last dataref_update_values message (or since connecting); null while disconnected.</summary>
+    public TimeSpan? LastUpdateAge => _connected ? _time.GetElapsedTime(Interlocked.Read(ref _lastUpdate)) : null;
+
+    /// <summary>
+    /// The staleness rule: a subscribed connection that has had no update for <paramref name="staleAfter"/> needs a
+    /// liveness probe. Pure so it can be tested on its own.
+    /// </summary>
+    public static bool NeedsLivenessProbe(int subscribedCount, TimeSpan sinceLastUpdate, TimeSpan staleAfter) =>
+        subscribedCount > 0 && sinceLastUpdate >= staleAfter;
 
     /// <summary>X-Plane version reported by the API on connect, e.g. "12.4.0".</summary>
     public string? XPlaneVersion { get; private set; }
@@ -97,7 +118,13 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
             return false;
         }
 
-        // "data" datarefs arrive base64-encoded and NUL-padded.
+        // "data" datarefs arrive base64-encoded and NUL-padded; any other string is passed on as it is.
+        if (!IsData(DatarefName.Parse(dataref).Name))
+        {
+            value = raw.GetString() ?? "";
+            return true;
+        }
+
         try
         {
             var bytes = Convert.FromBase64String(raw.GetString() ?? "");
@@ -194,27 +221,72 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
         XPlaneVersion = capabilities.TryGetProperty("x-plane", out var xp) && xp.TryGetProperty("version", out var v) ? v.GetString() : null;
 
         using var socket = new ClientWebSocket();
+        // WebSocket PING every 5 s; a peer that does not PONG within 20 s aborts the socket (a half-open connection).
+        socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(5);
+        socket.Options.KeepAliveTimeout = TimeSpan.FromSeconds(20);
         var wsUri = new UriBuilder(_baseUri) { Scheme = _baseUri.Scheme == "https" ? "wss" : "ws", Path = "api/v2" }.Uri;
         await socket.ConnectAsync(wsUri, ct).ConfigureAwait(false);
         _log($"xplane CONNECTED to X-Plane {XPlaneVersion ?? "(unknown version)"} at {_baseUri}");
+        Interlocked.Exchange(ref _lastUpdate, _time.GetTimestamp());
         SetConnected(true);
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var receive = ReceiveLoopAsync(socket, linked.Token);
         var subscribe = SubscribeLoopAsync(socket, linked.Token);
-        var first = await Task.WhenAny(receive, subscribe).ConfigureAwait(false);
+        var watchdog = WatchdogLoopAsync(linked.Token);
+        var first = await Task.WhenAny(receive, subscribe, watchdog).ConfigureAwait(false);
         await linked.CancelAsync().ConfigureAwait(false);
+        socket.Abort(); // a receive blocked on a half-open socket must not keep the reconnect waiting
         try
         {
-            await Task.WhenAll(receive, subscribe).ConfigureAwait(false);
+            await Task.WhenAll(receive, subscribe, watchdog).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is OperationCanceledException or WebSocketException or ObjectDisposedException)
         {
-            // The other loop ended; surface its error below.
+            // The other loops ended because of the first one; surface its error below.
         }
 
         await first.ConfigureAwait(false);
         throw new IOException("X-Plane closed the Web API connection");
+    }
+
+    private async Task WatchdogLoopAsync(CancellationToken ct)
+    {
+        var probeFrom = Interlocked.Read(ref _lastUpdate);
+        var quietSince = long.MinValue;
+        var check = TimeSpan.FromTicks(Math.Clamp(StaleAfter.Ticks / 4, TimeSpan.FromMilliseconds(50).Ticks, TimeSpan.FromSeconds(1).Ticks));
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(check, _time, ct).ConfigureAwait(false);
+            var last = Interlocked.Read(ref _lastUpdate);
+            var since = _time.GetElapsedTime(Math.Max(last, probeFrom));
+            if (!NeedsLivenessProbe(_subscribed.Count, since, StaleAfter))
+            {
+                continue;
+            }
+
+            var age = _time.GetElapsedTime(last);
+            try
+            {
+                using var probe = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                probe.CancelAfter(TimeSpan.FromSeconds(5));
+                using var response = await _http.GetAsync("api/capabilities", probe.Token).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException($"no dataref update for {age.TotalSeconds:0}s and X-Plane does not answer ({ex.Message})", ex);
+            }
+
+            if (last != quietSince)
+            {
+                // Once per quiet spell, not every probe, so a long pause does not fill the log.
+                _log($"xplane no dataref update for {age.TotalSeconds:0}s; X-Plane answers, keeping the connection (X-Plane loading or paused)");
+                quietSince = last;
+            }
+
+            probeFrom = _time.GetTimestamp();
+        }
     }
 
     private async Task SubscribeLoopAsync(ClientWebSocket socket, CancellationToken ct)
@@ -278,6 +350,7 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
         switch (type)
         {
             case "dataref_update_values" when root.TryGetProperty("data", out var data):
+                Interlocked.Exchange(ref _lastUpdate, _time.GetTimestamp());
                 foreach (var entry in data.EnumerateObject())
                 {
                     if (long.TryParse(entry.Name, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
@@ -292,6 +365,9 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
                 break;
         }
     }
+
+    private bool IsData(string name) =>
+        _datarefs.TryGetValue(name, out var info) && info is not null && info.ValueType == "data";
 
     private bool TryGetRaw(string name, out JsonElement raw)
     {

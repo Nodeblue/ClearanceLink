@@ -184,7 +184,15 @@ public static class FileLookup
     {
         if (dir.Length == 0 || name.IndexOfAny(['*', '?']) >= 0 || !Directory.Exists(dir)) return null;
         // Returns the name as it is on disk, so output file names do not depend on how a .cfg spelled it.
-        return Directory.EnumerateFileSystemEntries(dir, name, IgnoreCase).FirstOrDefault();
+        try
+        {
+            return Directory.EnumerateFileSystemEntries(dir, name, IgnoreCase).FirstOrDefault();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // .NET can throw this, rather than find nothing, for a name without wildcards that is not there.
+            return null;
+        }
     }
 
     /// <summary>A relative MSFS path (either slash, "..") resolved under <paramref name="dir"/>, ignoring case; null if missing.</summary>

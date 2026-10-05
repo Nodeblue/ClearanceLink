@@ -37,7 +37,9 @@ public sealed class SimVarResolver(MappingSet mappings, IXPlaneData xplane, Time
         return true;
     }
 
-    public (SimValue Value, ResolveStatus Status) Resolve(string simVar, string units)
+    /// <param name="unitsPassedThrough">Called with (from, to) when the mapping's units cannot be converted to the
+    /// client's and the value is passed on unchanged.</param>
+    public (SimValue Value, ResolveStatus Status) Resolve(string simVar, string units, Action<string, string>? unitsPassedThrough = null)
     {
         if (mappings.FindSimVar(simVar, out var index) is not { } map)
         {
@@ -51,7 +53,7 @@ public sealed class SimVarResolver(MappingSet mappings, IXPlaneData xplane, Time
 
         if (map.Const is { } constant)
         {
-            return (SimValue.Of(Units.Convert(constant, map.Units, units)), ResolveStatus.Ok);
+            return (SimValue.Of(Units.Convert(constant, map.Units, units, unitsPassedThrough)), ResolveStatus.Ok);
         }
 
         if (map.Text)
@@ -75,7 +77,7 @@ public sealed class SimVarResolver(MappingSet mappings, IXPlaneData xplane, Time
         var source = map.Derive is null
             ? values.FirstOrDefault()
             : Derivations.Apply(map.Derive, values, map, index, _time.GetUtcNow());
-        return (SimValue.Of(Units.Convert(source, map.Units, units)), ResolveStatus.Ok);
+        return (SimValue.Of(Units.Convert(source, map.Units, units, unitsPassedThrough)), ResolveStatus.Ok);
     }
 
     private static IEnumerable<string> Datarefs(SimVarMap map, int index)

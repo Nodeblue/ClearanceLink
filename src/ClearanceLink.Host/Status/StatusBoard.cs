@@ -34,6 +34,9 @@ public sealed class StatusBoard(
 
     public string? Recording { get; set; }
 
+    /// <summary>The FPLN page's SimBrief uplink; null until serve starts.</summary>
+    public ClearanceLink.Host.Support.FlightPlans? FlightPlans { get; set; }
+
     /// <summary>True while the real MSFS runs (it holds the default connection).</summary>
     public Func<bool>? MsfsRunning { get; set; }
 

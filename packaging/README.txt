@@ -25,7 +25,10 @@ Every flight
 1. Plan your flight in SimBrief. BeyondATC loads your latest SimBrief plan itself.
 2. Start X-Plane 12 and load your aircraft at the SimBrief departure airport.
 3. Double-click ClearanceLink.exe and leave its window open.
-4. Start BeyondATC. The STATUS page says READY FOR CLEARANCE when all is connected, or CLOSE MSFS TO
+4. Optional: on the FPLN page press REQUEST to fetch the same SimBrief plan, check it, then press LOAD
+   twice to put it in X-Plane's FMS. It is also saved in X-Plane 12\Output\FMS plans for aircraft with
+   their own FMS.
+5. Start BeyondATC. The STATUS page says READY FOR CLEARANCE when all is connected, or CLOSE MSFS TO
    CONNECT if Microsoft Flight Simulator is open.
 
 If ClearanceLink is closed or restarted during a flight, restart BeyondATC too.

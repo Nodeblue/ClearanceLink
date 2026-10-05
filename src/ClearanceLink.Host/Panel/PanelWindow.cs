@@ -11,7 +11,7 @@ namespace ClearanceLink.Host.Panel;
 
 /// <summary>
 /// The FMS-style panel: a 24-column screen with six line select keys each side and page keys below. Keys 1-6 press
-/// the left keys, Shift+1-6 the right ones, F1-F4 change page; clicking either half of a row presses its key too.
+/// the left keys, Shift+1-6 the right ones, F1-F5 change page; clicking either half of a row presses its key too.
 /// </summary>
 public sealed class PanelWindow : Window
 {
@@ -24,6 +24,12 @@ public sealed class PanelWindow : Window
     private const double LabelSize = 13.5;
     private const double MessageSize = 15;
     private static readonly TimeSpan FlashTime = TimeSpan.FromSeconds(4);
+
+    /// <summary>How long a second close stops a running conversion (after that, closing asks again).</summary>
+    public static readonly TimeSpan CloseAgainTime = TimeSpan.FromSeconds(10);
+
+    /// <summary>The scratchpad when closing would stop a conversion.</summary>
+    public const string CloseAgainText = "CLOSE AGAIN TO STOP";
 
     private static readonly IBrush Bezel = Brush("#2A2F33");
     private static readonly IBrush Screen = Brush("#05080A");
@@ -47,6 +53,7 @@ public sealed class PanelWindow : Window
     private string? _flash;
     private DateTime _flashUntil;
     private LiveLogWindow? _liveLog;
+    private DateTime _closeArmedUntil;
 
     public PanelWindow(PanelController controller)
         : this(controller.State)
@@ -66,6 +73,7 @@ public sealed class PanelWindow : Window
         Content = Build();
         _timer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Render());
         Opened += (_, _) => _timer.Start();
+        Closing += OnClosing;
         Closed += (_, _) =>
         {
             _timer.Stop();
@@ -172,6 +180,9 @@ public sealed class PanelWindow : Window
             case CduKey.GoAbout:
                 ShowPage(PanelPage.About);
                 return;
+            case CduKey.GoFlightPlan:
+                ShowPage(PanelPage.FlightPlan);
+                return;
             case CduKey.ChooseBatcFolder:
             case CduKey.ChooseXPlaneFolder:
             case CduKey.ChooseFsltlFolder:
@@ -245,11 +256,37 @@ public sealed class PanelWindow : Window
         Flash("LIVE LOG OPEN");
     }
 
-    private void Flash(string? text)
+    private void Flash(string? text, TimeSpan? time = null)
     {
         _flash = text;
-        _flashUntil = text is null ? default : DateTime.Now + FlashTime;
+        _flashUntil = text is null ? default : DateTime.Now + (time ?? FlashTime);
         Render();
+    }
+
+    /// <summary>
+    /// Closing while FSLTL models convert would cut the conversion off. The first close is held back: the window shows
+    /// the conversion's page with CLOSE AGAIN TO STOP; a second close within 10 s stops the conversion (the models
+    /// converted before stay as they were) and closes. This is the CDU's own way of asking (a scratchpad message, like
+    /// every other answer) rather than a separate dialog window, which would need its own styling, owner and
+    /// keyboard handling, and can end up behind the panel. Windows shutting down or the app exiting never waits.
+    /// </summary>
+    private void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (!_state().FsltlConverting)
+        {
+            return;
+        }
+
+        if (DateTime.Now < _closeArmedUntil || e.CloseReason is WindowCloseReason.OSShutdown or WindowCloseReason.ApplicationShutdown)
+        {
+            _controller?.StopConverting();
+            return;
+        }
+
+        e.Cancel = true;
+        _closeArmedUntil = DateTime.Now + CloseAgainTime;
+        Page = PanelPage.StartModels;
+        Flash(CloseAgainText, CloseAgainTime);
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -260,6 +297,7 @@ public sealed class PanelWindow : Window
             Key.F2 => PanelPage.Setup,
             Key.F3 => PanelPage.Support,
             Key.F4 => PanelPage.About,
+            Key.F5 => PanelPage.FlightPlan,
             _ => (PanelPage?)null,
         };
         if (page is { } p)
@@ -347,7 +385,7 @@ public sealed class PanelWindow : Window
         {
             var button = new Button
             {
-                Content = page.ToString().ToUpperInvariant(),
+                Content = CduPages.KeyName(page),
                 FontFamily = CduFont,
                 FontWeight = FontWeight.Bold,
                 FontSize = 12,

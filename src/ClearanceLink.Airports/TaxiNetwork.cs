@@ -28,6 +28,9 @@ public sealed class TaxiNetwork
     private const double MinLeadInMeters = 5;
     private const double LeadInMeters = 8;
 
+    /// <summary>Closest two taxi points may be after <see cref="SeparatePoints"/>.</summary>
+    private const double MinSeparationMeters = 1;
+
     public List<TaxiPoint> Points { get; } = [];
 
     public List<TaxiPath> Paths { get; } = [];
@@ -36,6 +39,9 @@ public sealed class TaxiNetwork
     public List<string> Names { get; } = [""];
 
     public List<ParkingSpot> Parking { get; } = [];
+
+    /// <summary>Taxi points the final pass moved because they were within a metre of another (see SeparatePoints).</summary>
+    public int MovedApart { get; private set; }
 
     /// <summary>True when X-Plane had no taxi network here and this one was generated from runways and parking.</summary>
     public bool Generated { get; private set; }
@@ -54,6 +60,7 @@ public sealed class TaxiNetwork
             network.Generate(airport, frame);
         }
 
+        network.SeparatePoints(frame);
         return network;
     }
 
@@ -401,6 +408,134 @@ public sealed class TaxiNetwork
             var (lat, lon) = frame.FromLocal(moved.X, moved.Z);
             Points[i] = Points[i] with { Latitude = lat, Longitude = lon };
             local[i] = moved;
+        }
+    }
+
+    /// <summary>
+    /// Final pass: no two taxi points closer than <see cref="MinSeparationMeters"/>. Back-spurs, split points, the split
+    /// clamp and X-Plane's own nodes can coincide, and BATC 1.8.21 crashed on two points at one position. The later
+    /// point of a close pair (a generated one where possible) is nudged along one of its paths, or failing that a short
+    /// way off it, never nearer a parking spot than <see cref="SpurMeters"/> (or than it already was).
+    /// </summary>
+    private void SeparatePoints(LocalFrame frame)
+    {
+        var local = Points.Select(p => frame.ToLocal(p.Latitude, p.Longitude)).ToList();
+        var spots = Parking.Select(s => frame.ToLocal(s.Start.Latitude, s.Start.Longitude)).ToList();
+        var neighbours = new Dictionary<int, List<int>>();
+        foreach (var path in Paths.Where(p => p.Type != MsfsCodes.ParkingPath))
+        {
+            foreach (var (a, b) in new[] { (path.Start, path.End), (path.End, path.Start) })
+            {
+                if (!neighbours.TryGetValue(a, out var list))
+                {
+                    neighbours[a] = list = [];
+                }
+
+                list.Add(b);
+            }
+        }
+
+        var grid = new Dictionary<(long, long), List<int>>();
+        for (var i = 0; i < local.Count; i++)
+        {
+            Cell(local[i]).Add(i);
+        }
+
+        for (var j = 0; j < local.Count; j++)
+        {
+            // Move the later point of a pair: X-Plane's nodes come first, ClearanceLink's spurs and splits after them.
+            var other = Closest(j, local[j], below: j);
+            if (other < 0)
+            {
+                continue;
+            }
+
+            var spotFloor = spots.Count == 0 ? 0 : Math.Min(SpurMeters, spots.Min(s => Distance(s, local[j])));
+            foreach (var candidate in Candidates(j, local[other]))
+            {
+                if ((spots.Count == 0 || spots.Min(s => Distance(s, candidate)) >= spotFloor) && Closest(j, candidate) < 0)
+                {
+                    Cell(local[j]).Remove(j);
+                    local[j] = candidate;
+                    Cell(candidate).Add(j);
+                    var (lat, lon) = frame.FromLocal(candidate.X, candidate.Z);
+                    Points[j] = Points[j] with { Latitude = lat, Longitude = lon };
+                    MovedApart++;
+                    break;
+                }
+            }
+        }
+
+        List<int> Cell((double X, double Z) p)
+        {
+            var key = ((long)Math.Floor(p.X / MinSeparationMeters), (long)Math.Floor(p.Z / MinSeparationMeters));
+            if (!grid.TryGetValue(key, out var list))
+            {
+                grid[key] = list = [];
+            }
+
+            return list;
+        }
+
+        // The nearest point other than j (and below the limit) closer than the minimum to p, or -1.
+        int Closest(int j, (double X, double Z) p, int below = int.MaxValue)
+        {
+            var (cx, cz) = ((long)Math.Floor(p.X / MinSeparationMeters), (long)Math.Floor(p.Z / MinSeparationMeters));
+            var best = (Index: -1, Distance: MinSeparationMeters);
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                for (var dz = -1; dz <= 1; dz++)
+                {
+                    if (!grid.TryGetValue((cx + dx, cz + dz), out var list))
+                    {
+                        continue;
+                    }
+
+                    foreach (var k in list)
+                    {
+                        var d = Distance(local[k], p);
+                        if (k != j && k < below && d < best.Distance)
+                        {
+                            best = (k, d);
+                        }
+                    }
+                }
+            }
+
+            return best.Index;
+        }
+
+        // Along each path first (up to 40 % of the path), then directly away from the close point, then around it.
+        IEnumerable<(double X, double Z)> Candidates(int j, (double X, double Z) from)
+        {
+            var at = local[j];
+            var steps = new[] { 1.2, 2, 3, 4.5 };
+            foreach (var step in steps)
+            {
+                foreach (var n in neighbours.GetValueOrDefault(j) ?? [])
+                {
+                    var length = Distance(at, local[n]);
+                    if (length > 0 && step <= length * 0.4)
+                    {
+                        yield return (at.X + ((local[n].X - at.X) / length * step), at.Z + ((local[n].Z - at.Z) / length * step));
+                    }
+                }
+            }
+
+            var away = Distance(at, from);
+            foreach (var step in steps)
+            {
+                if (away > 0)
+                {
+                    yield return (at.X + ((at.X - from.X) / away * step), at.Z + ((at.Z - from.Z) / away * step));
+                }
+
+                for (var a = 0; a < 8; a++)
+                {
+                    var angle = a * Math.PI / 4;
+                    yield return (at.X + (Math.Sin(angle) * step), at.Z + (Math.Cos(angle) * step));
+                }
+            }
         }
     }
 

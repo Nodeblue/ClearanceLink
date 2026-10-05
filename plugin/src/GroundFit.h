@@ -2,6 +2,7 @@
 // that put both on the ground. X-Plane-independent so it can be tested; see docs/protocol/plugin.md.
 #pragma once
 
+#include <atomic>
 #include <istream>
 #include <map>
 #include <optional>
@@ -60,8 +61,9 @@ void ReadPosedObj(std::istream& obj, PosedModel& model);
 // several files is posed with one bogie level, whichever file its gear is in.
 void ScanBogies(std::istream& obj, PosedModel& model);
 
-// A model's .obj files posed with the gear down: bogies scanned in all of them first, then each file posed.
-PosedModel PoseObjFiles(const std::vector<std::string>& files);
+// A model's .obj files posed with the gear down: bogies scanned in all of them first, then each file posed. Stops
+// between files once `cancel` is set (the plugin is being disabled); the model is then incomplete.
+PosedModel PoseObjFiles(const std::vector<std::string>& files, const std::atomic<bool>* cancel = nullptr);
 
 // The datarefs a model may tilt its main bogies with, by how much they are loaded.
 constexpr const char* TireDeflectionDataref = "libxplanemp/gear/tire_vertical_deflection_mtr";

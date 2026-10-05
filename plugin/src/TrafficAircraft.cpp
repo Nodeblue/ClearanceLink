@@ -1,5 +1,7 @@
 #include "TrafficAircraft.h"
 
+#include "Worker.h"
+
 #include "XPLMGraphics.h"
 #include "XPLMProcessing.h"
 #include "XPLMUtilities.h"
@@ -17,14 +19,8 @@ namespace {
 
 constexpr double FeetPerMeter = 3.28083989501;
 constexpr double Pi = 3.14159265358979323846;
-// Terrain under an aircraft is probed again when it has moved this far (or turned this much) on the ground, or after
-// this long: parked aircraft every few seconds, airborne ones a few times a second for the ground height report.
-constexpr float ReprobeMeters = 0.25f;
-constexpr float ReprobeTurnDeg = 1.0f;
-constexpr float ReprobeParkedSeconds = 5.0f;
-constexpr float ReprobeAirborneSeconds = 0.25f;
-// Ground slope is measured this far ahead of and behind the aircraft's reference point.
-constexpr double SlopeProbeMeters = 8.0;
+// Ground slope is measured this far ahead of and behind the aircraft's reference point (Motion.h).
+constexpr double SlopeProbeMeters = GroundSlopeProbeMeters;
 // Steeper "slopes" are terrain mesh edges or buildings, not aprons.
 constexpr double MaxGroundSlopeDeg = 4.0;
 
@@ -43,8 +39,13 @@ size_t g_worldTrafficDeflection = 0;
 
 std::shared_ptr<const CslPackages> g_packages = std::make_shared<CslPackages>();
 
-// Runs in the background: finds the model's .obj files from its xsb_aircraft.txt and reads its wheels.
-FitResult ReadWheels(std::string xsbFolder, int line, std::shared_ptr<const CslPackages> packages) {
+// Reads models' wheels one at a time in the background (Worker.h).
+Worker g_worker;
+
+// Runs on the worker thread: finds the model's .obj files from its xsb_aircraft.txt and reads its wheels. Everything
+// it uses is its own copy (the folder, the line) or immutable and shared (the packages).
+FitResult ReadWheels(const std::string& xsbFolder, int line, const std::shared_ptr<const CslPackages>& packages,
+                     const std::atomic<bool>& cancel) {
     FitResult result;
     try {
         const auto files = ModelObjFiles(xsbFolder, line, *packages);
@@ -52,7 +53,7 @@ FitResult ReadWheels(std::string xsbFolder, int line, std::shared_ptr<const CslP
             result.why = "no .obj file found";
             return result;
         }
-        const PosedModel model = PoseObjFiles(files);
+        const PosedModel model = PoseObjFiles(files, &cancel);
         result.wheels = FindWheels(model, &result.why);
         result.bogieDataref = model.bogieDataref;
         result.bogieLevel = model.bogieLevel;
@@ -84,7 +85,10 @@ void TrafficAircraft::SetCslPackages(CslPackages packages) {
     g_packages = std::make_shared<const CslPackages>(std::move(packages));
 }
 
-void TrafficAircraft::ForgetModelFits() { g_fits.clear(); }
+void TrafficAircraft::ForgetModelFits() {
+    g_worker.Stop();  // cancels the read in progress (between files) and drops the queued ones
+    g_fits.clear();
+}
 
 bool TrafficAircraft::AddModelDatarefs() {
     g_worldTrafficDeflection = XPMPAddModelDataRef(WorldTrafficDeflectionDataref);
@@ -110,12 +114,27 @@ const Wheels* TrafficAircraft::ModelWheels() {
         if (!fit) {
             fit = std::make_shared<ModelFit>();
             fit->name = info.cslId;
-            fit->reading = std::async(std::launch::async, ReadWheels, info.xsbAircraftPath, info.xsbAircraftLn, g_packages);
+            auto promise = std::make_shared<std::promise<FitResult>>();
+            fit->reading = promise->get_future();
+            const bool queued = g_worker.Post([promise, folder = info.xsbAircraftPath, line = info.xsbAircraftLn,
+                                               packages = g_packages](const std::atomic<bool>& cancel) {
+                if (cancel) return;  // dropped: the promise breaks, and the fit is forgotten anyway
+                promise->set_value(ReadWheels(folder, line, packages, cancel));
+            });
+            if (!queued) {
+                fit->done = true;  // drawn as models without a fit are
+                XPLMDebugString(("ClearanceLink: ground fit " + fit->name + ": none (cannot start the reader), drawn level\n").c_str());
+            }
         }
         fit_ = fit;
     }
     if (!fit_->done && fit_->reading.valid() && fit_->reading.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-        const auto result = fit_->reading.get();
+        FitResult result;
+        try {
+            result = fit_->reading.get();
+        } catch (const std::future_error&) {  // the read was cancelled
+            result.why = "read cancelled";
+        }
         fit_->wheels = result.wheels;
         fit_->bogieDataref = result.bogieDataref;
         fit_->bogieLevel = result.bogieLevel;
@@ -147,8 +166,8 @@ TrafficAircraft::TrafficAircraft(const Add& add)
     SetVisible(false);  // until the first position arrives
 }
 
-std::optional<float> TrafficAircraft::GroundSlopeDeg(float centreY) {
-    const double heading = track_.Latest().heading * Pi / 180.0;
+std::optional<float> TrafficAircraft::GroundSlopeDeg(float centreY, float headingDeg) {
+    const double heading = headingDeg * Pi / 180.0;
     // X-Plane local coordinates: x east, z south.
     const float dx = float(std::sin(heading) * SlopeProbeMeters);
     const float dz = float(-std::cos(heading) * SlopeProbeMeters);
@@ -189,15 +208,15 @@ void TrafficAircraft::Apply(const Pos& pos, float now) {
 
 bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     const float dx = drawInfo.x - probeX_, dz = drawInfo.z - probeZ_;
-    float turned = std::fabs(std::fmod(drawInfo.heading - probeHeading_ + 540.0f, 360.0f) - 180.0f);
-    const bool moved = dx * dx + dz * dz > ReprobeMeters * ReprobeMeters || turned > ReprobeTurnDeg;
-    const float maxAge = onGround ? ReprobeParkedSeconds : ReprobeAirborneSeconds;
-    if (now - probeTime_ < maxAge && !(onGround && moved)) return groundFt_.has_value();
+    const float turned = HeadingDelta(probeHeading_, drawInfo.heading);
+    if (!ShouldReprobeGround(onGround, probeOnGround_, std::sqrt(dx * dx + dz * dz), turned, now - probeTime_))
+        return groundFt_.has_value();
 
     probeTime_ = now;
     probeX_ = drawInfo.x;
     probeZ_ = drawInfo.z;
     probeHeading_ = drawInfo.heading;
+    probeOnGround_ = onGround;
     XPLMProbeInfo_t info{};
     info.structSize = sizeof(info);
     if (XPLMProbeTerrainXYZ(probe_, drawInfo.x, drawInfo.y, drawInfo.z, &info) != xplm_ProbeHitTerrain) {
@@ -208,7 +227,7 @@ bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     XPLMLocalToWorld(info.locationX, info.locationY, info.locationZ, &groundLat, &groundLon, &groundAltM);
     groundFt_ = groundAltM * FeetPerMeter;
     probeY_ = info.locationY;
-    slope_ = onGround ? GroundSlopeDeg(info.locationY) : std::nullopt;
+    slope_ = onGround ? GroundSlopeDeg(info.locationY, probeHeading_) : std::nullopt;
     return true;
 }
 
@@ -237,7 +256,11 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
             pitch += groundPitch_.value_or(0.0f);
             height = GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
         }
-        drawInfo.y = probeY_ + height;
+        // Between probes (at most every 0.1 s when moving, Motion.h) the terrain height is carried along the slope
+        // measured at the last probe, so the aircraft rolls smoothly up and down taxiway slopes instead of stepping.
+        drawInfo.y = GroundYAlongSlope(probeY_, slope_.value_or(0.0f), probeHeading_, drawInfo.x - probeX_,
+                                       drawInfo.z - probeZ_) +
+                     height;
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
         SetPitch(pitch + slope_.value_or(0.0f));
     }

@@ -1,4 +1,5 @@
 using ClearanceLink.Host;
+using ClearanceLink.Host.Support;
 
 namespace ClearanceLink.Host.Tests;
 
@@ -60,6 +61,23 @@ public sealed class BatcRedirectTests : IDisposable
         File.WriteAllText(redirect.Files[0], "[SimConnect]\nProtocol=IPv4\nAddress=127.0.0.1\nPort=5112");
 
         Assert.Equal(BatcRedirect.FileState.ClearanceLink, redirect.StateOf(redirect.Files[0]));
+    }
+
+    [Fact]
+    public void A_file_that_cannot_be_written_is_a_plain_message_not_a_crash()
+    {
+        // A directory where the cfg should go stands in for a read-only folder (tests may run as root).
+        var redirect = new BatcRedirect(_batc);
+        Directory.CreateDirectory(redirect.Files[1]);
+
+        var ex = Assert.Throws<RedirectFailedException>(() => redirect.SwitchOn());
+        Assert.Equal(redirect.Files[1], ex.FilePath);
+        Assert.StartsWith($"could not write {redirect.Files[1]}: run ClearanceLink as administrator, or use connection automatic", ex.Message);
+
+        var problem = Cli.ApplyConnection(new AppSettings { Connection = ConnectionMode.AlwaysOn }, _batc);
+        Assert.NotNull(problem);
+        Assert.StartsWith("could not write ", problem);
+        Assert.Equal(Cli.BatcNotFoundProblem, Cli.ApplyConnection(new AppSettings { Connection = ConnectionMode.AlwaysOn }, null));
     }
 
     public void Dispose() => Directory.Delete(_batc, recursive: true);

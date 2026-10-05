@@ -121,6 +121,31 @@ public sealed class SupportTests : IDisposable
     }
 
     [Fact]
+    public void Recordings_over_the_size_cap_lose_the_oldest_first()
+    {
+        var folder = Path.Combine(_root, "recordings");
+        Directory.CreateDirectory(folder);
+        var names = new[] { "a.jsonl", "a.md", "b.jsonl", "c.jsonl", "d.jsonl" };
+        for (var i = 0; i < names.Length; i++)
+        {
+            var file = Path.Combine(folder, names[i]);
+            File.WriteAllBytes(file, new byte[100]);
+            File.SetLastWriteTime(file, DateTime.Now.AddHours(-10 + i)); // a.jsonl oldest, d.jsonl newest
+        }
+
+        File.WriteAllBytes(Path.Combine(folder, "keep.txt"), new byte[10_000]); // not a recording
+
+        Assert.Equal(0, SessionLog.PruneToSize(folder, ["*.jsonl", "*.md"], 500));
+        Assert.Equal(2, SessionLog.PruneToSize(folder, ["*.jsonl", "*.md"], 300));
+        Assert.Equal(["b.jsonl", "c.jsonl", "d.jsonl", "keep.txt"], Directory.EnumerateFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+
+        // The newest recording stays even when it alone is over the cap.
+        Assert.Equal(2, SessionLog.PruneToSize(folder, ["*.jsonl", "*.md"], 10));
+        Assert.True(File.Exists(Path.Combine(folder, "d.jsonl")));
+        Assert.Equal(0, SessionLog.PruneToSize(Path.Combine(_root, "none"), ["*.jsonl"], 10));
+    }
+
+    [Fact]
     public void Support_zip_holds_logs_recording_batc_and_xplane_files_with_the_user_blanked()
     {
         var folders = new AppFolders(Path.Combine(_root, "app"));

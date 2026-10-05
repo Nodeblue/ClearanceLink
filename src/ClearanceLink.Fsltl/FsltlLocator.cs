@@ -28,10 +28,13 @@ public static class FsltlLocator
         return null;
     }
 
-    /// <summary>The given folder if it is an FSLTL package, else the first fsltl-traffic-base found through UserCfg.opt.</summary>
+    /// <summary>
+    /// The FSLTL package for a folder the user chose (see <see cref="FromChosen"/>), or with none given, the first
+    /// fsltl-traffic-base found through UserCfg.opt.
+    /// </summary>
     public static string? Find(string? given = null, IEnumerable<string>? userCfgs = null)
     {
-        if (given is not null) return IsPackage(given) ? given : null;
+        if (given is not null) return FromChosen(given);
         foreach (var cfg in userCfgs ?? UserCfgCandidates())
         {
             if (!File.Exists(cfg) || InstalledPackagesPath(File.ReadAllText(cfg)) is not { } packages) continue;
@@ -41,6 +44,30 @@ public static class FsltlLocator
 
         return null;
     }
+
+    /// <summary>
+    /// The package for a folder the user picked: the package itself, the Community folder (or the packages folder
+    /// above it) holding fsltl-traffic-base, or any folder inside fsltl-traffic-base. Null when none of these.
+    /// </summary>
+    public static string? FromChosen(string folder)
+    {
+        folder = Path.TrimEndingDirectorySeparator(folder);
+        if (IsPackage(folder)) return folder;
+        foreach (var child in new[] { FsltlCatalog.PackageName, $"Community/{FsltlCatalog.PackageName}" })
+        {
+            if (FileLookup.Resolve(folder, child) is { } inside && IsPackage(inside)) return inside;
+        }
+
+        for (var up = Path.GetDirectoryName(folder); up is not null; up = Path.GetDirectoryName(up))
+        {
+            if (Path.GetFileName(up).Equals(FsltlCatalog.PackageName, StringComparison.OrdinalIgnoreCase) && IsPackage(up)) return up;
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether MSFS 2020 or 2024 has ever run on this PC (it writes UserCfg.opt); FSLTL is installed through MSFS.</summary>
+    public static bool MsfsInstalled(IEnumerable<string>? userCfgs = null) => (userCfgs ?? UserCfgCandidates()).Any(File.Exists);
 
     public static bool IsPackage(string folder) =>
         Directory.Exists(folder) && FileLookup.Resolve(folder, "SimObjects/Airplanes") is { } airplanes && Directory.Exists(airplanes);
