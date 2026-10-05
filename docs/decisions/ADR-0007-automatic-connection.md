@@ -1,6 +1,6 @@
 # ADR-0007: Answer on MSFS's default connection while MSFS is closed
 
-Date: 2026-10-02. Status: accepted.
+Date: 2026-10-02. Status: superseded by ADR-0012 (the pipe is now only the fallback).
 
 ## Context
 Until now, BATC reached ClearanceLink through two `SimConnect.cfg` files written into BeyondATC's folder (one next to

@@ -157,13 +157,19 @@ Nothing needs changing. BeyondATC sees ClearanceLink as "MSFS 2024".
   yet.
 
 ## Flying MSFS as well
-Nothing to switch. ClearanceLink answers BeyondATC on the connection MSFS uses, but only while MSFS is closed. To fly
-MSFS, close ClearanceLink and start MSFS: BeyondATC talks to MSFS as usual. If MSFS starts while ClearanceLink is
-running, ClearanceLink steps aside and STATUS says **CLOSE MSFS TO CONNECT**.
+Nothing to switch. While ClearanceLink is open, it adds two small files (`SimConnect.cfg`) to BeyondATC's folder so
+BeyondATC talks to X-Plane; SETUP says **BATC: X-PLANE TILL EXIT**. Closing ClearanceLink removes them, so BeyondATC
+goes back to MSFS. Other apps that work with both sims, such as SPAD.neXt, never see a pretend MSFS.
 
-If you want MSFS open while flying X-Plane, choose **ALWAYS ON** on SETUP. That adds two small files
-(`SimConnect.cfg`) to BeyondATC's folder so BeyondATC always goes to ClearanceLink; choosing **AUTOMATIC** removes them
-again. Switch back to AUTOMATIC before flying MSFS with BeyondATC.
+To fly MSFS, close ClearanceLink and start MSFS. If MSFS starts while ClearanceLink is open, ClearanceLink steps aside:
+BeyondATC goes to MSFS and STATUS says **CLOSE MSFS TO CONNECT**.
+
+If you want MSFS open while flying X-Plane, choose **ALWAYS ON** on SETUP. The two files then stay in place even after
+ClearanceLink closes, so BeyondATC always goes to ClearanceLink. Choose **AUTOMATIC** again before flying MSFS with
+BeyondATC.
+
+If BeyondATC is in a folder ClearanceLink can't write to (under Program Files, for example), ClearanceLink uses MSFS's
+own connection instead, while MSFS is closed. Running ClearanceLink as administrator lets it use the files.
 
 ## What works
 - Clearance, taxi routes on X-Plane's own taxiways, SIDs and STARs, frequencies with automatic COM tuning, handoffs,
@@ -190,6 +196,7 @@ Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equiv
 | Another X-Plane add-on (SPAD.neXt, for example) can't use UDP port 49707 | Windows has reserved a block of ports for Hyper-V. Rebooting usually moves it. To keep 49707 free, run in an admin command prompt: `net stop winnat`, then `netsh int ipv4 add excludedportrange protocol=udp startport=49707 numberofports=1`, then `net start winnat`. ClearanceLink's plugin picks a free port by itself. |
 | X-Plane talks over BeyondATC | In X-Plane, Settings > Sound, set the Radios slider to 0. |
 | OTHER ADD-ONS on STATUS shows a number | Other MSFS add-ons tried to connect while MSFS was closed. They are ignored; nothing to do. |
+| BeyondATC can't find MSFS after ClearanceLink crashed or the PC lost power | Start ClearanceLink and close it again. That removes its files from BeyondATC's folder. |
 
 ## Getting help
 On the SUPPORT page press **CREATE SUPPORT FILE**. It makes one zip of ClearanceLink's recent logs, BeyondATC's log and

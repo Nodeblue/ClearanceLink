@@ -79,6 +79,27 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
     /// <summary>True when both files point at ClearanceLink.</summary>
     public bool IsOn => Files.All(f => StateOf(f) == FileState.ClearanceLink);
 
+    /// <summary>True when ClearanceLink can create files in both of BeyondATC's folders (not a protected folder).</summary>
+    public bool CanWrite()
+    {
+        foreach (var file in Files)
+        {
+            var probe = Path.Combine(Path.GetDirectoryName(file)!, "ClearanceLink.write-test");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(probe, "");
+                File.Delete(probe);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// Writes both files. Another SimConnect.cfg already there is kept as SimConnect.cfg.clearancelink-backup.
     /// Throws <see cref="RedirectFailedException"/> when a file cannot be written (a read-only or protected folder).

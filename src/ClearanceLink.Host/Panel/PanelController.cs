@@ -131,7 +131,7 @@ public sealed class PanelController : IAsyncDisposable
             LastAirportSource: airport?.Source,
             MsfsRunning: snapshot?.MsfsRunning ?? false,
             settings.Connection,
-            OldConfigFiles: batc is not null && new BatcRedirect(batc).IsOn,
+            BatcRedirected: batc is not null && new BatcRedirect(batc).IsOn,
             settings.SessionLog,
             SessionLogBytes: log is not null && File.Exists(log) ? new FileInfo(log).Length : 0,
             settings.KeepDays,
@@ -176,21 +176,6 @@ public sealed class PanelController : IAsyncDisposable
             case CduKey.ConnectionAutomatic:
             case CduKey.ConnectionAlwaysOn:
                 return await SetConnectionAsync(key == CduKey.ConnectionAutomatic ? ConnectionMode.Automatic : ConnectionMode.AlwaysOn).ConfigureAwait(false);
-            case CduKey.RemoveOldFiles:
-                if (Folders().Batc is { } folder)
-                {
-                    try
-                    {
-                        new BatcRedirect(folder).SwitchOff();
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        PacketConsole.Info($"panel: could not remove BeyondATC's old files: {ex.Message}");
-                        return "RUN AS ADMINISTRATOR";
-                    }
-                }
-
-                return "OLD FILES REMOVED";
             case CduKey.OpenStatusPage:
                 Cli.OpenInBrowser($"http://localhost:{StatusServer.DefaultPort}/");
                 return "OPENING STATUS PAGE";
