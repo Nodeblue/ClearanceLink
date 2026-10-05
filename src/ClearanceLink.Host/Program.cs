@@ -521,6 +521,7 @@ namespace ClearanceLink.Host
                 Traffic = () => traffic.Objects,
             };
             board.Plugin = () => plugin?.Status;
+            var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowBatcAsync(stub, server, msfs, ct);
             onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -537,6 +538,29 @@ namespace ClearanceLink.Host
                 await xplaneTask;
                 await msfsTask;
                 await bridgeTask;
+                await stubTask;
+            }
+        }
+
+        /// <summary>Runs the MSFS stand-in only while BeyondATC is not connected (<see cref="StubLauncher.FollowBatc"/>).</summary>
+        private static async Task FollowBatcAsync(StubLauncher stub, XPlaneSimServer server, MsfsGate msfs, CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1), ct);
+                    var names = server.Sessions.Select(s => s.ClientName).ToList();
+                    var batc = names.Contains(StatusBoard.HelperClient) && names.Contains(StatusBoard.AppClient);
+                    if (stub.FollowBatc(batc, msfs.IsRunning, DateTimeOffset.UtcNow) is { } line)
+                    {
+                        PacketConsole.Info(line);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Closing.
             }
         }
 
