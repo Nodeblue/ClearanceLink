@@ -285,12 +285,12 @@ PLUGIN_API int XPluginEnable() {
 
     std::string socketErrors;
     for (const auto port : clink::PluginPorts) {
-        std::string error;
-        if (g_socket.Open(port, error)) {
+        std::string why;
+        if (g_socket.Open(port, why)) {
             Log(std::string("plugin ") + Version + " listening on 127.0.0.1:" + std::to_string(port));
             break;
         }
-        socketErrors += (socketErrors.empty() ? "" : "; ") + error;
+        socketErrors += (socketErrors.empty() ? "" : "; ") + why;
     }
     if (!g_socket.IsOpen()) Log("cannot listen for ClearanceLink (traffic will not be drawn): " + socketErrors);
     else if (!socketErrors.empty()) Log("ports not available: " + socketErrors);
