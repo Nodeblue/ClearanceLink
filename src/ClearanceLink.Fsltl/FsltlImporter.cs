@@ -367,17 +367,16 @@ public static class FsltlImporter
 
     /// <summary>
     /// Why the package in <paramref name="packageFolder"/> should be converted again, or null when it is up to date
-    /// or nothing was converted yet: FSLTL was updated, this ClearanceLink converts differently, the texture size
-    /// differs from <paramref name="textureSize"/>, or only some liveries were imported.
+    /// or nothing was converted yet: FSLTL was updated, this ClearanceLink converts differently, or only some liveries
+    /// were imported. The texture size is the user's choice (--size), not a reason to convert again.
     /// </summary>
-    public static string? OutOfDate(string fsltlPackage, string packageFolder, int textureSize = DefaultTextureSize)
+    public static string? OutOfDate(string fsltlPackage, string packageFolder)
     {
         if (!File.Exists(Path.Combine(packageFolder, CatalogueFile))) return null;
         return LoadManifest(packageFolder) switch
         {
             null => "converted by an older ClearanceLink",
             { ImporterVersion: var v } when v != ImporterVersion => "converted by another ClearanceLink version",
-            { TextureSize: var size } when size != textureSize => $"textures converted at {size} px, not {textureSize}",
             { Partial: true } => "only some liveries were converted",
             { FsltlVersion: var version } when version != FsltlVersion(fsltlPackage) => "FSLTL was updated",
             _ => null,

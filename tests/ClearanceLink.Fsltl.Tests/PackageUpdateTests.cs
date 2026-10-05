@@ -11,7 +11,7 @@ public sealed class PackageUpdateTests
     {
         using var package = new FakePackage();
         var output = Path.Combine(package.Root, "out");
-        Assert.Null(FsltlImporter.OutOfDate(package.Root, output, 4)); // nothing converted yet: nothing to update
+        Assert.Null(FsltlImporter.OutOfDate(package.Root, output)); // nothing converted yet: nothing to update
 
         FsltlImporter.Import(Options(package, output));
 
@@ -20,26 +20,25 @@ public sealed class PackageUpdateTests
         Assert.Equal(4, manifest.TextureSize);
         Assert.False(manifest.Partial);
         Assert.StartsWith("files 2 ", manifest.FsltlVersion, StringComparison.Ordinal); // no manifest.json: two aircraft.cfg files
-        Assert.Null(FsltlImporter.OutOfDate(package.Root, output, 4));
-        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output, 2048)); // the window converts at 2048
+        Assert.Null(FsltlImporter.OutOfDate(package.Root, output));
 
         // FSLTL updated: its manifest.json now has a version.
         File.WriteAllText(Path.Combine(package.Root, "manifest.json"), """{ "package_version": "2.1.0", "title": "FSLTL" }""");
         Assert.Equal("2.1.0", FsltlImporter.FsltlVersion(package.Root));
-        Assert.Equal("FSLTL was updated", FsltlImporter.OutOfDate(package.Root, output, 4));
+        Assert.Equal("FSLTL was updated", FsltlImporter.OutOfDate(package.Root, output));
         FsltlImporter.Import(Options(package, output));
-        Assert.Null(FsltlImporter.OutOfDate(package.Root, output, 4));
+        Assert.Null(FsltlImporter.OutOfDate(package.Root, output));
 
         // A package converted before manifests were written, or by a version that converts differently.
         File.WriteAllText(Path.Combine(output, FsltlImporter.ManifestFile), """{ "fsltlVersion": "2.1.0", "importerVersion": 0, "textureSize": 4 }""");
-        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output, 4));
+        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output));
         File.Delete(Path.Combine(output, FsltlImporter.ManifestFile));
-        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output, 4));
+        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output));
 
         // Only some liveries imported.
         FsltlImporter.Import(Options(package, output) with { Filter = l => l.IcaoAirline == "BAW" });
         Assert.True(FsltlImporter.LoadManifest(output)!.Partial);
-        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output, 4));
+        Assert.NotNull(FsltlImporter.OutOfDate(package.Root, output));
     }
 
     [Fact]
