@@ -452,13 +452,15 @@ void ReadPosedObj(std::istream& in, PosedModel& model) {
     Pose(obj, model.bogieDataref, model.bogieLevel, model);
 }
 
-PosedModel PoseObjFiles(const std::vector<std::string>& files) {
+PosedModel PoseObjFiles(const std::vector<std::string>& files, const std::atomic<bool>* cancel) {
     std::vector<Obj> objs;
+    PosedModel model;
     for (const auto& file : files) {
+        if (cancel && *cancel) return model;
         std::ifstream in(std::filesystem::u8path(file));
         objs.push_back(ReadObj(in));
     }
-    PosedModel model;
+    if (cancel && *cancel) return model;
     for (const auto& obj : objs) ScanBogies(obj, model);
     for (const auto& obj : objs) Pose(obj, model.bogieDataref, model.bogieLevel, model);
     return model;

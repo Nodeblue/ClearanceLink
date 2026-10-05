@@ -53,6 +53,10 @@ namespace ClearanceLink.Host
               clearancelink support
                   Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
+              clearancelink simbrief [--xplane-root <dir>]
+                  Save your latest SimBrief plan into X-Plane's Output\FMS plans (e.g. YBBNYSSY.fms) to load in the FMS.
+                  The pilot ID comes from BeyondATC's SimBrief link, or settings simbrief-id. The window's FPLN page does
+                  the same and can also load it into X-Plane's FMS.
               clearancelink update
                   Ask GitHub whether a newer ClearanceLink release exists and print where to download it. The window does
                   this on its own at start-up (ABOUT page) unless update-check is off. Nothing is downloaded.
@@ -136,6 +140,7 @@ namespace ClearanceLink.Host
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
                     "update" => await UpdateCommandAsync(),
+                    "simbrief" => await SimbriefCommandAsync(options),
                     "plugin" => Plugin(options),
                     "fsltl" => Fsltl(options),
                     "showcase" => await ShowcaseAsync(options),
@@ -234,7 +239,10 @@ namespace ClearanceLink.Host
                 + SessionLog.Prune(AppFolders.Default.Recordings, "*.jsonl", settings.KeepDays, DateTime.Now)
                 + SessionLog.Prune(AppFolders.Default.Recordings, "*.md", settings.KeepDays, DateTime.Now)
                 + SessionLog.Prune(AppFolders.Default.SupportFiles, "*.zip", settings.KeepDays, DateTime.Now);
-            PacketConsole.Info($"session log: {SessionLog.Path ?? "off"}" + (pruned > 0 ? $"; removed {pruned} files older than {settings.KeepDays} days" : ""));
+            var oversize = SessionLog.PruneToSize(AppFolders.Default.Recordings, ["*.jsonl", "*.md"], SessionLog.MaxRecordingBytes);
+            PacketConsole.Info($"session log: {SessionLog.Path ?? "off"}"
+                + (pruned > 0 ? $"; removed {pruned} files older than {settings.KeepDays} days" : "")
+                + (oversize > 0 ? $"; removed {oversize} oldest recordings to stay under {SessionLog.MaxRecordingBytes / (1024 * 1024 * 1024)} GB" : ""));
         }
 
         /// <summary>--batc when given, else the folder saved in settings when it still holds BeyondATC, else found automatically.</summary>
@@ -365,13 +373,19 @@ namespace ClearanceLink.Host
                             _ => throw new ArgumentException("update-check takes on or off"),
                         };
                         break;
+                    case "simbrief-id":
+                        settings.SimbriefId = auto ? null
+                            : value.Length is > 0 and <= 64 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
+                                ? value
+                                : throw new ArgumentException("simbrief-id takes your SimBrief pilot ID (a number) or username, or auto");
+                        break;
                     case "keep-days":
                         settings.KeepDays = int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var days) && days > 0
                             ? days
                             : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
                         break;
                     default:
-                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days or update-check.");
+                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days, update-check or simbrief-id.");
                 }
             }
 
@@ -388,26 +402,38 @@ namespace ClearanceLink.Host
             Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
             Console.WriteLine($"  Update check      {(settings.CheckForUpdates ? "on (asks GitHub for a newer release at start-up)" : "off")}");
+            var pilot = settings.SimbriefId ?? (SimbriefPlan.PilotIdFromBatc() is null ? "not found" : "BeyondATC's");
+            Console.WriteLine($"  SimBrief pilot ID {pilot}");
             return 0;
         }
 
+        /// <summary>The problem <see cref="ApplyConnection"/> returns when BeyondATC's folder is unknown.</summary>
+        public const string BatcNotFoundProblem = "BeyondATC not found; set its folder first: settings batc-folder \"<BeyondATC folder>\"";
+
         /// <summary>
         /// Always on writes BeyondATC's two config files; automatic removes ClearanceLink's (a user's own are put back).
-        /// Returns a problem to show, or null.
+        /// Returns a problem to show, or null: <see cref="BatcNotFoundProblem"/> when BeyondATC's folder is unknown,
+        /// otherwise a message starting "could not " when a file in BeyondATC's folder cannot be written or removed
+        /// (read-only or protected folder). Never throws for that.
         /// </summary>
-        internal static string? ApplyConnection(AppSettings settings, string? batcFolder)
+        public static string? ApplyConnection(AppSettings settings, string? batcFolder)
         {
             if (batcFolder is null)
             {
-                return settings.Connection == ConnectionMode.AlwaysOn
-                    ? "BeyondATC not found; set its folder first: settings batc-folder \"<BeyondATC folder>\""
-                    : null;
+                return settings.Connection == ConnectionMode.AlwaysOn ? BatcNotFoundProblem : null;
             }
 
             var redirect = new BatcRedirect(batcFolder);
-            var done = settings.Connection == ConnectionMode.AlwaysOn ? redirect.SwitchOn() : redirect.SwitchOff();
-            done.ToList().ForEach(l => Console.WriteLine("  " + l));
-            return null;
+            try
+            {
+                var done = settings.Connection == ConnectionMode.AlwaysOn ? redirect.SwitchOn() : redirect.SwitchOff();
+                done.ToList().ForEach(l => Console.WriteLine("  " + l));
+                return null;
+            }
+            catch (RedirectFailedException ex)
+            {
+                return ex.Message;
+            }
         }
 
         private static int SupportCommand()
@@ -508,6 +534,15 @@ namespace ClearanceLink.Host
                 Traffic = () => traffic.Objects,
             };
             board.Plugin = () => plugin?.Status;
+            var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowBatcAsync(stub, server, msfs, ct);
+            var xplaneRoot = FindXPlane(options)?.Root;
+            var plans = new FlightPlans(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot, path => plugin?.LoadFms(path) == true);
+            if (plugin is not null)
+            {
+                plugin.FmsAnswered += plans.FmsAnswered;
+            }
+
+            board.FlightPlans = plans;
             onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -524,6 +559,29 @@ namespace ClearanceLink.Host
                 await xplaneTask;
                 await msfsTask;
                 await bridgeTask;
+                await stubTask;
+            }
+        }
+
+        /// <summary>Runs the MSFS stand-in only while BeyondATC is not connected (<see cref="StubLauncher.FollowBatc"/>).</summary>
+        private static async Task FollowBatcAsync(StubLauncher stub, XPlaneSimServer server, MsfsGate msfs, CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1), ct);
+                    var names = server.Sessions.Select(s => s.ClientName).ToList();
+                    var batc = names.Contains(StatusBoard.HelperClient) && names.Contains(StatusBoard.AppClient);
+                    if (stub.FollowBatc(batc, msfs.IsRunning, DateTimeOffset.UtcNow) is { } line)
+                    {
+                        PacketConsole.Info(line);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Closing.
             }
         }
 
@@ -566,6 +624,31 @@ namespace ClearanceLink.Host
             return missing.Count == 0 ? 0 : 3;
         }
 
+        private static async Task<int> SimbriefCommandAsync(Options options)
+        {
+            if (SimbriefPlan.PilotId(AppSettings.Load(AppFolders.Default.Settings)) is not { } id)
+            {
+                Console.WriteLine("No SimBrief pilot ID: link SimBrief in BeyondATC, or run: settings simbrief-id <your SimBrief pilot ID>");
+                return 1;
+            }
+
+            if (FindXPlane(options)?.Root is not { } root)
+            {
+                Console.WriteLine("X-Plane 12 not found; use --xplane-root <dir> or: settings xplane-folder <dir>");
+                return 1;
+            }
+
+            if (await SimbriefPlan.FindAsync(id) is not { } flight || await SimbriefPlan.DownloadAsync(flight) is not { } fms
+                || SimbriefPlan.Save(flight, fms, root) is not { } path)
+            {
+                Console.WriteLine("No flight plan saved (see the line above).");
+                return 1;
+            }
+
+            Console.WriteLine($"Saved {flight.Origin}-{flight.Destination} as {path}. Load it in the aircraft's FMS as {Path.GetFileNameWithoutExtension(path)}.");
+            return 0;
+        }
+
         private static async Task<int> UpdateCommandAsync()
         {
             Console.WriteLine(UpdateCheck.Describe(Version, await UpdateCheck.FindAsync(Version)));
@@ -592,7 +675,15 @@ namespace ClearanceLink.Host
                 var redirect = new BatcRedirect(folder);
                 if (settings.Connection == ConnectionMode.AlwaysOn && !redirect.IsOn)
                 {
-                    redirect.SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    try
+                    {
+                        redirect.SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    }
+                    catch (RedirectFailedException ex)
+                    {
+                        Console.WriteLine($"  {ex.Message}");
+                    }
+
                     Console.WriteLine();
                 }
                 else if (settings.Connection == ConnectionMode.Automatic && redirect.IsOn)
@@ -604,7 +695,14 @@ namespace ClearanceLink.Host
                     var answer = Console.IsInputRedirected ? "n" : Console.ReadLine();
                     if (answer is null || answer.Trim().Length == 0 || answer.Trim().StartsWith('y') || answer.Trim().StartsWith('Y'))
                     {
-                        redirect.SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                        try
+                        {
+                            redirect.SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                        }
+                        catch (RedirectFailedException ex)
+                        {
+                            Console.WriteLine($"  {ex.Message}");
+                        }
                     }
 
                     Console.WriteLine();
@@ -648,7 +746,7 @@ namespace ClearanceLink.Host
             }
             catch (System.Net.Sockets.SocketException ex)
             {
-                PacketConsole.Info($"plugin: cannot listen on 127.0.0.1:{PluginLink.ClearanceLinkPort} ({ex.Message}); traffic will not be drawn");
+                PacketConsole.Info($"plugin: cannot open a UDP port on 127.0.0.1 ({ex.Message}); traffic will not be drawn");
                 return null;
             }
         }
@@ -685,7 +783,7 @@ namespace ClearanceLink.Host
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Console.WriteLine($"  Could not install the plugin ({ex.Message}). Close X-Plane, then start ClearanceLink again.");
+                Console.WriteLine($"  Could not install the plugin: {plugin.Describe(ex)}");
             }
 
             Console.WriteLine();
@@ -700,7 +798,7 @@ namespace ClearanceLink.Host
             }
 
             var icao = (options.Get("airport") ?? "YBBN").ToUpperInvariant();
-            var airport = AptDatIndex.Build(xplane.AirportFiles()).Load(icao);
+            var airport = AptDatIndex.Build(xplane.AirportFiles(), AppFolders.Default.AptIndex, Console.Error.WriteLine).Load(icao);
             if (airport is null || airport.Runways.Count == 0) return Fail($"{icao}: no airport with runways in {xplane.Root}");
 
             // Runway: the end asked for (line up from it), else the longest runway from its first end.
@@ -766,7 +864,7 @@ namespace ClearanceLink.Host
             }
             catch (System.Net.Sockets.SocketException ex)
             {
-                return Fail($"Cannot listen on 127.0.0.1:{PluginLink.ClearanceLinkPort} ({ex.Message}). Close ClearanceLink first.");
+                return Fail($"Cannot open a UDP port on 127.0.0.1 ({ex.Message}).");
             }
 
             await using var _ = link;
@@ -866,6 +964,11 @@ namespace ClearanceLink.Host
                     Console.WriteLine(package is null ? "FSLTL: not found (pass --fsltl <folder>)" : $"FSLTL: {package}");
                     var catalogue = FsltlImporter.LoadCatalogue(output);
                     Console.WriteLine(catalogue.Count == 0 ? $"Imported: none ({output})" : $"Imported: {catalogue.Count} liveries in {output}");
+                    if (package is not null && catalogue.Count > 0 && FsltlImporter.OutOfDate(package, output) is { } why)
+                    {
+                        Console.WriteLine($"Out of date: {why}. Run: fsltl import");
+                    }
+
                     return 0;
                 case "import":
                     if (package is null)
@@ -881,13 +984,18 @@ namespace ClearanceLink.Host
                         return Fail("Close X-Plane before importing; it reads the CSL files while it runs");
                     }
 
+                    if (!FsltlImporter.TryParseTextureSize(options.Get("size"), out var size))
+                    {
+                        return Fail($"--size {options.Get("size")} is not a texture size; use 1024, 2048 (the default) or 4096");
+                    }
+
                     output = options.Get("out") ?? FsltlOutput(xplane.Root, moveOld: true);
                     var only = options.Get("only");
                     var result = FsltlImporter.Import(new ImportOptions
                     {
                         PackageRoot = package,
                         Output = output,
-                        MaxTextureSize = int.Parse(options.Get("size") ?? "2048", System.Globalization.CultureInfo.InvariantCulture),
+                        MaxTextureSize = size,
                         Force = options.Has("force"),
                         Filter = only is null ? null : l => l.Title.Contains(only, StringComparison.OrdinalIgnoreCase)
                             || Path.GetFileName(l.Folder).Contains(only, StringComparison.OrdinalIgnoreCase),
@@ -930,7 +1038,7 @@ namespace ClearanceLink.Host
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return Fail($"{ex.Message} Close X-Plane first.");
+                return Fail($"Could not {action} the plugin: {plugin.Describe(ex)}");
             }
         }
 
@@ -950,6 +1058,18 @@ namespace ClearanceLink.Host
 
             var port = int.Parse(options.Get("port") ?? BatcRedirect.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
             var redirect = new BatcRedirect(folder, port);
+            try
+            {
+                return BatcAction(action, folder, redirect);
+            }
+            catch (RedirectFailedException ex)
+            {
+                return Fail(ex.Message);
+            }
+        }
+
+        private static int BatcAction(string action, string folder, BatcRedirect redirect)
+        {
             switch (action)
             {
                 case "on":
@@ -1073,7 +1193,7 @@ namespace ClearanceLink.Host
 
             if (FindXPlane(options) is { } install)
             {
-                var airports = new XPlaneAirports(install, PacketConsole.Info);
+                var airports = new XPlaneAirports(install, PacketConsole.Info, AppFolders.Default.AptIndex);
                 airports.Start();
                 sources.Add(new XPlaneFacilitySource(airports, ground));
                 PacketConsole.Info($"Airports: from X-Plane at {install.Root}");
@@ -1091,7 +1211,7 @@ namespace ClearanceLink.Host
             var icao = options.Positional.FirstOrDefault() ?? throw new ArgumentException("airport needs an ICAO code");
             var install = FindXPlane(options)
                 ?? throw new ArgumentException("X-Plane folder not found; pass --xplane-root <dir>");
-            var airport = new XPlaneAirports(install, Console.Error.WriteLine).Find(icao);
+            var airport = new XPlaneAirports(install, Console.Error.WriteLine, AppFolders.Default.AptIndex).Find(icao);
             if (airport is null)
             {
                 Console.Error.WriteLine($"{icao}: no scenery pack in {install.Root} defines it");

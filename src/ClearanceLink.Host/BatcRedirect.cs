@@ -79,64 +79,96 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
     /// <summary>True when both files point at ClearanceLink.</summary>
     public bool IsOn => Files.All(f => StateOf(f) == FileState.ClearanceLink);
 
-    /// <summary>Writes both files. Another SimConnect.cfg already there is kept as SimConnect.cfg.clearancelink-backup.</summary>
+    /// <summary>
+    /// Writes both files. Another SimConnect.cfg already there is kept as SimConnect.cfg.clearancelink-backup.
+    /// Throws <see cref="RedirectFailedException"/> when a file cannot be written (a read-only or protected folder).
+    /// </summary>
     public IReadOnlyList<string> SwitchOn()
     {
         var done = new List<string>();
         foreach (var file in Files)
         {
-            switch (StateOf(file))
+            try
             {
-                case FileState.ClearanceLink:
-                    done.Add($"already set: {file}");
-                    continue;
-                case FileState.Other:
-                    var backup = Path.Combine(Path.GetDirectoryName(file)!, BackupName);
-                    if (!File.Exists(backup))
-                    {
-                        File.Move(file, backup);
-                        done.Add($"kept your existing file as {backup}");
-                    }
-
-                    break;
+                SwitchOn(file, done);
             }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            File.WriteAllText(file, Content);
-            done.Add($"wrote {file}");
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new RedirectFailedException(
+                    $"could not write {file}: run ClearanceLink as administrator, or use connection automatic ({ex.Message})", file, ex);
+            }
         }
 
         return done;
     }
 
-    /// <summary>Removes ClearanceLink's files and puts back any file that was there before.</summary>
+    /// <summary>
+    /// Removes ClearanceLink's files and puts back any file that was there before.
+    /// Throws <see cref="RedirectFailedException"/> when a file cannot be removed or restored.
+    /// </summary>
     public IReadOnlyList<string> SwitchOff()
     {
         var done = new List<string>();
         foreach (var file in Files)
         {
-            if (StateOf(file) == FileState.ClearanceLink)
+            try
             {
-                File.Delete(file);
-                done.Add($"removed {file}");
+                SwitchOff(file, done);
             }
-            else if (File.Exists(file))
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                done.Add($"left alone (not ClearanceLink's): {file}");
-            }
-
-            foreach (var name in new[] { BackupName, Support.OldNames.CfgBackup })
-            {
-                var backup = Path.Combine(Path.GetDirectoryName(file)!, name);
-                if (File.Exists(backup) && !File.Exists(file))
-                {
-                    File.Move(backup, file);
-                    done.Add($"restored {file}");
-                }
+                throw new RedirectFailedException(
+                    $"could not remove {file}: run ClearanceLink as administrator, or delete it yourself ({ex.Message})", file, ex);
             }
         }
 
         return done;
+    }
+
+    private void SwitchOn(string file, List<string> done)
+    {
+        switch (StateOf(file))
+        {
+            case FileState.ClearanceLink:
+                done.Add($"already set: {file}");
+                return;
+            case FileState.Other:
+                var backup = Path.Combine(Path.GetDirectoryName(file)!, BackupName);
+                if (!File.Exists(backup))
+                {
+                    File.Move(file, backup);
+                    done.Add($"kept your existing file as {backup}");
+                }
+
+                break;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, Content);
+        done.Add($"wrote {file}");
+    }
+
+    private void SwitchOff(string file, List<string> done)
+    {
+        if (StateOf(file) == FileState.ClearanceLink)
+        {
+            File.Delete(file);
+            done.Add($"removed {file}");
+        }
+        else if (File.Exists(file))
+        {
+            done.Add($"left alone (not ClearanceLink's): {file}");
+        }
+
+        foreach (var name in new[] { BackupName, Support.OldNames.CfgBackup })
+        {
+            var backup = Path.Combine(Path.GetDirectoryName(file)!, name);
+            if (File.Exists(backup) && !File.Exists(file))
+            {
+                File.Move(backup, file);
+                done.Add($"restored {file}");
+            }
+        }
     }
 
     private static IEnumerable<string?> UninstallLocations()
@@ -169,4 +201,10 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
             }
         }
     }
+}
+
+/// <summary>BeyondATC's SimConnect.cfg could not be written or removed (a read-only or protected folder).</summary>
+public sealed class RedirectFailedException(string message, string file, Exception inner) : IOException(message, inner)
+{
+    public string FilePath { get; } = file;
 }

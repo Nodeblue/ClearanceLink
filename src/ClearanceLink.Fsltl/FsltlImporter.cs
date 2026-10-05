@@ -13,7 +13,7 @@ public sealed record ImportOptions
     public required string Output { get; init; }
 
     /// <summary>Largest texture side written; FSLTL's 4096 liveries cost 22 MB of video memory each, 2048 a quarter.</summary>
-    public int MaxTextureSize { get; init; } = 2048;
+    public int MaxTextureSize { get; init; } = FsltlImporter.DefaultTextureSize;
 
     /// <summary>Models with more triangles than this use a lower LOD, or are left out.</summary>
     public int MaxTriangles { get; init; } = 60000;
@@ -25,7 +25,36 @@ public sealed record ImportOptions
     public bool Force { get; init; }
 
     public Action<string> Log { get; init; } = _ => { };
+
+    /// <summary>Called as models and textures are done (from several threads while textures convert).</summary>
+    public Action<ImportProgress>? Progress { get; init; }
+
+    /// <summary>
+    /// Stops the import between models and between textures; <see cref="FsltlImporter.Import"/> then throws
+    /// <see cref="OperationCanceledException"/> and the package written before is left as it was.
+    /// </summary>
+    public CancellationToken Cancel { get; init; }
 }
+
+public enum ImportStage
+{
+    Models,
+    Textures,
+    Saving,
+}
+
+/// <summary>How far an import is: <paramref name="Done"/> of <paramref name="Total"/> models or textures.</summary>
+public sealed record ImportProgress(ImportStage Stage, int Done, int Total);
+
+/// <summary>
+/// What a converted package was made from (fsltl-manifest.json, next to the catalogue): when any of it differs from
+/// what an import would use now, the package is out of date.
+/// </summary>
+/// <param name="FsltlVersion">FSLTL's package_version, or a fingerprint of its aircraft.cfg files (<see cref="FsltlImporter.FsltlVersion"/>).</param>
+/// <param name="ImporterVersion"><see cref="FsltlImporter.ImporterVersion"/> of the ClearanceLink that converted it.</param>
+/// <param name="TextureSize">The largest texture side used.</param>
+/// <param name="Partial">Only some liveries were imported (a filtered import).</param>
+public sealed record PackageManifest(string FsltlVersion, int ImporterVersion, int TextureSize, bool Partial = false);
 
 public sealed record ImportResult(int Liveries, int Models, int Textures, int Skipped, List<string> Problems);
 
@@ -42,6 +71,14 @@ public static class FsltlImporter
 {
     public const string ExportName = "ClearanceLink_FSLTL";
     public const string CatalogueFile = "fsltl-catalogue.json";
+    public const string ManifestFile = "fsltl-manifest.json";
+    public const int DefaultTextureSize = 2048;
+
+    /// <summary>
+    /// Bump whenever the converter's output changes (models, textures, xsb_aircraft.txt or the catalogue): packages an
+    /// older version converted then show as out of date, so users convert again.
+    /// </summary>
+    public const int ImporterVersion = 1;
 
     /// <summary>Models more lopsided than this (<see cref="Obj8Converter.Asymmetry"/>) are left out.</summary>
     public const float MaxAsymmetry = 0.08f;
@@ -49,6 +86,23 @@ public static class FsltlImporter
 
     public static ImportResult Import(ImportOptions options)
     {
+        // Objects are written next to their final name (".obj.tmp") and moved into place only once every texture is
+        // done, just before xsb_aircraft.txt and the catalogue: a run stopped or killed before then leaves the
+        // package that was there whole (new textures are extra files; reconverted ones are still valid textures).
+        var staged = new List<string>();
+        try
+        {
+            return Import(options, staged);
+        }
+        finally
+        {
+            foreach (var tmp in staged) TryDelete(tmp + ".tmp");
+        }
+    }
+
+    private static ImportResult Import(ImportOptions options, List<string> staged)
+    {
+        var cancel = options.Cancel;
         var problems = new List<string>();
         var liveries = FsltlCatalog.Load(options.PackageRoot, problems, IsMicrosoftFolder)
             .Where(l => !IsMicrosoftModel(l))
@@ -67,9 +121,13 @@ public static class FsltlImporter
         var skipped = 0;
         var modelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var groups = liveries.GroupBy(l => l.ModelId, StringComparer.OrdinalIgnoreCase).ToList();
+        var modelsDone = 0;
 
-        foreach (var model in liveries.GroupBy(l => l.ModelId, StringComparer.OrdinalIgnoreCase))
+        foreach (var model in groups)
         {
+            cancel.ThrowIfCancellationRequested();
+            options.Progress?.Invoke(new ImportProgress(ImportStage.Models, modelsDone++, groups.Count));
             var first = model.First();
             var modelName = ModelName(airplanes, model.Key);
             for (var n = 2; !modelNames.Add(modelName); n++) modelName = $"{ModelName(airplanes, model.Key)}_{n}";
@@ -120,11 +178,9 @@ public static class FsltlImporter
                 var text = part.Text.Replace("{TEXTURE}", texture?.Name ?? "missing.dds", StringComparison.Ordinal)
                     .Replace("{TEXTURE_LIT}", lit?.Name ?? "missing.dds", StringComparison.Ordinal);
                 var objPath = Path.Combine(objects, ObjName(modelName, i));
-                File.WriteAllText(objPath, text);
+                File.WriteAllText(objPath + ".tmp", text);
+                staged.Add(objPath);
                 written.Add(Path.GetFileName(objPath));
-                // XPMP2 writes a copy per livery texture ("<obj name>.<texture>.xpmp2.obj") and would keep using a stale one.
-                var copies = Path.GetFileNameWithoutExtension(objPath) + ".*.xpmp2.obj";
-                foreach (var copy in Directory.EnumerateFiles(objects, copies)) File.Delete(copy);
             }
 
             foreach (var livery in model)
@@ -177,6 +233,8 @@ public static class FsltlImporter
         }
 
         var (textureCount, failed) = ConvertTextures(textureJobs, keepAlpha, objects, options, problems);
+        cancel.ThrowIfCancellationRequested();
+        options.Progress?.Invoke(new ImportProgress(ImportStage.Saving, 0, 0));
         // A livery whose texture did not convert (a damaged file, a full disk) is left out rather than listed with a
         // texture X-Plane cannot load; the package still works for every other livery.
         var kept = entries.Where(e => !e.Textures.Any(failed.Contains)).ToList();
@@ -189,6 +247,17 @@ public static class FsltlImporter
         var catalogue = kept.Select(e => e.Entry).ToList();
         var xsb = new StringBuilder($"EXPORT_NAME {ExportName}\n\n");
         foreach (var e in kept) xsb.Append(e.Text);
+
+        // From here on the package is replaced; nothing below checks the cancellation token.
+        foreach (var obj in staged)
+        {
+            File.Move(obj + ".tmp", obj, overwrite: true);
+            // XPMP2 writes a copy per livery texture ("<obj name>.<texture>.xpmp2.obj") and would keep using a stale one.
+            var copies = Path.GetFileNameWithoutExtension(obj) + ".*.xpmp2.obj";
+            foreach (var copy in Directory.EnumerateFiles(objects, copies)) File.Delete(copy);
+        }
+
+        staged.Clear();
         if (options.Filter is null)
         {
             // Objects a previous import wrote that this one did not (a model now has fewer parts), and their XPMP2 copies.
@@ -200,12 +269,131 @@ public static class FsltlImporter
             }
         }
 
-        File.WriteAllText(Path.Combine(options.Output, "xsb_aircraft.txt"), xsb.ToString());
-        File.WriteAllText(Path.Combine(options.Output, CatalogueFile), JsonSerializer.Serialize(catalogue, CatalogueJson.Options));
-        File.WriteAllText(Path.Combine(options.Output, "README.txt"),
+        WriteAtomic(Path.Combine(options.Output, "README.txt"),
             "Converted by ClearanceLink from your own FSLTL install (https://fslivetrafficliveries.com/) for your own use.\n" +
             "The models and liveries belong to FSLTL and their original authors. Do not share or upload this folder.\n");
+        WriteAtomic(Path.Combine(options.Output, "xsb_aircraft.txt"), xsb.ToString());
+        WriteAtomic(Path.Combine(options.Output, CatalogueFile), JsonSerializer.Serialize(catalogue, CatalogueJson.Options));
+        var manifest = new PackageManifest(FsltlVersion(options.PackageRoot), ImporterVersion, options.MaxTextureSize, Partial: options.Filter is not null);
+        WriteAtomic(Path.Combine(options.Output, ManifestFile), JsonSerializer.Serialize(manifest, CatalogueJson.Options));
+
+        if (options.Filter is null)
+        {
+            // Textures no livery uses any more (FSLTL renamed or dropped them; 5-22 MB each) and leftovers of a run
+            // that was stopped. A filtered import knows only some liveries' textures, so it keeps the others.
+            var stale = Directory.EnumerateFiles(objects, "*.dds")
+                .Where(f => Path.GetExtension(f).Equals(".dds", StringComparison.OrdinalIgnoreCase) && !textureJobs.ContainsKey(Path.GetFileName(f)))
+                .Concat(Directory.EnumerateFiles(objects, "*.tmp"))
+                .Concat(Directory.EnumerateFiles(options.Output, "*.tmp"))
+                .ToList();
+            foreach (var file in stale) TryDelete(file);
+            if (stale.Count > 0) options.Log($"FSLTL: removed {stale.Count} files no longer used");
+        }
+
         return new ImportResult(catalogue.Count, models, textureCount, skipped, problems);
+    }
+
+    /// <summary>Writes through a .tmp file then moves it over the old one, so a reader never sees a half-written file.</summary>
+    private static void WriteAtomic(string path, string text)
+    {
+        File.WriteAllText(path + ".tmp", text);
+        File.Move(path + ".tmp", path, overwrite: true);
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Left for the next full import's clean-up.
+        }
+    }
+
+    /// <summary>
+    /// FSLTL's version: package_version from its manifest.json, else (no or unreadable manifest) a fingerprint of its
+    /// aircraft folders: how many aircraft.cfg files there are and when the newest was written. Cheap: one small file,
+    /// or one directory listing with no file contents read.
+    /// </summary>
+    public static string FsltlVersion(string packageRoot)
+    {
+        try
+        {
+            if (FileLookup.Child(packageRoot, "manifest.json") is { } manifest && File.Exists(manifest))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("package_version", out var version)
+                    && version.ValueKind == JsonValueKind.String
+                    && version.GetString() is { Length: > 0 } text)
+                {
+                    return text;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            // Fall back to the fingerprint.
+        }
+
+        var airplanes = FileLookup.Resolve(packageRoot, "SimObjects/Airplanes");
+        if (airplanes is null) return "none";
+        var files = Directory.EnumerateFiles(airplanes, "aircraft.cfg", new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            MaxRecursionDepth = 1,
+            MatchCasing = MatchCasing.CaseInsensitive,
+            IgnoreInaccessible = true,
+        }).Select(File.GetLastWriteTimeUtc).ToList();
+        return FormattableString.Invariant($"files {files.Count} newest {(files.Count == 0 ? 0 : files.Max().Ticks)}");
+    }
+
+    /// <summary>The manifest of a converted package, or null (none, damaged, or converted before manifests were written).</summary>
+    public static PackageManifest? LoadManifest(string packageFolder)
+    {
+        var path = Path.Combine(packageFolder, ManifestFile);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<PackageManifest>(File.ReadAllText(path), CatalogueJson.Options);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Why the package in <paramref name="packageFolder"/> should be converted again, or null when it is up to date
+    /// or nothing was converted yet: FSLTL was updated, this ClearanceLink converts differently, or only some liveries
+    /// were imported. The texture size is the user's choice (--size), not a reason to convert again.
+    /// </summary>
+    public static string? OutOfDate(string fsltlPackage, string packageFolder)
+    {
+        if (!File.Exists(Path.Combine(packageFolder, CatalogueFile))) return null;
+        return LoadManifest(packageFolder) switch
+        {
+            null => "converted by an older ClearanceLink",
+            { ImporterVersion: var v } when v != ImporterVersion => "converted by another ClearanceLink version",
+            { Partial: true } => "only some liveries were converted",
+            { FsltlVersion: var version } when version != FsltlVersion(fsltlPackage) => "FSLTL was updated",
+            _ => null,
+        };
+    }
+
+    /// <summary>Reads a --size value: a power of two from 256 to 8192 pixels.</summary>
+    public static bool TryParseTextureSize(string? text, out int size)
+    {
+        if (text is null)
+        {
+            size = DefaultTextureSize;
+            return true;
+        }
+
+        return int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out size)
+            && size is >= 256 and <= 8192 && int.IsPow2(size);
     }
 
     /// <summary>The ten FSLTL_Asobo_* aircraft are Microsoft's own MSFS models, not FSLTL's to give; they stay on Bluebell.</summary>
@@ -270,15 +458,21 @@ public static class FsltlImporter
         var failures = new ConcurrentBag<string>();
         var failedNames = new ConcurrentBag<string>();
         var done = 0;
-        var todo = jobs.Where(j => options.Force || !File.Exists(Path.Combine(folder, j.Key))).ToList();
+        var todo = jobs.Where(j => NeedsConverting(j.Value, Path.Combine(folder, j.Key), options)).ToList();
         options.Log($"FSLTL: converting {todo.Count} textures ({jobs.Count - todo.Count} already done), at most {options.MaxTextureSize} px");
-        Parallel.ForEach(todo, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, job =>
+        options.Progress?.Invoke(new ImportProgress(ImportStage.Textures, 0, todo.Count));
+        // At most six at once: each holds a source texture and, for BC7, two full-size RGBA copies (about 100 MB).
+        var parallel = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount - 1, 1, 6), CancellationToken = options.Cancel };
+        Parallel.ForEach(todo, parallel, job =>
         {
             try
             {
-                var bytes = DdsTexture.Load(job.Value).ToXPlane(options.MaxTextureSize, opaque: !keepAlpha.ContainsKey(job.Key));
                 var target = Path.Combine(folder, job.Key);
-                File.WriteAllBytes(target + ".tmp", bytes);
+                using (var file = File.Create(target + ".tmp"))
+                {
+                    DdsTexture.Load(job.Value, options.MaxTextureSize).ToXPlane(file, options.MaxTextureSize, opaque: !keepAlpha.ContainsKey(job.Key));
+                }
+
                 File.Move(target + ".tmp", target, overwrite: true);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -290,10 +484,29 @@ public static class FsltlImporter
             }
 
             var n = Interlocked.Increment(ref done);
+            options.Progress?.Invoke(new ImportProgress(ImportStage.Textures, n, todo.Count));
             if (n % 200 == 0) options.Log($"FSLTL: {n}/{todo.Count} textures");
         });
         problems.AddRange(failures);
         return (jobs.Count - failures.Count, new HashSet<string>(failedNames, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether a texture is converted (again): not there yet, --force, or there at another size than this run makes
+    /// (an earlier run used another --size, or was stopped part way through a change of size). Reads two headers.
+    /// </summary>
+    private static bool NeedsConverting(string source, string target, ImportOptions options)
+    {
+        if (options.Force || !File.Exists(target)) return true;
+        try
+        {
+            if (DdsTexture.ReadHeader(source) is not { } from || DdsTexture.ReadHeader(target) is not { } to) return true;
+            return DdsTexture.TargetSize(from.Width, from.Height, options.MaxTextureSize) != (to.Width, to.Height);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
     }
 
     /// <summary>The catalogue written by an import, or empty if there is none, it is damaged or it is being written.</summary>

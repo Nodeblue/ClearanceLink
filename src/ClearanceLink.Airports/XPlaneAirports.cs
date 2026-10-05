@@ -7,9 +7,10 @@ namespace ClearanceLink.Airports;
 /// <summary>
 /// Airports as the X-Plane installation describes them, built into MSFS facility trees on demand: apt.dat in
 /// scenery order, procedures from CIFP, fix positions and magnetic variation from the nav data. Indexing runs in
-/// the background from <see cref="Start"/>; the first request waits for it.
+/// the background from <see cref="Start"/>; the first request waits for it. With an index cache file the apt.dat
+/// index is kept between starts and only rebuilt when an apt.dat file changes.
 /// </summary>
-public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log)
+public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log, string? indexCache = null)
 {
     private readonly ConcurrentDictionary<string, Lazy<FacilityObject?>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private Task<AptDatIndex>? _index;
@@ -23,8 +24,8 @@ public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log)
         {
             var watch = Stopwatch.StartNew();
             var files = install.AirportFiles();
-            var index = AptDatIndex.Build(files);
-            log($"airports: indexed {index.Count} airports in {files.Count} apt.dat files in {watch.ElapsedMilliseconds} ms (first: {files.FirstOrDefault() ?? "none"})");
+            var index = AptDatIndex.Build(files, indexCache, log);
+            log($"airports: {(index.FromCache ? "loaded the cached index of" : "indexed")} {index.Count} airports in {files.Count} apt.dat files in {watch.ElapsedMilliseconds} ms (first: {files.FirstOrDefault() ?? "none"})");
             return index;
         });
         _nav ??= Task.Run(() =>

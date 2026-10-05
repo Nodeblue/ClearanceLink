@@ -78,11 +78,73 @@ public sealed class StubLauncher : IDisposable
         return $"stub: started {path} (pid {_started?.Id})";
     }
 
-    /// <summary>Starts the stand-in again after <see cref="Stop"/> (MSFS closed again).</summary>
-    public string Restart() => _started is null ? Start(_explicitPath) : "stub: already running";
+    /// <summary>How long BeyondATC stays connected before the stand-in is closed.</summary>
+    public static readonly TimeSpan BatcSettled = TimeSpan.FromSeconds(5);
+
+    // MSFS changes and BeyondATC's connections are followed on different threads.
+    private readonly Lock _gate = new();
+    private bool _pausedForBatc;
+    private DateTimeOffset? _batcSince;
+
+    /// <summary>
+    /// BeyondATC only looks for the FlightSimulator2024 process when it connects (Ben's PC, 2026-10-05), but some X-Plane
+    /// add-ons that also support MSFS (FlightSimBuilder HUB) will not connect to X-Plane while one runs. So the stand-in
+    /// runs only while BeyondATC is not connected: closed once both its connections have been open for
+    /// <see cref="BatcSettled"/>, started again as soon as either drops. Called about once a second; returns a log
+    /// line when something changed, else null.
+    /// </summary>
+    public string? FollowBatc(bool batcConnected, bool msfsRunning, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            return Follow(batcConnected, msfsRunning, now);
+        }
+    }
+
+    private string? Follow(bool batcConnected, bool msfsRunning, DateTimeOffset now)
+    {
+        if (!batcConnected)
+        {
+            _batcSince = null;
+            if (!_pausedForBatc)
+            {
+                return null;
+            }
+
+            _pausedForBatc = false;
+            return msfsRunning ? null : Start(_explicitPath) + " for BeyondATC to connect";
+        }
+
+        _batcSince ??= now;
+        if (_started is null || now - _batcSince < BatcSettled)
+        {
+            return null;
+        }
+
+        _pausedForBatc = true;
+        return StopLocked("BeyondATC is connected");
+    }
+
+    /// <summary>Starts the stand-in again after <see cref="Stop"/> (MSFS closed again), unless BeyondATC is connected.</summary>
+    public string Restart()
+    {
+        lock (_gate)
+        {
+            return _pausedForBatc ? "stub: not needed while BeyondATC is connected"
+                : _started is null ? Start(_explicitPath) : "stub: already running";
+        }
+    }
 
     /// <summary>Stops the stand-in so it can't be mistaken for MSFS while the real one runs.</summary>
-    public string Stop()
+    public string Stop(string why = "MSFS runs")
+    {
+        lock (_gate)
+        {
+            return StopLocked(why);
+        }
+    }
+
+    private string StopLocked(string why)
     {
         if (_started is null)
         {
@@ -98,8 +160,8 @@ public sealed class StubLauncher : IDisposable
         _started.Dispose();
         _started = null;
         StartedIds.TryRemove(pid, out _);
-        return $"stub: stopped (pid {pid}) while MSFS runs";
+        return $"stub: stopped (pid {pid}) while {why}";
     }
 
-    public void Dispose() => Stop();
+    public void Dispose() => Stop("ClearanceLink closes");
 }

@@ -79,6 +79,7 @@ bool UdpSocket::Open(uint16_t port, std::string& error) {
 }
 
 void UdpSocket::Close() {
+    replyPort_ = 0;
     if (!IsOpen()) return;
 #ifdef _WIN32
     closesocket(static_cast<Native>(socket_));
@@ -91,13 +92,21 @@ void UdpSocket::Close() {
 
 size_t UdpSocket::Receive(char* buffer, size_t size) {
     if (!IsOpen()) return 0;
+    sockaddr_in from{};
 #ifdef _WIN32
-    int n = ::recv(static_cast<Native>(socket_), buffer, static_cast<int>(size), 0);
+    int fromLength = sizeof(from);
+    int n = ::recvfrom(static_cast<Native>(socket_), buffer, static_cast<int>(size), 0, reinterpret_cast<sockaddr*>(&from), &fromLength);
 #else
-    ssize_t n = ::recv(socket_, buffer, size, 0);
+    socklen_t fromLength = sizeof(from);
+    ssize_t n = ::recvfrom(socket_, buffer, size, 0, reinterpret_cast<sockaddr*>(&from), &fromLength);
 #endif
-    return n > 0 ? static_cast<size_t>(n) : 0;
+    if (n <= 0) return 0;
+    // Only answer this machine (the socket is bound to 127.0.0.1, so nothing else can reach it anyway).
+    if (from.sin_family == AF_INET && ntohl(from.sin_addr.s_addr) == INADDR_LOOPBACK) replyPort_ = ntohs(from.sin_port);
+    return static_cast<size_t>(n);
 }
+
+bool UdpSocket::Reply(const std::string& text) { return replyPort_ != 0 && Send(replyPort_, text); }
 
 bool UdpSocket::Send(uint16_t port, const std::string& text) {
     if (!IsOpen()) return false;

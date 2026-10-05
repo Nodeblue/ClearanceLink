@@ -5,8 +5,13 @@ height under each aircraft. ClearanceLink and the plugin talk over UDP on the lo
 
 | Direction | Address | Notes |
 |---|---|---|
-| ClearanceLink → plugin | `127.0.0.1:49710` | The plugin binds this port. |
-| plugin → ClearanceLink | `127.0.0.1:49711` | ClearanceLink binds this port. |
+| ClearanceLink → plugin | `127.0.0.1:34710` | Plugin 0.5.3+ binds the first of 34710, 38710, 42710, 46710, 49710 it can open. Until the plugin answers, ClearanceLink sends each line to all five; then only to the port the plugin answered from. |
+| plugin → ClearanceLink | the sender's port | ClearanceLink listens on any free port; the plugin answers the port the last datagram came from. |
+
+Before 0.5.3 the ports were fixed at 49710 (plugin) and 49711 (ClearanceLink). Windows can reserve blocks of ports in
+its dynamic range (49152+) for Hyper-V/WinNAT at boot (`netsh int ipv4 show excludedportrange protocol=udp`); on Ben's
+PC on 2026-10-05 the block 49650-49749 was reserved, so neither side could bind (WSA error 10013) and no traffic was
+drawn. 0.5.3 is not compatible with older ClearanceLink versions and the other way round (SETUP offers the update).
 
 Every datagram holds one or more lines of UTF-8 text separated by `\n`. Fields are separated by single spaces.
 Numbers use `.` as the decimal point. Unknown message types are ignored (and logged once), so either side can be
@@ -18,10 +23,11 @@ newer than the other.
 |---|---|
 | `hello <version>` | Sent every second. If the plugin hears nothing for 10 s it removes all its aircraft (ClearanceLink closed). |
 | `add <id> <icaoType> <icaoAirline> <livery> <label...>` | Create aircraft `id` (1..16777215). `icaoAirline` and `livery` are `-` when unknown. `label` (rest of the line) is shown next to the aircraft, for example the registration. Re-sending `add` for an existing id changes its model. |
-| `pos <id> <lat> <lon> <altFt> <hdgTrue> <pitch> <bank> <gsKt> <onGround> <gear> <flaps> <spoilers> <thrust> <lights>` | Latest state. `altFt` is MSL; when `onGround` is `1` the plugin puts the wheels on X-Plane's terrain and ignores `altFt`. `gear`, `flaps`, `spoilers`, `thrust` are 0..1. `lights` is a bit mask: 1 nav, 2 beacon, 4 strobe, 8 landing, 16 taxi. |
+| `pos <id> <lat> <lon> <altFt> <hdgTrue> <pitch> <bank> <gsKt> <onGround> <gear> <flaps> <spoilers> <thrust> <lights>` | Latest state. `altFt` is MSL; when `onGround` is `1` the plugin puts the wheels on X-Plane's terrain and ignores `altFt`. `gear`, `flaps`, `spoilers`, `thrust` are 0..1 (plugin 0.5.2+ clamps them). `lights` is a bit mask: 1 nav, 2 beacon, 4 strobe, 8 landing, 16 taxi; plugin 0.5.2+ ignores a `pos` whose `lights` is negative or not a whole number, and ignores bits above 16. |
 | `offset <id> <feet> [<pitch>]` | Per-type height (feet, + raises) and parked pitch (degrees, nose up +) for aircraft `id`, from `ground_offset_ft` and `ground_pitch` in `mapping/traffic-models.yaml`, sent after each `add`. Plugin 0.4.0+ uses them only for models it cannot fit to their own wheels, and ClearanceLink then sends the pitch here rather than in each `pos`; to older plugins ClearanceLink sends `<feet>` only (0.2.0+) and puts the pitch in `pos`. |
 | `del <id>` | Remove aircraft `id`. ClearanceLink sends it on 3 syncs in a row, as UDP can drop it; plugin 0.4.1+ also removes an aircraft that has had no `add` or `pos` for 15 s. |
 | `clear` | Remove all aircraft. ClearanceLink sends it when it starts, so a plugin still drawing a previous run's aircraft drops them. |
+| `fms <path...>` | 0.5.3+: load the X-Plane 11/12 `.fms` flight plan file at `path` (rest of the line, UTF-8) into X-Plane's own FMS/GPS, pilot side, with `XPLMLoadFMSFlightPlan` (X-Plane 12.1+). Sent when the user presses LOAD twice on the window's FPLN page. Aircraft with their own FMS ignore it. |
 
 On the ground the plugin also pitches each aircraft to the slope of the terrain under it (probed 8 m ahead and
 behind, at most 4°), added to the `pitch` ClearanceLink sends (plugin 0.2.0+).
@@ -69,7 +75,10 @@ overshot, back and forth, until 0.4.3 (YBBN, 2026-10-03). Since 0.4.3 the move-o
 lines received (not the blended point), and is 0 when they are more than 1 s apart (ClearanceLink's keep-alives).
 
 Terrain probes are kept cheap: on the ground an aircraft is probed again only when it has moved 25 cm or turned 1°,
-or every 5 s when parked; in the air every 0.25 s (for the `ground` report).
+or every 5 s when parked; in the air every 0.25 s (for the `ground` report). Since 0.5.2 a moving aircraft is probed
+at most every 0.1 s (sooner only once it has moved 8 m, beyond the measured slope), and between probes its height
+follows the slope measured at the last one, so it does not step on taxiway slopes; before, anything faster than
+about 15 m/s was probed (three probes) every frame.
 
 ## plugin → ClearanceLink
 
@@ -78,6 +87,7 @@ or every 5 s when parked; in the air every 0.25 s (for the `ground` report).
 | `status <version> <aircraft> <models> <cslFolders>` | Sent every second. `models` is the number of CSL models loaded (0 means traffic cannot be drawn: no CSL package found). `cslFolders` is a `;`-separated list (rest of the line), `-` if none. |
 | `ground <id> <elevFt>` | Terrain elevation (MSL, feet) under aircraft `id`, from X-Plane's terrain probe. Sent about every 0.25 s per aircraft. This is what BATC's `GROUND ALTITUDE` for an AI object should return. |
 | `error <id> <message...>` | The aircraft could not be created (for example no CSL model matched). |
+| `fms ok` / `fms error <why...>` | 0.5.3+: answer to `fms`. `ok` means X-Plane accepted the call (it does not say whether the aircraft's FMS uses it). |
 
 ## CSL models
 

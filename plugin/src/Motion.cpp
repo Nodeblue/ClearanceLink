@@ -25,6 +25,13 @@ constexpr float MaxMovingInterval = 1.0f;
 // Moves on for at most this long after the updates stop.
 constexpr float MaxAheadSeconds = 1.0f;
 constexpr double KnotsToMps = 0.514444;
+// Terrain probes (ShouldReprobeGround): moved or turned this much on the ground, at most this often; parked or
+// airborne, after this long.
+constexpr float ReprobeMeters = 0.25f;
+constexpr float ReprobeTurnDeg = 1.0f;
+constexpr float MinReprobeSeconds = 0.1f;
+constexpr float ReprobeParkedSeconds = 5.0f;
+constexpr float ReprobeAirborneSeconds = 0.25f;
 
 template <typename T>
 T Lerp(T a, T b, float f) {
@@ -73,6 +80,24 @@ float HeadingDelta(float from, float to) {
     if (d > 180) d -= 360;
     if (d < -180) d += 360;
     return d;
+}
+
+bool ShouldReprobeGround(bool onGround, bool probedOnGround, float movedM, float turnedDeg, float ageS) {
+    if (onGround != probedOnGround) return true;  // touchdown needs the slope; lift-off the airborne interval
+    if (!onGround) return ageS >= ReprobeAirborneSeconds;
+    if (ageS >= ReprobeParkedSeconds) return true;
+    if (movedM <= ReprobeMeters && std::fabs(turnedDeg) <= ReprobeTurnDeg) return false;
+    // Moving: no more than every MinReprobeSeconds, as GroundYAlongSlope carries the height along the slope between
+    // probes; but at once beyond the measured slope, where that would guess.
+    return ageS >= MinReprobeSeconds || movedM >= GroundSlopeProbeMeters;
+}
+
+float GroundYAlongSlope(float probeY, float slopeDeg, float headingDeg, float dx, float dz) {
+    const double heading = headingDeg * Pi / 180.0;
+    // Forward in X-Plane local coordinates (x east, z south) is (sin, -cos).
+    const double along = std::clamp(dx * std::sin(heading) - dz * std::cos(heading), -double(GroundSlopeProbeMeters),
+                                    double(GroundSlopeProbeMeters));
+    return float(probeY + along * std::tan(slopeDeg * Pi / 180.0));
 }
 
 Pos Blend(const Pos& a, const Pos& b, float f) {

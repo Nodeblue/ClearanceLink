@@ -3,15 +3,22 @@
 #include "GroundFit.h"
 #include "Motion.h"
 #include "Protocol.h"
+#include "Worker.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
+#include <memory>
+#include <stdexcept>
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -75,6 +82,39 @@ void RejectsBadLines() {
     CHECK(std::holds_alternative<clink::Clear>(*clink::Parse("clear")));
     CHECK(std::get<clink::Del>(*clink::Parse("del 9")).id == 9);
     CHECK(std::get<clink::Hello>(*clink::Parse("hello 0.4.0")).version == "0.4.0");
+}
+
+void ChecksLightsAndClampsRatios() {
+    std::string error;
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 -1", &error) && error.find("bad pos") != std::string::npos);
+    CHECK(std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 33")).lights == 1);  // unknown bit 32 ignored
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 1e30", &error));
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 2.5", &error));
+    CHECK(std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 31")).lights == 31);
+
+    // fms: a .fms path (spaces kept) to load into X-Plane's FMS, answered with "fms ok" or "fms error <why>".
+    CHECK(std::get<clink::Fms>(*clink::Parse("fms C:\\X-Plane 12\\Output\\FMS plans\\YBBNYSSY.fms")).path ==
+          "C:\\X-Plane 12\\Output\\FMS plans\\YBBNYSSY.fms");
+    CHECK(!clink::Parse("fms", &error) && error.find("bad fms") != std::string::npos);
+    CHECK(clink::FormatFms("") == "fms ok");
+    CHECK(clink::FormatFms("no\nfile") == "fms error no file");
+    CHECK(clink::LooksLikeFms("I\r\n1100 Version\r\nCYCLE 2610\r\n"));
+    CHECK(clink::LooksLikeFms("A\n3 version\n") == false);
+    CHECK(!clink::LooksLikeFms("<html>Not found</html>"));
+    auto pos = std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 1.5 -0.2 7 0.5 0"));
+    CHECK(pos.gear == 1.0f && pos.flaps == 0.0f && pos.spoilers == 1.0f && pos.thrust == 0.5f);
+}
+
+void ParsesNumbersStrictly() {
+    std::string error;
+    auto pos = std::get<clink::Pos>(*clink::Parse("pos 1 -0.5 1e-3 3.25e2 4 5 6 7 0 0 0 0 0 0"));
+    CHECK(pos.lat == -0.5 && pos.lon == 1e-3 && pos.altFt == 325);
+    CHECK(!clink::Parse("pos 1 nan 2 3 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 inf 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 1e999 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 3x 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 0x10 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("del 1.5", &error));
 }
 
 void SplitsDatagrams() {
@@ -500,6 +540,93 @@ void ReadsAnimationsKeyedHighToLow() {
     CHECK(model.all.size() == 1 && std::fabs(model.all[0].y) < 1e-6f);
 }
 
+void ProbesTerrainAtMostTenTimesASecondWhenMoving() {
+    using clink::ShouldReprobeGround;
+    // Parked: every 5 s only.
+    CHECK(!ShouldReprobeGround(true, true, 0.0f, 0.0f, 4.9f));
+    CHECK(ShouldReprobeGround(true, true, 0.0f, 0.0f, 5.0f));
+    // Taxiing at 15 m/s (25 cm a frame at 60 fps): not every frame, but every 0.1 s.
+    CHECK(!ShouldReprobeGround(true, true, 0.25f * 3, 0.0f, 0.05f));
+    CHECK(ShouldReprobeGround(true, true, 1.5f, 0.0f, 0.1f));
+    // Turning in place, likewise; a tiny move or turn waits for the parked interval.
+    CHECK(!ShouldReprobeGround(true, true, 0.0f, -5.0f, 0.05f));
+    CHECK(ShouldReprobeGround(true, true, 0.0f, -5.0f, 0.1f));
+    CHECK(!ShouldReprobeGround(true, true, 0.2f, 0.5f, 1.0f));
+    // Beyond the measured slope (take-off roll, BATC placing it): at once.
+    CHECK(ShouldReprobeGround(true, true, clink::GroundSlopeProbeMeters, 0.0f, 0.02f));
+    // Airborne every 0.25 s whatever it does; touchdown and lift-off at once.
+    CHECK(!ShouldReprobeGround(false, false, 50.0f, 10.0f, 0.2f));
+    CHECK(ShouldReprobeGround(false, false, 0.0f, 0.0f, 0.25f));
+    CHECK(ShouldReprobeGround(true, false, 0.0f, 0.0f, 0.0f));
+    CHECK(ShouldReprobeGround(false, true, 0.0f, 0.0f, 0.0f));
+}
+
+void CarriesTerrainHeightAlongTheSlope() {
+    using clink::GroundYAlongSlope;
+    const float rise = float(std::tan(2.0 * 3.14159265358979 / 180.0));  // per metre up a 2 degree slope
+    // Heading north is -z in X-Plane's local coordinates: 1 m north up a 2 degree slope.
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 0, 0, -1) - (100 + rise)) < 1e-4f);
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 0, 0, 1) - (100 - rise)) < 1e-4f);  // backwards: down
+    // Heading east is +x; sideways movement keeps the height.
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 90, 3, 0) - (100 + 3 * rise)) < 1e-4f);
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 90, 0, 3) - 100) < 1e-4f);
+    // Capped at the measured slope's length; level ground stays level.
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 0, 0, -50) - (100 + clink::GroundSlopeProbeMeters * rise)) < 1e-3f);
+    CHECK(GroundYAlongSlope(100, 0, 37, 4, -2) == 100);
+    // Taxiing up a 2 degree slope at 15 m/s probed every 0.1 s: the drawn height rises each frame, no step.
+    float last = GroundYAlongSlope(100, 2, 0, 0, 0);
+    bool rising = true;
+    for (int frame = 1; frame <= 6; ++frame) {
+        const float y = GroundYAlongSlope(100, 2, 0, 0, -0.25f * frame);
+        rising = rising && y > last;
+        last = y;
+    }
+    CHECK(rising && std::fabs(last - (100 + 1.5f * rise)) < 1e-4f);
+}
+
+void RunsJobsInTurnAndCancels() {
+    clink::Worker worker;
+    std::vector<int> order;
+    std::promise<void> doneA, doneB;
+    auto a = doneA.get_future(), b = doneB.get_future();
+    CHECK(worker.Post([&](const std::atomic<bool>&) { order.push_back(1); doneA.set_value(); }));
+    CHECK(worker.Post([&](const std::atomic<bool>&) { order.push_back(2); doneB.set_value(); }));
+    CHECK(b.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+    CHECK(order == std::vector<int>({1, 2}));
+
+    // A long job sees the cancel flag; queued jobs are dropped, so their promises break and nothing waits on them.
+    std::atomic<bool> started{false}, sawCancel{false};
+    CHECK(worker.Post([&](const std::atomic<bool>& cancel) {
+        started = true;
+        while (!cancel) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        sawCancel = true;
+    }));
+    auto never = std::make_shared<std::promise<int>>();
+    auto dropped = never->get_future();
+    CHECK(worker.Post([never](const std::atomic<bool>&) { never->set_value(1); }));
+    never.reset();
+    while (!started) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    worker.Stop();
+    CHECK(sawCancel);
+    CHECK(worker.Pending() == 0);
+    bool broken = false;
+    try {
+        dropped.get();
+    } catch (const std::future_error& e) {
+        broken = e.code() == std::future_errc::broken_promise;
+    }
+    CHECK(broken);
+
+    // Usable again after Stop; a throwing job does not end the thread.
+    std::promise<void> again;
+    auto c = again.get_future();
+    CHECK(worker.Post([](const std::atomic<bool>&) { throw std::runtime_error("bad model"); }));
+    CHECK(worker.Post([&](const std::atomic<bool>&) { again.set_value(); }));
+    CHECK(c.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+    worker.Stop();
+    worker.Stop();  // twice is fine
+}
+
 }  // namespace
 
 int main() {
@@ -507,6 +634,8 @@ int main() {
     ParsesOffset();
     ParsesAddWithLabelAndUnknowns();
     RejectsBadLines();
+    ChecksLightsAndClampsRatios();
+    ParsesNumbersStrictly();
     SplitsDatagrams();
     FormatsReplies();
     FindsCslFolders();
@@ -531,6 +660,9 @@ int main() {
     EasesHeightAcrossLiftOff();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
+    ProbesTerrainAtMostTenTimesASecondWhenMoving();
+    CarriesTerrainHeightAlongTheSlope();
+    RunsJobsInTurnAndCancels();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }

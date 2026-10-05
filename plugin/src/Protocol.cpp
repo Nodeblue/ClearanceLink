@@ -1,7 +1,9 @@
 #include "Protocol.h"
 
-#include <locale>
+#include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <locale>
 #include <sstream>
 
 namespace clink {
@@ -25,14 +27,24 @@ std::vector<std::string> Words(const std::string& line, size_t maxWords, std::st
     return words;
 }
 
-// Locale-independent number parsing: X-Plane may run with a decimal-comma locale.
+// Locale-independent number parsing: X-Plane may run with a decimal-comma locale. std::from_chars never looks at the
+// locale and allocates nothing (a pos line has 13 numbers, ~640 lines a second at 64 aircraft); standard libraries
+// without floating-point from_chars (older libc++) use a stream imbued with the classic locale instead.
 bool Number(const std::string& text, double& out) {
     if (text.empty()) return false;
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+    const char* const end = text.data() + text.size();
+    const auto [ptr, ec] = std::from_chars(text.data(), end, out, std::chars_format::general);
+    return ec == std::errc() && ptr == end && std::isfinite(out);
+#else
     std::istringstream stream(text);
     stream.imbue(std::locale::classic());
     stream >> out;
     return !stream.fail() && stream.eof() && std::isfinite(out);
+#endif
 }
+
+float Ratio(double value) { return static_cast<float>(std::clamp(value, 0.0, 1.0)); }
 
 bool Id(const std::string& text, uint32_t& out) {
     double value = 0;
@@ -67,6 +79,10 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
 
     if (type == "hello") return Hello{rest};
     if (type == "clear") return Clear{};
+    if (type == "fms") {
+        if (rest.empty() || rest.size() > 1024) return fail("bad fms: " + line);
+        return Fms{rest};
+    }
     if (type == "del") {
         auto w = Words(rest, 1, nullptr);
         Del del;
@@ -104,7 +120,11 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
         double v[13];
         for (int i = 0; i < 13; ++i)
             if (!Number(w[i + 1], v[i])) return fail("bad pos number '" + w[i + 1] + "': " + line);
-        if (!Id(w[0], pos.id) || std::fabs(v[0]) > 90 || std::fabs(v[1]) > 180) return fail("bad pos: " + line);
+        // Lights is a bit mask: a negative, fractional or huge value is a broken line (casting it to unsigned is
+        // undefined). Bits this plugin does not know (a newer ClearanceLink) are ignored, not the aircraft.
+        if (!Id(w[0], pos.id) || std::fabs(v[0]) > 90 || std::fabs(v[1]) > 180 || v[12] < 0 || v[12] > 4294967295.0 ||
+            v[12] != std::floor(v[12]))
+            return fail("bad pos: " + line);
         pos.lat = v[0];
         pos.lon = v[1];
         pos.altFt = v[2];
@@ -113,11 +133,11 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
         pos.bank = static_cast<float>(v[5]);
         pos.groundSpeedKt = static_cast<float>(v[6]);
         pos.onGround = v[7] != 0;
-        pos.gear = static_cast<float>(v[8]);
-        pos.flaps = static_cast<float>(v[9]);
-        pos.spoilers = static_cast<float>(v[10]);
-        pos.thrust = static_cast<float>(v[11]);
-        pos.lights = static_cast<unsigned>(v[12]);
+        pos.gear = Ratio(v[8]);
+        pos.flaps = Ratio(v[9]);
+        pos.spoilers = Ratio(v[10]);
+        pos.thrust = Ratio(v[11]);
+        pos.lights = static_cast<unsigned>(v[12]) & 31u;
         return pos;
     }
     return fail("unknown message: " + type);
@@ -157,6 +177,28 @@ std::string FormatError(uint32_t id, const std::string& message) {
     for (auto& c : clean)
         if (c == '\n' || c == '\r') c = ' ';
     return "error " + std::to_string(id) + " " + clean;
+}
+
+std::string FormatFms(const std::string& error) {
+    if (error.empty()) return "fms ok";
+    std::string clean = error;
+    for (auto& c : clean)
+        if (c == '\n' || c == '\r') c = ' ';
+    return "fms error " + clean;
+}
+
+bool LooksLikeFms(const std::string& text) {
+    auto lines = Lines(text.data(), std::min<size_t>(text.size(), 256));
+    auto trim = [](std::string s) {
+        while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.pop_back();
+        while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());
+        return s;
+    };
+    if (lines.size() < 2) return false;
+    auto first = trim(lines[0]), second = trim(lines[1]);
+    const std::string version = "Version";
+    return (first == "I" || first == "A") && second.size() > version.size() &&
+           second.compare(second.size() - version.size(), version.size(), version) == 0;
 }
 
 }  // namespace clink

@@ -44,6 +44,75 @@ public sealed class XPlaneWebApiClientTests : IDisposable
     }
 
     [Fact]
+    public async Task Only_data_datarefs_are_base64_decoded()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var client = new XPlaneWebApiClient(_api.BaseUri, _ => { });
+        client.Watch("test/plain/text");
+        client.Watch("sim/aircraft/view/acf_ICAO");
+        var run = client.RunAsync(cts.Token);
+
+        await WaitForAsync(() => client.TryGetText("test/plain/text", out _) && client.TryGetText("sim/aircraft/view/acf_ICAO", out _), cts.Token);
+
+        Assert.True(client.TryGetText("test/plain/text", out var plain));
+        Assert.Equal("ABCD", plain); // valid base64, but not a data dataref: passed on as it is
+        Assert.True(client.TryGetText("sim/aircraft/view/acf_ICAO", out var icao));
+        Assert.Equal("SF50", icao);
+
+        await cts.CancelAsync();
+        await run;
+    }
+
+    [Theory]
+    [InlineData(0, 60, false)] // nothing subscribed: silence is expected
+    [InlineData(3, 9, false)]
+    [InlineData(3, 10, true)]
+    [InlineData(3, 60, true)]
+    public void Liveness_probe_is_needed_only_when_subscribed_and_quiet(int subscribed, int quietSeconds, bool expected) =>
+        Assert.Equal(expected, XPlaneWebApiClient.NeedsLivenessProbe(subscribed, TimeSpan.FromSeconds(quietSeconds), TimeSpan.FromSeconds(10)));
+
+    [Fact]
+    public async Task A_quiet_socket_while_X_Plane_answers_stays_connected()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var client = new XPlaneWebApiClient(_api.BaseUri, log.Enqueue) { StaleAfter = TimeSpan.FromMilliseconds(300) };
+        client.Watch("sim/flightmodel/position/latitude");
+        var run = client.RunAsync(cts.Token);
+
+        await WaitForAsync(() => log.Any(l => l.Contains("keeping the connection", StringComparison.Ordinal)), cts.Token);
+        await Task.Delay(1000, cts.Token);
+
+        Assert.True(client.IsConnected);
+        Assert.True(client.LastUpdateAge >= TimeSpan.FromMilliseconds(300));
+        Assert.Single(log, l => l.Contains("keeping the connection", StringComparison.Ordinal)); // once per quiet spell
+        Assert.DoesNotContain(log, l => l.Contains("DISCONNECTED", StringComparison.Ordinal));
+
+        await cts.CancelAsync();
+        await run;
+    }
+
+    [Fact]
+    public async Task A_quiet_socket_while_X_Plane_does_not_answer_is_a_disconnect()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var client = new XPlaneWebApiClient(_api.BaseUri, log.Enqueue) { StaleAfter = TimeSpan.FromMilliseconds(300) };
+        client.Watch("sim/flightmodel/position/latitude");
+        var run = client.RunAsync(cts.Token);
+        await WaitForAsync(() => client.TryGetNumber("sim/flightmodel/position/latitude", out _), cts.Token);
+
+        _api.RestFails = true; // X-Plane hangs: the socket stays open but nothing answers
+
+        await WaitForAsync(() => !client.IsConnected, cts.Token);
+        Assert.Contains(log, l => l.StartsWith("xplane DISCONNECTED: no dataref update", StringComparison.Ordinal));
+        Assert.Null(client.LastUpdateAge);
+
+        await cts.CancelAsync();
+        await run;
+    }
+
+    [Fact]
     public async Task Writes_datarefs_and_runs_commands_over_rest()
     {
         using var client = new XPlaneWebApiClient(_api.BaseUri, _ => { });
@@ -71,6 +140,7 @@ public sealed class XPlaneWebApiClientTests : IDisposable
             (1, "sim/flightmodel/position/latitude", "double", -27.4016),
             (2, "sim/flightmodel2/engines/engine_is_burning_fuel", "int_array", new JsonArray(0, 1)),
             (3, "sim/aircraft/view/acf_ICAO", "data", Convert.ToBase64String(Encoding.ASCII.GetBytes("SF50\0\0\0\0"))),
+            (4, "test/plain/text", "string", "ABCD"),
             (5, "sim/cockpit2/radios/actuators/com1_frequency_hz_833", "int", 127850),
         ];
 
@@ -89,6 +159,8 @@ public sealed class XPlaneWebApiClientTests : IDisposable
         public Uri BaseUri { get; }
 
         public List<string> Calls { get; } = [];
+
+        public volatile bool RestFails;
 
         public void Dispose()
         {
@@ -127,6 +199,13 @@ public sealed class XPlaneWebApiClientTests : IDisposable
             }
 
             var body = await new StreamReader(request.InputStream).ReadToEndAsync();
+            if (RestFails)
+            {
+                context.Response.StatusCode = 500;
+                context.Response.Close();
+                return;
+            }
+
             JsonNode response = new JsonObject();
             switch (request.HttpMethod, path)
             {
