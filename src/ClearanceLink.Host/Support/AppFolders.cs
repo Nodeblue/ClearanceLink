@@ -40,4 +40,7 @@ public sealed class AppFolders(string root)
     public string Recordings => Path.Combine(Root, "recordings");
 
     public string SupportFiles => Path.Combine(Root, "support");
+
+    /// <summary>The cached apt.dat index (rebuilt when any apt.dat file changes).</summary>
+    public string AptIndex => Path.Combine(Root, "apt-index.json");
 }
