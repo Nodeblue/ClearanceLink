@@ -183,6 +183,9 @@ public sealed class PanelWindow : Window
             case CduKey.GoFlightPlan:
                 ShowPage(PanelPage.FlightPlan);
                 return;
+            case CduKey.GoPush:
+                ShowPage(PanelPage.Push);
+                return;
             case CduKey.ChooseBatcFolder:
             case CduKey.ChooseXPlaneFolder:
             case CduKey.ChooseFsltlFolder:
@@ -298,6 +301,7 @@ public sealed class PanelWindow : Window
             Key.F3 => PanelPage.Support,
             Key.F4 => PanelPage.About,
             Key.F5 => PanelPage.FlightPlan,
+            Key.F6 => PanelPage.Push,
             _ => (PanelPage?)null,
         };
         if (page is { } p)

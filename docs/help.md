@@ -7,7 +7,7 @@ X-Plane 12. BeyondATC talks to ClearanceLink as if it were MSFS, and ClearanceLi
 > endorsed by or supported by BeyondATC, Microsoft or Laminar Research. Please don't ask BeyondATC's team for help
 > with it.
 
-**Contents:** [The window](#the-window) · [First start](#first-start) · [Every flight](#every-flight) · [Flight plans](#flight-plans) ·
+**Contents:** [The window](#the-window) · [First start](#first-start) · [Every flight](#every-flight) · [Flight plans](#flight-plans) · [Pushback](#pushback) ·
 [X-Plane settings](#x-plane-settings) · [Aircraft models for traffic](#aircraft-models-for-traffic) ·
 [BeyondATC settings](#beyondatc-settings) · [Flying MSFS as well](#flying-msfs-as-well) · [What works](#what-works) ·
 [Problems](#problems) · [Getting help](#getting-help) · [Commands](#commands)
@@ -17,7 +17,7 @@ Downloading, the Windows warning and updating are on [Download and install](inst
 ## The window
 ClearanceLink looks like an aircraft's FMS. Each page has six rows; press the button beside a row, or click the row,
 to do what it says. The keys under the screen change page. On the keyboard, 1 to 6 press the left buttons,
-Shift+1 to 6 the right ones, and F1 to F5 change page (F5 is FPLN).
+Shift+1 to 6 the right ones, and F1 to F6 change page (F5 is FPLN, F6 is PUSH).
 
 | STATUS | FPLN | SETUP | SUPPORT |
 |---|---|---|---|
@@ -27,6 +27,7 @@ Shift+1 to 6 the right ones, and F1 to F5 change page (F5 is FPLN).
   well.
 - **FPLN** fetches your latest SimBrief plan and loads it into X-Plane's FMS when you ask. See
   [Flight plans](#flight-plans).
+- **PUSH** pushes you back with the Better Pushback plugin when BeyondATC clears you. See [Pushback](#pushback).
 - **SETUP** shows the BeyondATC and X-Plane folders, the connection mode and the X-Plane plugin, starts BeyondATC and
   opens a web page in your browser with the same status.
 - **SUPPORT** makes a support file, shows the live log, and reopens the WELCOME pages.
@@ -95,6 +96,34 @@ new.
 airports (for example `YBBNYSSY.fms`). Aircraft that don't use X-Plane's FMS (many add-on airliners) can load that
 file from their own FMS menu. If the plugin isn't installed, LOAD only saves the file and the bottom line says which
 name to load.
+
+## Pushback
+In MSFS, BeyondATC can call GSX for your pushback. X-Plane has no GSX, so the **PUSH** page does it with the free
+[Better Pushback](https://github.com/olivierbutler/BetterPusbackMod) plugin (version 1.14 or later) instead. It
+follows BeyondATC's clearance, including "face east". Nothing moves until you press **START PUSH**.
+
+<img src="images/panel-push-flying.png" width="330" alt="PUSH page with a clearance to face east">
+
+1. Ask BeyondATC for pushback as usual. When it approves, STATUS says **PUSHBACK APPROVED: PUSH** and the PUSH page
+   shows the clearance (**FACE EAST**) and the push it worked out: how far back, which way the tail goes, and the
+   heading and taxiway you'll end up on.
+2. If you'd rather go another way, press **TAIL LEFT**, **TAIL RIGHT** or **STRAIGHT**. Press it again to go back
+   to what ATC said.
+3. Press **START PUSH**. Better Pushback's tug comes to the aircraft.
+4. When the bottom line says **RELEASE PARKING BRAKE**, release it. The tug pushes you back, turns and stops.
+5. When it says **SET PARKING BRAKE**, set it. ClearanceLink tells the tug to disconnect for you.
+
+**STOP** ends the push where you are. The tug still disconnects once you set the parking brake.
+
+ClearanceLink uses the taxiways in X-Plane's airport data to end the push on the taxiway behind you, lined up with
+it. Where it finds none, it pushes back 15 m and turns.
+
+**BETTER PUSHBACK MISSING** means X-Plane doesn't have the plugin. Install it in `X-Plane 12\Resources\plugins` and
+restart X-Plane. ClearanceLink sends nothing to X-Plane until it's there.
+
+**NOT MOVING: SEE HELP** means the tug is on and the brake is off, but the aircraft doesn't move. Better Pushback
+can't push some aircraft (in our tests, the Aerobask Phenom 300, even from Better Pushback's own menu). Press
+**STOP** and use the aircraft's own pushback, if it has one.
 
 ## X-Plane settings
 Change these in X-Plane, so only BeyondATC talks and only BeyondATC's traffic flies:
@@ -177,8 +206,10 @@ own connection instead, while MSFS is closed. Running ClearanceLink as administr
 - BeyondATC's traffic, drawn in X-Plane with CSL models.
 - Airports whose X-Plane scenery has no taxiways get a simple generated taxi network.
 - STATUS shows the airport BeyondATC is using and which scenery it came from.
+- Pushback with Better Pushback, following BeyondATC's clearance (see [Pushback](#pushback)).
 
-Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equivalent of (those are ignored).
+BeyondATC's other GSX services (boarding, refuelling) do nothing in X-Plane. Not yet: a few things BeyondATC asks
+MSFS for that X-Plane has no equivalent of (those are ignored).
 
 ## Problems
 | What you see | What to do |

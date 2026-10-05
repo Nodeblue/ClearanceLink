@@ -13,6 +13,7 @@ namespace ClearanceLink.Airports;
 public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log, string? indexCache = null)
 {
     private readonly ConcurrentDictionary<string, Lazy<FacilityObject?>> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Lazy<Airport?>> _airports = new(StringComparer.OrdinalIgnoreCase);
     private Task<AptDatIndex>? _index;
     private Task<NavData>? _nav;
 
@@ -41,6 +42,13 @@ public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log, st
 
     /// <summary>The airport's facility tree, or null when no scenery pack defines it. Built once per airport.</summary>
     public FacilityObject? Find(string icao) => _cache.GetOrAdd(icao.Trim(), key => new Lazy<FacilityObject?>(() => Build(key))).Value;
+
+    /// <summary>The airport as apt.dat describes it (first scenery pack in order), or null. Loaded once per airport.</summary>
+    public Airport? Airport(string icao) => _airports.GetOrAdd(icao.Trim(), key => new Lazy<Airport?>(() =>
+    {
+        Start();
+        return _index!.GetAwaiter().GetResult().Load(key);
+    })).Value;
 
     /// <summary>
     /// Custom scenery often lists fewer frequencies than the Gateway airport (Orbx YBBN has no approach or departure),
