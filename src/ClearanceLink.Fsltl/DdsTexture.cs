@@ -26,14 +26,84 @@ public sealed class DdsTexture
     /// <summary>Each mip level's compressed bytes, largest first.</summary>
     public required List<byte[]> Mips { get; init; }
 
-    public static DdsFormat ReadFormat(string path)
+    public static DdsFormat ReadFormat(string path) => ReadHeader(path)?.Format ?? DdsFormat.Unknown;
+
+    /// <summary>The format and size in a DDS file's header (only the header is read), or null if it is not a DDS file.</summary>
+    public static (DdsFormat Format, int Width, int Height)? ReadHeader(string path)
     {
         using var stream = File.OpenRead(path);
         var header = new byte[148];
-        return stream.Read(header, 0, header.Length) >= 128 ? Header(header).Format : DdsFormat.Unknown;
+        var read = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+        if (read < 128 || BitConverter.ToInt32(header, 0) != Magic) return null;
+        var h = Header(header.AsSpan(0, read));
+        return (h.Format, h.Width, h.Height);
     }
 
     public static DdsTexture Load(string path) => Parse(File.ReadAllBytes(path));
+
+    /// <summary>
+    /// Loads only the mip levels <see cref="ToXPlane(int, bool)"/> with the same <paramref name="maxSize"/> uses: a
+    /// 4096 px livery is about 21 MB, of which the levels up to 2048 px are a quarter. The levels left out are empty
+    /// arrays, so <see cref="Mips"/> still has one entry per level.
+    /// </summary>
+    public static DdsTexture Load(string path, int maxSize)
+    {
+        using var stream = File.OpenRead(path);
+        var header = new byte[148];
+        var read = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+        if (read < 128 || BitConverter.ToInt32(header, 0) != Magic) throw new InvalidDataException("not a DDS file");
+        var (format, width, height, mipCount, dataStart) = Header(header.AsSpan(0, read));
+
+        // The levels the file holds, then how many of the largest ToXPlane would drop.
+        var sizes = new List<int>();
+        long offset = dataStart;
+        int w = width, h = height;
+        for (var level = 0; level < Math.Max(1, mipCount) && format != DdsFormat.Unknown; level++)
+        {
+            var size = LevelSize(format, w, h);
+            if (offset + size > stream.Length) break;
+            sizes.Add(size);
+            offset += size;
+            w = Math.Max(1, w / 2);
+            h = Math.Max(1, h / 2);
+        }
+
+        var skip = 0;
+        for (int sw = width, sh = height; (sw > maxSize || sh > maxSize) && skip + 1 < sizes.Count; skip++)
+        {
+            sw = Math.Max(1, sw / 2);
+            sh = Math.Max(1, sh / 2);
+        }
+
+        var mips = new List<byte[]>(sizes.Count);
+        stream.Position = dataStart + sizes.Take(skip).Sum(s => (long)s);
+        for (var level = 0; level < sizes.Count; level++)
+        {
+            if (level < skip)
+            {
+                mips.Add([]);
+                continue;
+            }
+
+            var bytes = new byte[sizes[level]];
+            stream.ReadExactly(bytes);
+            mips.Add(bytes);
+        }
+
+        return new DdsTexture { Format = format, Width = width, Height = height, Mips = mips };
+    }
+
+    /// <summary>The size <see cref="ToXPlane(int, bool)"/> gives a <paramref name="width"/> x <paramref name="height"/> texture.</summary>
+    public static (int Width, int Height) TargetSize(int width, int height, int maxSize)
+    {
+        while ((width > maxSize || height > maxSize) && width > 1 && height > 1)
+        {
+            width = Math.Max(1, width / 2);
+            height = Math.Max(1, height / 2);
+        }
+
+        return (width, height);
+    }
 
     public static DdsTexture Parse(byte[] bytes)
     {
@@ -55,19 +125,19 @@ public sealed class DdsTexture
         return new DdsTexture { Format = format, Width = width, Height = height, Mips = mips };
     }
 
-    private static (DdsFormat Format, int Width, int Height, int MipCount, int DataStart) Header(byte[] b)
+    private static (DdsFormat Format, int Width, int Height, int MipCount, int DataStart) Header(ReadOnlySpan<byte> b)
     {
-        var height = BitConverter.ToInt32(b, 12);
-        var width = BitConverter.ToInt32(b, 16);
-        var mipCount = BitConverter.ToInt32(b, 28);
-        var fourCc = System.Text.Encoding.ASCII.GetString(b, 84, 4);
+        var height = BitConverter.ToInt32(b[12..]);
+        var width = BitConverter.ToInt32(b[16..]);
+        var mipCount = BitConverter.ToInt32(b[28..]);
+        var fourCc = System.Text.Encoding.ASCII.GetString(b.Slice(84, 4));
         var format = fourCc switch
         {
             "DXT1" => DdsFormat.Dxt1,
             "DXT2" or "DXT3" => DdsFormat.Dxt3,
             "DXT4" or "DXT5" => DdsFormat.Dxt5,
             "ATI2" or "BC5U" or "BC5S" => DdsFormat.Bc5,
-            "DX10" when b.Length >= 148 => BitConverter.ToInt32(b, 128) switch
+            "DX10" when b.Length >= 148 => BitConverter.ToInt32(b[128..]) switch
             {
                 70 or 71 or 72 => DdsFormat.Dxt1,
                 73 or 74 or 75 => DdsFormat.Dxt3,
@@ -94,6 +164,14 @@ public sealed class DdsTexture
     /// </param>
     public byte[] ToXPlane(int maxSize, bool opaque = false)
     {
+        using var ms = new MemoryStream();
+        ToXPlane(ms, maxSize, opaque);
+        return ms.ToArray();
+    }
+
+    /// <summary>As <see cref="ToXPlane(int, bool)"/>, written straight to <paramref name="output"/> (no copy of the whole file in memory).</summary>
+    public void ToXPlane(Stream output, int maxSize, bool opaque = false)
+    {
         var level = 0;
         int w = Width, h = Height;
         while ((w > maxSize || h > maxSize) && level + 1 < Mips.Count)
@@ -111,7 +189,8 @@ public sealed class DdsTexture
         {
             var kept = Mips.Skip(level).ToList();
             if (opaque && Format is DdsFormat.Dxt3 or DdsFormat.Dxt5) kept = [.. kept.Select(OpaqueAlpha)];
-            return Write(Format, w, h, kept);
+            WriteTo(output, Format, w, h, kept);
+            return;
         }
 
         var source = Format switch
@@ -137,7 +216,7 @@ public sealed class DdsTexture
         encoder.OutputOptions.GenerateMipMaps = true;
         encoder.OutputOptions.Quality = CompressionQuality.Balanced;
         var mips = encoder.EncodeToRawBytes(bytes, w, h, PixelFormat.Rgba32);
-        return Write(DdsFormat.Dxt5, w, h, [.. mips]);
+        WriteTo(output, DdsFormat.Dxt5, w, h, mips);
     }
 
     /// <summary>
@@ -186,8 +265,16 @@ public sealed class DdsTexture
 
         return (dst, nw, nh);
     }
+
     /// <summary>A classic (non-DX10) DDS file: 128-byte header, then the mip levels.</summary>
     public static byte[] Write(DdsFormat format, int width, int height, IReadOnlyList<byte[]> mips)
+    {
+        using var ms = new MemoryStream();
+        WriteTo(ms, format, width, height, mips);
+        return ms.ToArray();
+    }
+
+    public static void WriteTo(Stream output, DdsFormat format, int width, int height, IReadOnlyList<byte[]> mips)
     {
         var fourCc = format switch
         {
@@ -196,8 +283,7 @@ public sealed class DdsTexture
             DdsFormat.Dxt5 => "DXT5",
             _ => throw new NotSupportedException($"cannot write {format}"),
         };
-        using var ms = new MemoryStream();
-        using var w = new BinaryWriter(ms);
+        using var w = new BinaryWriter(output, System.Text.Encoding.ASCII, leaveOpen: true);
         w.Write(Magic);
         w.Write(124);                                         // header size
         w.Write(0x1 | 0x2 | 0x4 | 0x1000 | 0x20000 | 0x80000); // caps, height, width, pixel format, mip count, linear size
@@ -215,6 +301,5 @@ public sealed class DdsTexture
         for (var i = 0; i < 4; i++) w.Write(0);
         foreach (var mip in mips) w.Write(mip);
         w.Flush();
-        return ms.ToArray();
     }
 }

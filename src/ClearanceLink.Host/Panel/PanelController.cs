@@ -14,15 +14,30 @@ public sealed class PanelController : IAsyncDisposable
 {
     private static readonly TimeSpan FolderRefresh = TimeSpan.FromSeconds(10);
 
+    /// <summary>How often the X-Plane plugin's files are compared with the bundled ones (it hashes every file).</summary>
+    private static readonly TimeSpan PluginRecheck = TimeSpan.FromMinutes(5);
+
     private readonly Lock _lock = new();
     private readonly DateTime _started = DateTime.Now;
     private CancellationTokenSource? _stop;
     private Task? _serve;
     private StatusBoard? _board;
-    private Found _folders = new();
+    private volatile Found _folders = new();
+    private Task? _refresh;
+    private volatile bool _refreshDue = true;
+    private volatile PluginCheck? _plugin;
     private bool _foldersChanged;
     private volatile bool _fsltlConverting;
     private volatile string? _fsltlMessage;
+    private volatile Fsltl.ImportProgress? _fsltlProgress;
+    private CancellationTokenSource? _fsltlCancel;
+    private Task? _fsltl;
+
+    public PanelController()
+    {
+        // Looked up in the background from the start, so the first page already shows the folders.
+        RefreshFolders();
+    }
 
     public void Start()
     {
@@ -53,13 +68,52 @@ public sealed class PanelController : IAsyncDisposable
         Start();
     }
 
-    public async ValueTask DisposeAsync() => await StopAsync().ConfigureAwait(false);
+    public async ValueTask DisposeAsync()
+    {
+        // A conversion stopped by closing the window finishes the texture it is on, then leaves the old package.
+        StopConverting();
+        if (_fsltl is { } fsltl)
+        {
+            try
+            {
+                await fsltl.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                PacketConsole.Info("fsltl: conversion did not stop within 20 s");
+            }
+        }
 
+        await StopAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Stops a running FSLTL conversion (the window is closing); the package converted before stays as it was.</summary>
+    public void StopConverting()
+    {
+        lock (_lock)
+        {
+            if (_fsltlConverting && _fsltlCancel is { IsCancellationRequested: false } cancel)
+            {
+                PacketConsole.Info("fsltl: stopping the conversion (window closed)");
+                cancel.Cancel();
+            }
+        }
+    }
+
+    /// <summary>What the pages show. Called every second on the window's thread, so it never waits for the disk.</summary>
     public PanelState State()
     {
         var settings = AppSettings.Load(AppFolders.Default.Settings);
-        var (batc, xplane) = Folders();
-        var addOn = _folders.AddOn;
+        if (_folders.At == default)
+        {
+            // Only before the very first lookup has finished (the window opening): wait for it rather than show
+            // every folder as NOT FOUND for a moment.
+            RefreshFolders(due: false).Wait(TimeSpan.FromSeconds(3));
+        }
+
+        var found = Folders();
+        var (batc, xplane) = (found.Batc, found.XPlane);
+        var addOn = found.AddOn;
         var snapshot = _board?.Snapshot();
         var names = snapshot?.Clients.Select(c => c.Name).ToList() ?? [];
         var airport = snapshot is { Airports.Count: > 0 } ? snapshot.Airports[0] : null;
@@ -85,13 +139,17 @@ public sealed class PanelController : IAsyncDisposable
             xplane,
             addOn,
             snapshot?.Plugin?.Aircraft,
-            _folders.Csl,
-            _folders.Fsltl,
-            _folders.FsltlLiveries,
+            found.Csl,
+            found.Fsltl,
+            found.FsltlLiveries,
             _fsltlConverting,
-            UpdateCheck.Available,
+            settings.CheckForUpdates ? UpdateCheck.Result : null,
             snapshot?.Plugin?.Models,
-            _fsltlMessage);
+            _fsltlMessage,
+            found.FsltlOutOfDate,
+            _fsltlProgress,
+            found.XPlaneRunning,
+            found.MsfsInstalled);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -133,7 +191,7 @@ public sealed class PanelController : IAsyncDisposable
                 Cli.OpenInBrowser(CduPages.ModelsHelp);
                 return "OPENING HELP PAGE";
             case CduKey.ConvertFsltl:
-                return ConvertFsltl();
+                return await ConvertFsltlAsync().ConfigureAwait(false);
             case CduKey.InstallTrafficAddOn:
                 return InstallTrafficAddOn();
             case CduKey.OpenUpdatePage:
@@ -158,9 +216,10 @@ public sealed class PanelController : IAsyncDisposable
                 return "NOT AN FSLTL FOLDER";
             }
 
-            settings.FsltlFolder = Path.GetFullPath(folder);
+            // The package itself, found from the Community folder or a folder inside it.
+            settings.FsltlFolder = Path.GetFullPath(Fsltl.FsltlLocator.Find(folder)!);
             settings.Save(AppFolders.Default.Settings);
-            _folders = new();
+            RefreshFolders();
             return "FSLTL FOLDER SAVED";
         }
 
@@ -184,7 +243,7 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         settings.Save(AppFolders.Default.Settings);
-        _folders = new();
+        RefreshFolders();
         _foldersChanged = true;
         return which == CduKey.ChooseBatcFolder ? "BEYONDATC FOLDER SAVED" : "X-PLANE FOLDER SAVED";
     }
@@ -298,7 +357,8 @@ public sealed class PanelController : IAsyncDisposable
         try
         {
             new PluginInstall(xplane).Install().ToList().ForEach(l => PacketConsole.Info($"plugin: {l}"));
-            _folders = new();
+            _plugin = null;
+            RefreshFolders();
             return "PLUGIN INSTALLED";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -325,51 +385,151 @@ public sealed class PanelController : IAsyncDisposable
         return on ? "SESSION LOG ON" : "SESSION LOG OFF";
     }
 
-    /// <summary>The BeyondATC and X-Plane folders, looked up at most every 10 s (the registry search is slow).</summary>
-    private (string? Batc, string? XPlane) Folders()
+    /// <summary>
+    /// What was last found on disk. It is looked up again in the background every 10 s and after a change (the
+    /// registry search, the plugin check, the CSL folder walk and the FSLTL catalogue take too long for the window's
+    /// thread); until then this returns the last result.
+    /// </summary>
+    private Found Folders()
     {
-        if (DateTime.Now - _folders.At > FolderRefresh)
+        if (_refreshDue || DateTime.Now - _folders.At > FolderRefresh)
         {
-            var none = new Options();
-            var xplane = Cli.FindXPlane(none)?.Root;
-            _folders = new Found
-            {
-                Batc = Cli.BatcFolder(none),
-                XPlane = xplane,
-                AddOn = xplane is null ? PluginInstall.State.NotBundled : new PluginInstall(xplane).Check(),
-                Csl = xplane is null ? 0 : CountCslPackages(xplane, except: Cli.FsltlOutput(xplane)),
-                Fsltl = Cli.FsltlFolder(none),
-                FsltlLiveries = xplane is null ? 0 : Fsltl.FsltlImporter.LoadCatalogue(Cli.FsltlOutput(xplane)).Count,
-                At = DateTime.Now,
-            };
+            RefreshFolders(due: false);
         }
 
-        return (_folders.Batc, _folders.XPlane);
+        return _folders;
+    }
+
+    /// <summary>Starts a lookup unless one is running; with <paramref name="due"/>, another runs after it (something changed meanwhile).</summary>
+    private Task RefreshFolders(bool due = true)
+    {
+        lock (_lock)
+        {
+            if (due)
+            {
+                _refreshDue = true;
+            }
+
+            if (_refresh is { IsCompleted: false } running)
+            {
+                return running;
+            }
+
+            _refreshDue = false;
+            _refresh = Task.Run(() =>
+            {
+                try
+                {
+                    _folders = LookUp();
+                }
+                catch (Exception ex)
+                {
+                    // Keep the last result; the next refresh tries again.
+                    PacketConsole.Info($"panel: folder lookup failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+                    _folders = _folders with { At = DateTime.Now };
+                }
+            });
+            return _refresh;
+        }
+    }
+
+    /// <summary>A lookup that has started after this call and finished: for keys that act on the folders.</summary>
+    private async Task<Found> FreshFoldersAsync()
+    {
+        await RefreshFolders().ConfigureAwait(false);
+        if (_refreshDue)
+        {
+            // The lookup awaited had started before this call; the one queued behind it has not.
+            await RefreshFolders(due: false).ConfigureAwait(false);
+        }
+
+        return _folders;
+    }
+
+    private sealed record PluginCheck(string XPlane, PluginInstall.State State, DateTime At);
+
+    private Found LookUp()
+    {
+        var none = new Options();
+        var xplane = Cli.FindXPlane(none)?.Root;
+        var fsltl = Cli.FsltlFolder(none);
+        var output = xplane is null ? null : Cli.FsltlOutput(xplane);
+        return new Found
+        {
+            Batc = Cli.BatcFolder(none),
+            XPlane = xplane,
+            AddOn = PluginState(xplane),
+            Csl = xplane is null ? 0 : CountCslPackages(xplane, except: output),
+            Fsltl = fsltl,
+            FsltlLiveries = output is null ? 0 : Fsltl.FsltlImporter.LoadCatalogue(output).Count,
+            FsltlOutOfDate = fsltl is not null && output is not null && Fsltl.FsltlImporter.OutOfDate(fsltl, output) is not null,
+            XPlaneRunning = XPlaneRunning(),
+            MsfsInstalled = Fsltl.FsltlLocator.MsfsInstalled(),
+            At = DateTime.Now,
+        };
+    }
+
+    /// <summary>The plugin check hashes every bundled file: done again only for another X-Plane, after an install, or every 5 minutes.</summary>
+    private PluginInstall.State PluginState(string? xplane)
+    {
+        if (xplane is null)
+        {
+            return PluginInstall.State.NotBundled;
+        }
+
+        if (_plugin is { } last && last.XPlane == xplane && DateTime.Now - last.At < PluginRecheck)
+        {
+            return last.State;
+        }
+
+        var state = new PluginInstall(xplane).Check();
+        _plugin = new PluginCheck(xplane, state, DateTime.Now);
+        return state;
+    }
+
+    private static bool XPlaneRunning()
+    {
+        var processes = Process.GetProcessesByName("X-Plane");
+        foreach (var p in processes)
+        {
+            p.Dispose();
+        }
+
+        return processes.Length > 0;
     }
 
     /// <summary>Converts the user's FSLTL models into X-Plane's CSL folder in the background (it takes minutes).</summary>
-    private string ConvertFsltl()
+    private async Task<string> ConvertFsltlAsync()
     {
-        Folders();
-        if (_folders.Fsltl is not { } package || _folders.XPlane is not { } xplane)
+        var found = await FreshFoldersAsync().ConfigureAwait(false);
+        if (found.Fsltl is not { } package || found.XPlane is not { } xplane)
         {
-            return _folders.XPlane is null ? "SET X-PLANE FOLDER" : "CHOOSE THE FSLTL FOLDER";
+            return found.XPlane is null ? "SET X-PLANE FOLDER" : "CHOOSE THE FSLTL FOLDER";
         }
 
         // Replacing files X-Plane has open can leave it drawing a mix of old and new models.
-        if (Process.GetProcessesByName("X-Plane").Length > 0)
+        if (XPlaneRunning())
         {
             return "CLOSE X-PLANE FIRST";
         }
 
-        if (_fsltlConverting)
+        CancellationToken cancel;
+        lock (_lock)
         {
-            return "ALREADY CONVERTING";
+            if (_fsltlConverting)
+            {
+                return "ALREADY CONVERTING";
+            }
+
+            _fsltlConverting = true;
+            _fsltlMessage = null;
+            _fsltlProgress = null;
+            _fsltlCancel?.Dispose();
+            _fsltlCancel = new CancellationTokenSource();
+            cancel = _fsltlCancel.Token;
         }
 
-        _fsltlConverting = true;
-        _fsltlMessage = null;
-        _ = Task.Run(async () =>
+        _fsltl = Task.Run(async () =>
         {
             try
             {
@@ -378,13 +538,16 @@ public sealed class PanelController : IAsyncDisposable
                     PackageRoot = package,
                     Output = Cli.FsltlOutput(xplane, moveOld: true),
                     Log = line => PacketConsole.Info($"fsltl: {line}"),
+                    // From several threads at once: a late, smaller count must not move the page backwards.
+                    Progress = p => _fsltlProgress = _fsltlProgress is { } last && last.Stage == p.Stage && last.Done > p.Done ? last : p,
+                    Cancel = cancel,
                 });
                 foreach (var problem in result.Problems.Take(MaxProblemsLogged)) PacketConsole.Info($"fsltl problem: {problem}");
                 if (result.Problems.Count > MaxProblemsLogged) PacketConsole.Info($"fsltl: {result.Problems.Count - MaxProblemsLogged} more problems not shown");
                 PacketConsole.Info($"fsltl: imported {result.Liveries} liveries ({result.Models} models, {result.Skipped} skipped, {result.Problems.Count} problems)");
                 _fsltlMessage = result.Liveries == 0 ? "CONVERT FAILED: SEE LIVE LOG" : $"{result.Liveries} LIVERIES CONVERTED";
                 _fsltlConverting = false;
-                _folders = new();
+                _ = RefreshFolders();
                 // The server read the catalogue when it started; it must read the new one for BATC's aircraft to be
                 // drawn with these liveries. Not while BeyondATC is connected: a restart would drop it.
                 if (result.Liveries > 0 && State() is { BatcHelper: false, BatcApp: false })
@@ -397,6 +560,11 @@ public sealed class PanelController : IAsyncDisposable
                     _fsltlMessage = "RESTART TO USE MODELS";
                 }
             }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+            {
+                PacketConsole.Info("fsltl: conversion stopped; the models converted before are kept");
+                _fsltlMessage = "CONVERT STOPPED";
+            }
             catch (Exception ex)
             {
                 // Anything, not only I/O: an unexpected failure (a texture the decoder cannot read, out of memory)
@@ -407,7 +575,8 @@ public sealed class PanelController : IAsyncDisposable
             finally
             {
                 _fsltlConverting = false;
-                _folders = new();
+                _fsltlProgress = null;
+                _ = RefreshFolders();
             }
         });
         return "CONVERTING FSLTL MODELS";
@@ -416,7 +585,7 @@ public sealed class PanelController : IAsyncDisposable
     /// <summary>How many of a conversion's problems go in the log (the rest are counted).</summary>
     private const int MaxProblemsLogged = 25;
 
-    /// <summary>What was last found on disk; looked up at most every 10 s.</summary>
+    /// <summary>What was last found on disk; looked up in the background at most every 10 s.</summary>
     private sealed record Found
     {
         public string? Batc { get; init; }
@@ -425,6 +594,9 @@ public sealed class PanelController : IAsyncDisposable
         public int Csl { get; init; }
         public string? Fsltl { get; init; }
         public int FsltlLiveries { get; init; }
+        public bool FsltlOutOfDate { get; init; }
+        public bool XPlaneRunning { get; init; }
+        public bool MsfsInstalled { get; init; } = true;
         public DateTime At { get; init; }
     }
 

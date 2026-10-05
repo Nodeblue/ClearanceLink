@@ -881,13 +881,18 @@ namespace ClearanceLink.Host
                         return Fail("Close X-Plane before importing; it reads the CSL files while it runs");
                     }
 
+                    if (!FsltlImporter.TryParseTextureSize(options.Get("size"), out var size))
+                    {
+                        return Fail($"--size {options.Get("size")} is not a texture size; use 1024, 2048 (the default) or 4096");
+                    }
+
                     output = options.Get("out") ?? FsltlOutput(xplane.Root, moveOld: true);
                     var only = options.Get("only");
                     var result = FsltlImporter.Import(new ImportOptions
                     {
                         PackageRoot = package,
                         Output = output,
-                        MaxTextureSize = int.Parse(options.Get("size") ?? "2048", System.Globalization.CultureInfo.InvariantCulture),
+                        MaxTextureSize = size,
                         Force = options.Has("force"),
                         Filter = only is null ? null : l => l.Title.Contains(only, StringComparison.OrdinalIgnoreCase)
                             || Path.GetFileName(l.Folder).Contains(only, StringComparison.OrdinalIgnoreCase),

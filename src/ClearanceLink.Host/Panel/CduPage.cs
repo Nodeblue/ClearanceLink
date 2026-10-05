@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using ClearanceLink.Fsltl;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
 
@@ -101,7 +102,11 @@ public sealed record PanelState(
     bool FsltlConverting = false,
     UpdateInfo? Update = null,
     int? PluginModels = null,
-    string? FsltlMessage = null);
+    string? FsltlMessage = null,
+    bool FsltlOutOfDate = false,
+    ImportProgress? FsltlProgress = null,
+    bool XPlaneRunning = false,
+    bool MsfsInstalled = true);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -162,18 +167,33 @@ public static class CduPages
     }
 
     /// <summary>
-    /// The scratchpad on the status page: what works, or the next thing to do. Before a flight, a newer release takes
-    /// turns with it every few seconds; never while something needs fixing (amber) or once BeyondATC is talking.
+    /// The scratchpad on the status page: what works, or the next thing to do. Before a flight, a newer release and
+    /// FSLTL models that need converting again take turns with it every few seconds; never while something needs
+    /// fixing (amber) or once BeyondATC is talking.
     /// </summary>
     public static CduCell Advice(PanelState s)
     {
         var advice = NextStep(s);
-        return s.Update is { } update && advice.Color == CduColor.White && s.Serving && (int)(s.Uptime.TotalSeconds / UpdateTurnSeconds) % 2 == 1
-            ? new(Fit($"NEW VERSION {update.Version}", Width), CduColor.Magenta)
-            : advice;
+        if (advice.Color != CduColor.White || !s.Serving)
+        {
+            return advice;
+        }
+
+        var turns = new List<CduCell> { advice };
+        if (s.Update is { } update)
+        {
+            turns.Add(new(Fit($"NEW VERSION {update.Version}", Width), CduColor.Magenta));
+        }
+
+        if (s.FsltlOutOfDate && !s.FsltlConverting)
+        {
+            turns.Add(new("FSLTL MODELS OUT OF DATE", CduColor.Amber));
+        }
+
+        return turns[(int)(s.Uptime.TotalSeconds / UpdateTurnSeconds) % turns.Count];
     }
 
-    /// <summary>How long the next step and the new-version notice each stay on the status page's bottom line.</summary>
+    /// <summary>How long the next step and each notice stay on the status page's bottom line.</summary>
     public const int UpdateTurnSeconds = 4;
 
     private static CduCell NextStep(PanelState s)
@@ -319,10 +339,14 @@ public static class CduPages
     {
         var fsltl = s switch
         {
-            { FsltlConverting: true } => Row("FSLTL", "", new("CONVERTING...", CduColor.Amber), new("")),
+            { FsltlConverting: true } => Row("FSLTL", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
+            { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
+                Row("FSLTL", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
             { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
                 CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
-            { FsltlFolder: not null } => Row("FSLTL", "", new("FOUND IN MSFS", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
+            { FsltlFolder: not null } => Row("FSLTL", "", new(s.MsfsInstalled ? "FOUND IN MSFS" : "FOUND", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
+            // No MSFS on this PC: FSLTL can still be copied from another PC, so the folder can still be chosen.
+            { MsfsInstalled: false } => Row("FSLTL", "", new("NEEDS MSFS"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
             _ => Row("FSLTL", "", new("NOT FOUND"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
         };
         var rows = new[]
@@ -336,9 +360,18 @@ public static class CduPages
         CduCell[] message =
         [
             Say("Aircraft models", CduColor.Green),
-            Say("Either tested library works. FSLTL is converted from your MSFS copy."),
+            s.FsltlFolder is null && !s.MsfsInstalled
+                ? Say("Either tested library works. FSLTL comes from MSFS, which isn't on this PC; CHOOSE a copied FSLTL folder.")
+                : Say("Either tested library works. FSLTL is converted from your MSFS copy."),
         ];
-        var help = s.FsltlFolder is not null && s.FsltlLiveries == 0 && !s.FsltlConverting ? "CLOSE X-PLANE TO CONVERT" : "";
+        var toConvert = s.FsltlFolder is not null && (s.FsltlLiveries == 0 || s.FsltlOutOfDate);
+        var help = s switch
+        {
+            // Closing the window would stop the conversion (the window asks first).
+            { FsltlConverting: true } => "KEEP THIS WINDOW OPEN",
+            { XPlaneRunning: true } when toConvert => s.FsltlLiveries == 0 ? "CLOSE X-PLANE TO CONVERT" : "CLOSE X-PLANE TO UPDATE",
+            _ => "",
+        };
         // The last conversion's result stays on the page (it ran in the background, so the key's flash is long gone).
         var line = flash ?? s.FsltlMessage ?? help;
         return new(StartTitle(PanelPage.StartModels), rows, new(line, line.StartsWith("CONVERT FAILED", StringComparison.Ordinal) ? CduColor.Amber : CduColor.White), message);
@@ -354,7 +387,7 @@ public static class CduPages
         CduCell[] message =
         [
             Say("In X-Plane's settings", CduColor.Green),
-            Say("\u2022 Sound: Radios to 0\n\u2022 Graphics: Draw parked aircraft off\n\u2022 No AI aircraft in your flight", CduColor.Cyan),
+            Say("\u2022 Sound: Radios to 0\n\u2022 Graphics: Draw parked aircraft off\n\u2022 Flight Configuration > AI Aircraft: none", CduColor.Cyan),
             Say("So only BeyondATC talks and flies traffic."),
         ];
         return new(StartTitle(PanelPage.StartXPlane), rows, new(flash ?? ""), message);
@@ -375,6 +408,15 @@ public static class CduPages
         ];
         return new(StartTitle(PanelPage.StartDone), rows, new(flash ?? "REOPEN ON SUPPORT PAGE"), message);
     }
+
+    /// <summary>How far a conversion is, for the FSLTL row: "TEXTURES 1200/3112".</summary>
+    public static string Progress(ImportProgress? p) => p switch
+    {
+        { Stage: ImportStage.Models, Total: > 0 } => $"MODELS {p.Done}/{p.Total}",
+        { Stage: ImportStage.Textures, Total: > 0 } => $"TEXTURES {p.Done}/{p.Total}",
+        { Stage: ImportStage.Saving } => "SAVING...",
+        _ => "CONVERTING...",
+    };
 
     /// <summary>The status page's traffic half: aircraft drawn in X-Plane, or why there are none.</summary>
     private static CduCell Traffic(PanelState s) => s switch
