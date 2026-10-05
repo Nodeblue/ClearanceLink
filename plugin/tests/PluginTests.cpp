@@ -87,7 +87,7 @@ void RejectsBadLines() {
 void ChecksLightsAndClampsRatios() {
     std::string error;
     CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 -1", &error) && error.find("bad pos") != std::string::npos);
-    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 32", &error));
+    CHECK(std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 33")).lights == 1);  // unknown bit 32 ignored
     CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 1e30", &error));
     CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 2.5", &error));
     CHECK(std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 31")).lights == 31);

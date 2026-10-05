@@ -116,9 +116,9 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
         double v[13];
         for (int i = 0; i < 13; ++i)
             if (!Number(w[i + 1], v[i])) return fail("bad pos number '" + w[i + 1] + "': " + line);
-        // Lights is a bit mask of the five lights the protocol knows: anything else is a broken line (casting a negative
-        // or huge double to unsigned is undefined).
-        if (!Id(w[0], pos.id) || std::fabs(v[0]) > 90 || std::fabs(v[1]) > 180 || v[12] < 0 || v[12] > 31 ||
+        // Lights is a bit mask: a negative, fractional or huge value is a broken line (casting it to unsigned is
+        // undefined). Bits this plugin does not know (a newer ClearanceLink) are ignored, not the aircraft.
+        if (!Id(w[0], pos.id) || std::fabs(v[0]) > 90 || std::fabs(v[1]) > 180 || v[12] < 0 || v[12] > 4294967295.0 ||
             v[12] != std::floor(v[12]))
             return fail("bad pos: " + line);
         pos.lat = v[0];
@@ -133,7 +133,7 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
         pos.flaps = Ratio(v[9]);
         pos.spoilers = Ratio(v[10]);
         pos.thrust = Ratio(v[11]);
-        pos.lights = static_cast<unsigned>(v[12]);
+        pos.lights = static_cast<unsigned>(v[12]) & 31u;
         return pos;
     }
     return fail("unknown message: " + type);
