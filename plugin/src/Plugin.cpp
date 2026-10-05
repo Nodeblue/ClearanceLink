@@ -45,8 +45,15 @@ void Log(const std::string& text) {
     XPLMDebugString(("ClearanceLink: " + text + "\n").c_str());
 }
 
+// Messages logged once each. The texts include types, airlines and unknown message names from the network, so the set
+// is capped: past this many, one last line says so and further new messages are not logged until the plugin restarts.
+constexpr size_t MaxLoggedOnce = 500;
+
 void LogOnce(const std::string& text) {
-    if (g_loggedOnce.insert(text).second) Log(text);
+    if (g_loggedOnce.size() >= MaxLoggedOnce) return;
+    if (!g_loggedOnce.insert(text).second) return;
+    Log(text);
+    if (g_loggedOnce.size() == MaxLoggedOnce) Log("further one-time messages suppressed");
 }
 
 std::filesystem::path PluginFolder() {
@@ -166,6 +173,10 @@ void FlightLoopBody(float now) {
         Log("ClearanceLink stopped sending; removing its traffic");
         RemoveAll();
         g_lastHello = -1;
+        // Hand TCAS and AI control back, so LiveTraffic or xPilot can take over while ClearanceLink is closed; the next
+        // add takes it again.
+        if (g_tcas) XPMPMultiplayerDisable();
+        g_tcas = false;
     }
 
     for (auto it = g_aircraft.begin(); it != g_aircraft.end();) {
@@ -266,6 +277,7 @@ PLUGIN_API void XPluginDisable() {
     XPMPMultiplayerCleanup();
     g_socket.Close();
     g_lastHello = -1;
+    g_loggedOnce.clear();
 }
 
 PLUGIN_API void XPluginStop() {}
