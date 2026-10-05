@@ -72,6 +72,23 @@ public sealed class ConnectionTests
     }
 
     [Fact]
+    public async Task Multi_listener_keeps_accepting_after_a_transient_accept_error()
+    {
+        using var cts = new CancellationTokenSource(Wait);
+        var inner = new FakeListener { FailNext = 2 };
+        var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        await using var multi = new MultiListener([inner], log.Enqueue, TimeSpan.FromMilliseconds(20));
+
+        var accept = multi.AcceptAsync(cts.Token);
+        var client = new MemoryStream();
+        await inner.Offer(client, cts.Token);
+
+        Assert.Same(client, await accept.WaitAsync(cts.Token));
+        Assert.Single(log, l => l.StartsWith($"listen: accept failed on {inner.Endpoint}: IOException: All pipe instances are busy.", StringComparison.Ordinal));
+        Assert.Contains($"listen: accepting again on {inner.Endpoint} after 2 failed accept(s)", log);
+    }
+
+    [Fact]
     public async Task Multi_listener_accepts_from_every_endpoint()
     {
         using var cts = new CancellationTokenSource(Wait);
@@ -114,8 +131,16 @@ public sealed class ConnectionTests
 
         public int Waiting => Volatile.Read(ref _waiting);
 
+        public int FailNext { get; set; }
+
         public async Task<Stream> AcceptAsync(CancellationToken ct)
         {
+            if (FailNext > 0)
+            {
+                FailNext--;
+                throw new IOException("All pipe instances are busy.");
+            }
+
             Interlocked.Increment(ref _waiting);
             try
             {
