@@ -19,6 +19,7 @@ public sealed partial class TrafficModels
     private const string AsoboPrefix = "Asobo PassiveAircraft ";
 
     private readonly HashSet<string> _prefixes;
+    private readonly string _defaultGaType;
     private readonly Dictionary<string, string> _types;
     private readonly HashSet<string> _notAirlines;
     private readonly List<(string[] Words, string Code)> _airlines;
@@ -35,6 +36,7 @@ public sealed partial class TrafficModels
         _airlines = [.. (file.Airlines ?? []).Select(a => (Words(a.Key), a.Value)).OrderByDescending(a => a.Item1.Length)];
         _asobo = [.. (file.Asobo ?? []).Select(a => (a.Key, a.Value)).OrderByDescending(a => a.Key.Length)];
         _defaultType = string.IsNullOrWhiteSpace(file.DefaultType) ? "A320" : file.DefaultType;
+        _defaultGaType = string.IsNullOrWhiteSpace(file.DefaultGaType) ? "C172" : file.DefaultGaType;
         _groundPitch = new(file.GroundPitch ?? [], StringComparer.OrdinalIgnoreCase);
         _groundOffset = new(file.GroundOffsetFt ?? [], StringComparer.OrdinalIgnoreCase);
     }
@@ -92,12 +94,15 @@ public sealed partial class TrafficModels
         }
 
         var i = 1;
+        var generalAviation = false;
         while (i < parts.Length - 1 && _prefixes.Contains(parts[i]))
         {
+            generalAviation |= parts[i].Equals("GA", StringComparison.OrdinalIgnoreCase);
             i++;
         }
 
-        var word = parts[i].ToUpperInvariant();
+        // A variant after a dash names the same type: FSLTL_GA_DA40-NG is a DA40.
+        var word = parts[i].Split('-')[0].ToUpperInvariant();
         if (_types.TryGetValue(word, out var mapped))
         {
             word = mapped;
@@ -109,7 +114,9 @@ public sealed partial class TrafficModels
         }
 
         var airlinePart = string.Join('_', parts.Skip(i + 1));
-        return new TrafficModel(IcaoTypeWord().IsMatch(word) ? word : _defaultType, Airline(Words(airlinePart), airlinePart));
+        // An unknown FSLTL GA model is a light aircraft, not the airliner default.
+        var fallback = generalAviation ? _defaultGaType : _defaultType;
+        return new TrafficModel(IcaoTypeWord().IsMatch(word) ? word : fallback, Airline(Words(airlinePart), airlinePart));
     }
 
     private string? Airline(string[] words, string text)
@@ -155,6 +162,8 @@ public sealed partial class TrafficModels
         public Dictionary<string, string>? Asobo { get; set; }
 
         public string? DefaultType { get; set; }
+
+        public string? DefaultGaType { get; set; }
 
         public Dictionary<string, double>? GroundPitch { get; set; }
 

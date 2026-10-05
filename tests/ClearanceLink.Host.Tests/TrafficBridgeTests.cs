@@ -29,6 +29,8 @@ public sealed class TrafficBridgeTests
     [InlineData("Asobo PassiveAircraft PC12", "PC12", null)]
     [InlineData("Asobo PassiveAircraft B777-200LR", "B77L", null)]
     [InlineData("Diamond DA40NG Private Charter", "A320", null)]
+    [InlineData("FSLTL_GA_DA40-NG", "DA40", null)] // drawn as an A320 on Ben's PC, 2026-10-05
+    [InlineData("FSLTL_GA_Unknownplane", "C172", null)] // an unknown GA type falls back to a light aircraft
     public void Model_titles_become_icao_type_and_airline(string title, string type, string? airline) =>
         Assert.Equal(new TrafficModel(type, airline), Models.Match(title));
 

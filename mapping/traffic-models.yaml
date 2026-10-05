@@ -155,3 +155,6 @@ ground_offset_ft:
 
 # Used when nothing above gives a type (XPMP2 then draws its closest model).
 default_type: A320
+
+# Used instead for an FSLTL_GA_ title whose type is not recognised.
+default_ga_type: C172
