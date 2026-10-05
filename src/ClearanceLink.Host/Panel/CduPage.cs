@@ -42,7 +42,6 @@ public enum CduKey
     ChooseXPlaneFolder,
     ConnectionAutomatic,
     ConnectionAlwaysOn,
-    RemoveOldFiles,
     OpenStatusPage,
     StartBatc,
     SessionLogOn,
@@ -91,7 +90,7 @@ public sealed record PanelState(
     string? LastAirportSource,
     bool MsfsRunning,
     ConnectionMode Connection,
-    bool OldConfigFiles,
+    bool BatcRedirected,
     bool SessionLog,
     long SessionLogBytes,
     int KeepDays,
@@ -271,6 +270,9 @@ public static class CduPages
 
     private static string Zulu(DateTimeOffset at) => at.UtcDateTime.ToString("HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>SETUP's bottom line while connection automatic has BeyondATC pointed at ClearanceLink.</summary>
+    public const string BatcUntilClose = "BATC: X-PLANE TILL EXIT";
+
     private static CduPage Setup(PanelState s, string? flash)
     {
         var automatic = s.Connection == ConnectionMode.Automatic;
@@ -284,16 +286,21 @@ public static class CduPages
                 CduKey.ConnectionAutomatic, CduKey.ConnectionAlwaysOn),
             Row("START", "WEB STATUS", new(s.BatcFolder is null ? "" : "<BEYONDATC"), new("OPEN>"),
                 s.BatcFolder is null ? CduKey.None : CduKey.StartBatc, CduKey.OpenStatusPage),
-            s.OldConfigFiles && automatic
-                ? Row("OLD BEYONDATC FILES", "", new("FOUND", CduColor.Amber), new("REMOVE>"), CduKey.None, CduKey.RemoveOldFiles)
-                : s is { TrafficAddOn: PluginInstall.State.Installed, FsltlOutOfDate: true, FsltlConverting: false }
+            s is { TrafficAddOn: PluginInstall.State.Installed, FsltlOutOfDate: true, FsltlConverting: false }
                     ? Row("FSLTL MODELS", "", new("OUT OF DATE", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.GoModels)
                     : TrafficAddOn(s),
             Row("", "", new("<STATUS"), new("ABOUT>"), CduKey.GoStatus, CduKey.GoAbout),
         };
-        // Automatic mode only needs MSFS closed: say so while it runs, not as a standing warning.
-        var help = automatic ? s.MsfsRunning ? "CLOSE MSFS BEFORE FLYING" : "" : "BATC SET TO X-PLANE";
-        return new($"{AppName} SETUP", rows, new(flash ?? help, flash is null && !automatic ? CduColor.Magenta : CduColor.White));
+        // Where BeyondATC goes right now. Automatic points it at X-Plane only while ClearanceLink is open and MSFS is
+        // closed (ADR-0012); closing ClearanceLink sends it back to MSFS.
+        var help = s switch
+        {
+            _ when !automatic => new CduCell("BATC SET TO X-PLANE", CduColor.Magenta),
+            { MsfsRunning: true } => new CduCell("CLOSE MSFS BEFORE FLYING"),
+            { BatcRedirected: true } => new CduCell(BatcUntilClose, CduColor.Magenta),
+            _ => new CduCell(""),
+        };
+        return new($"{AppName} SETUP", rows, flash is null ? help : new(flash));
     }
 
     private static CduPage Support(PanelState s, string? flash)

@@ -47,8 +47,8 @@ namespace ClearanceLink.Host
               clearancelink settings [connection automatic|always-on] [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
                     [update-check on|off]
                   Show or change saved settings (%LOCALAPPDATA%\ClearanceLink\settings.json). connection automatic (default):
-                  serve answers on MSFS's default connection while MSFS is closed, nothing changed in BeyondATC;
-                  always-on: BeyondATC's SimConnect.cfg files point at ClearanceLink's TCP port. Folders set here are used
+                  BeyondATC's SimConnect.cfg files point at ClearanceLink's TCP port only while serve runs and MSFS is closed
+                  (MSFS's default connection if BeyondATC's folder can't be written); always-on: the files stay in place. Folders set here are used
                   whenever --batc or --xplane-root is not given; "auto" goes back to finding them automatically.
               clearancelink support
                   Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
@@ -75,11 +75,14 @@ namespace ClearanceLink.Host
                   2048); --only imports liveries whose title or folder contains the text. Restart X-Plane afterwards.
               clearancelink batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
                   Point BeyondATC at ClearanceLink (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
+              clearancelink batc-guard --parent <pid>
+                  Started by serve: once process <pid> ends, point BeyondATC back at MSFS (connection automatic).
               clearancelink serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
                     [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--no-traffic] [--status-port <port> | --no-status] [--open-status]
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
-                  Stand in for MSFS 2024 and answer BATC from X-Plane. Without --listen: MSFS's default pipe while MSFS
-                  is closed plus tcp:5112 (connection automatic), or tcp:5112 only (always-on). Defaults:
+                  Stand in for MSFS 2024 and answer BATC from X-Plane. Without --listen: tcp:5112, with BeyondATC pointed
+                  at it while serve runs and MSFS is closed (connection automatic; MSFS's default pipe plus tcp:5112 when
+                  BeyondATC's folder can't be written), or tcp:5112 only (always-on). Defaults:
                   --xplane http://127.0.0.1:8086, --mapping ./mapping.
                   Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
                   --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
@@ -137,6 +140,7 @@ namespace ClearanceLink.Host
                     "facility-dump" => DumpFacility(options),
                     "airport" => BuildAirport(options),
                     "batc" => Batc(options),
+                    "batc-guard" => BatcGuard(options),
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
                     "update" => await UpdateCommandAsync(),
@@ -185,11 +189,12 @@ namespace ClearanceLink.Host
             var throttleMs = int.Parse(options.Get("throttle-ms") ?? "1000", System.Globalization.CultureInfo.InvariantCulture);
             var throttle = new RecordThrottle(TimeSpan.FromMilliseconds(throttleMs));
             using var msfs = new MsfsGate(MsfsGate.RealMsfsRunning, PacketConsole.Info);
+            BatcLink? link = null;
             using (var recorder = new JsonlRecorder(outPath, throttle: throttle))
             {
                 recorder.Recorded += inventory.Add;
                 await using var listener = mode == "serve" && options.Get("listen") is null
-                    ? DefaultServeListener(msfs)
+                    ? DefaultServeListener(msfs, out link)
                     : Transports.Listen(listen);
                 PacketConsole.Info($"Recording to {Path.GetFullPath(outPath)} (Ctrl+C to stop)");
                 try
@@ -214,6 +219,11 @@ namespace ClearanceLink.Host
                 }
                 catch (OperationCanceledException)
                 {
+                }
+                finally
+                {
+                    // BeyondATC goes back to MSFS as ClearanceLink closes (the guard covers a crash).
+                    link?.Release(AppSettings.Load(AppFolders.Default.Settings).Connection);
                 }
             }
 
@@ -398,7 +408,7 @@ namespace ClearanceLink.Host
             Console.WriteLine($"Settings: {file}");
             Console.WriteLine($"  BeyondATC folder  {BatcFolder(none) ?? "not found"}{(settings.BatcFolder is null ? " (found automatically)" : "")}");
             Console.WriteLine($"  X-Plane folder    {FindXPlane(none)?.Root ?? "not found"}{(settings.XPlaneFolder is null ? " (found automatically)" : "")}");
-            Console.WriteLine($"  Connection        {(settings.Connection == ConnectionMode.Automatic ? "automatic (MSFS's default connection; close MSFS before flying X-Plane)" : "always on (BeyondATC's config files point at ClearanceLink)")}");
+            Console.WriteLine($"  Connection        {(settings.Connection == ConnectionMode.Automatic ? "automatic (BeyondATC points at ClearanceLink while it runs; close MSFS before flying X-Plane)" : "always on (BeyondATC's config files point at ClearanceLink)")}");
             Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
             Console.WriteLine($"  Update check      {(settings.CheckForUpdates ? "on (asks GitHub for a newer release at start-up)" : "off")}");
@@ -474,28 +484,144 @@ namespace ClearanceLink.Host
         }
 
         /// <summary>
-        /// Where serve listens when --listen is not given. Automatic: MSFS's default pipe while MSFS is closed, plus
-        /// ClearanceLink's TCP port for a BeyondATC still set up with config files. Always on: the TCP port only.
+        /// Where serve listens when --listen is not given. Automatic: ClearanceLink's TCP port, with BeyondATC pointed at
+        /// it only while ClearanceLink runs and MSFS is closed (<paramref name="link"/>, ADR-0012); when BeyondATC's folder
+        /// is unknown or can't be written, MSFS's default pipe while MSFS is closed plus the TCP port, as before. Always
+        /// on: the TCP port only.
         /// </summary>
-        private static IListener DefaultServeListener(MsfsGate msfs)
+        private static IListener DefaultServeListener(MsfsGate msfs, out BatcLink? link)
         {
+            link = null;
             var tcp = Endpoint.Parse($"tcp:{BatcRedirect.DefaultPort}");
             if (AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn)
             {
                 return Transports.Listen(tcp);
             }
 
-            var listeners = new List<IListener> { new GatedPipeListener(Endpoint.Parse("pipe"), msfs) };
+            IListener? port = null;
             try
             {
-                listeners.Add(Transports.Listen(tcp));
+                port = Transports.Listen(tcp);
             }
             catch (System.Net.Sockets.SocketException ex)
             {
                 PacketConsole.Info($"listen: {tcp} not available ({ex.Message}); default connection only");
             }
 
+            if (port is not null && BatcFolder(new Options()) is { } folder)
+            {
+                var redirect = new BatcRedirect(folder);
+                if (BatcLink.Usable(redirect))
+                {
+                    var made = new BatcLink(redirect, PacketConsole.Info, StartBatcGuard);
+                    msfs.Changed += made.Follow;
+                    link = made;
+                    PacketConsole.Info($"batc: answering on {tcp} only; MSFS's default connection is left to MSFS");
+                    return port;
+                }
+
+                PacketConsole.Info($"batc: can't write to {folder} (run as administrator to fix); answering on MSFS's default connection instead");
+            }
+            else if (port is not null)
+            {
+                PacketConsole.Info("batc: BeyondATC's folder not found; answering on MSFS's default connection instead");
+            }
+
+            var listeners = new List<IListener> { new GatedPipeListener(Endpoint.Parse("pipe"), msfs) };
+            if (port is not null)
+            {
+                listeners.Add(port);
+            }
+
             return new MultiListener(listeners, PacketConsole.Info);
+        }
+
+        private static int _batcGuardStarted;
+
+        /// <summary>
+        /// Starts <c>ClearanceLink batc-guard --parent &lt;this process&gt;</c>, which points BeyondATC back at MSFS if this
+        /// ClearanceLink ends without doing so. Windows only (where BeyondATC runs).
+        /// </summary>
+        private static void StartBatcGuard()
+        {
+            // One guard per process: the window restarts serve when settings change.
+            if (!OperatingSystem.IsWindows() || Environment.ProcessPath is not { } exe || Interlocked.Exchange(ref _batcGuardStarted, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
+                using var guard = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe,
+                    ["batc-guard", "--parent", Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)])
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                PacketConsole.Info($"batc: guard started (pid {guard?.Id}); it points BeyondATC back at MSFS if ClearanceLink stops unexpectedly");
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                PacketConsole.Info($"batc: guard not started ({ex.Message}); after a crash, start and close ClearanceLink once");
+            }
+        }
+
+        /// <summary>
+        /// batc-guard: waits for the ClearanceLink that started it, then removes BeyondATC's SimConnect.cfg files unless
+        /// always on was chosen or another ClearanceLink is serving (<see cref="BatcLink.GuardShouldRelease"/>).
+        /// </summary>
+        private static int BatcGuard(Options options)
+        {
+            if (!int.TryParse(options.Get("parent"), System.Globalization.CultureInfo.InvariantCulture, out var pid))
+            {
+                return Fail("batc-guard needs --parent <pid>");
+            }
+
+            try
+            {
+                using var parent = System.Diagnostics.Process.GetProcessById(pid);
+                parent.WaitForExit();
+            }
+            catch (ArgumentException)
+            {
+                // Already gone.
+            }
+
+            var connection = AppSettings.Load(AppFolders.Default.Settings).Connection;
+            if (!BatcLink.GuardShouldRelease(connection, PortInUse(BatcRedirect.DefaultPort)) || BatcFolder(new Options()) is not { } folder)
+            {
+                return 0;
+            }
+
+            try
+            {
+                new BatcRedirect(folder).SwitchOff();
+            }
+            catch (RedirectFailedException)
+            {
+                // Nothing to show it to; the next ClearanceLink start tries again.
+            }
+
+            return 0;
+        }
+
+        /// <summary>True when something already listens on 127.0.0.1:<paramref name="port"/>.</summary>
+        public static bool PortInUse(int port)
+        {
+            var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
+            try
+            {
+                probe.Start();
+                return false;
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                return true;
+            }
+            finally
+            {
+                probe.Stop();
+            }
         }
 
         private static async Task ServeAsync(Options options, IListener listener, JsonlRecorder recorder, MsfsGate msfs, Action<StatusBoard>? onBoard, CancellationToken ct)
@@ -682,27 +808,6 @@ namespace ClearanceLink.Host
                     catch (RedirectFailedException ex)
                     {
                         Console.WriteLine($"  {ex.Message}");
-                    }
-
-                    Console.WriteLine();
-                }
-                else if (settings.Connection == ConnectionMode.Automatic && redirect.IsOn)
-                {
-                    // Set up by an older ClearanceLink: BeyondATC keeps working through the TCP port, but can't reach MSFS
-                    // while ClearanceLink is closed.
-                    Console.WriteLine("BeyondATC still has config files from an older ClearanceLink, which stop it working with MSFS.");
-                    Console.WriteLine("ClearanceLink no longer needs them. Remove them? [Y/n]");
-                    var answer = Console.IsInputRedirected ? "n" : Console.ReadLine();
-                    if (answer is null || answer.Trim().Length == 0 || answer.Trim().StartsWith('y') || answer.Trim().StartsWith('Y'))
-                    {
-                        try
-                        {
-                            redirect.SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
-                        }
-                        catch (RedirectFailedException ex)
-                        {
-                            Console.WriteLine($"  {ex.Message}");
-                        }
                     }
 
                     Console.WriteLine();

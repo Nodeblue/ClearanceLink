@@ -80,5 +80,101 @@ public sealed class BatcRedirectTests : IDisposable
         Assert.Equal(Cli.BatcNotFoundProblem, Cli.ApplyConnection(new AppSettings { Connection = ConnectionMode.AlwaysOn }, null));
     }
 
+    [Fact]
+    public void Can_write_is_false_for_a_folder_that_refuses_files()
+    {
+        var redirect = new BatcRedirect(_batc);
+        Assert.True(redirect.CanWrite());
+        Assert.All(Directory.GetFiles(_batc, "*", SearchOption.AllDirectories), f => Assert.EndsWith("BeyondATC.exe", f));
+
+        // A directory where the probe file goes stands in for a protected folder (tests may run as root).
+        Directory.CreateDirectory(Path.Combine(_batc, "BeyondATC_Data", "StreamingAssets", "ClearanceLink.write-test"));
+        Assert.False(redirect.CanWrite());
+    }
+
+    [Fact]
+    public void Link_points_BeyondATC_at_ClearanceLink_only_while_MSFS_is_closed_and_undoes_it_on_exit()
+    {
+        var redirect = new BatcRedirect(_batc);
+        var log = new List<string>();
+        var guards = 0;
+        var link = new BatcLink(redirect, log.Add, () => guards++);
+
+        link.Follow(msfsRunning: false);
+        Assert.True(redirect.IsOn);
+        Assert.Equal(1, guards);
+
+        link.Follow(msfsRunning: true);
+        Assert.All(redirect.Files, f => Assert.False(File.Exists(f)));
+
+        link.Follow(msfsRunning: false);
+        Assert.True(redirect.IsOn);
+        Assert.Equal(1, guards);
+
+        // Always on was chosen just before the restart: the files stay.
+        link.Release(ConnectionMode.AlwaysOn);
+        Assert.True(redirect.IsOn);
+
+        link.Release(ConnectionMode.Automatic);
+        Assert.All(redirect.Files, f => Assert.False(File.Exists(f)));
+        Assert.Null(link.Problem);
+        Assert.Contains(log, l => l.StartsWith("batc: BeyondATC pointed at ClearanceLink", StringComparison.Ordinal));
+        Assert.Contains(log, l => l.StartsWith("batc: ClearanceLink closing", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Link_puts_back_a_users_own_file_on_exit()
+    {
+        var redirect = new BatcRedirect(_batc);
+        const string own = "[SimConnect]\r\nProtocol=IPv4\r\nAddress=192.168.1.20\r\nPort=500\r\n";
+        File.WriteAllText(redirect.Files[0], own);
+        var link = new BatcLink(redirect, _ => { });
+
+        link.Follow(msfsRunning: false);
+        Assert.True(redirect.IsOn);
+
+        link.Release(ConnectionMode.Automatic);
+        Assert.Equal(own, File.ReadAllText(redirect.Files[0]));
+        Assert.False(File.Exists(redirect.Files[1]));
+    }
+
+    [Fact]
+    public void Link_reports_a_folder_it_cannot_write_without_throwing()
+    {
+        var redirect = new BatcRedirect(_batc);
+        Directory.CreateDirectory(redirect.Files[1]);
+        var log = new List<string>();
+        var link = new BatcLink(redirect, log.Add);
+
+        link.Follow(msfsRunning: false);
+
+        Assert.StartsWith("could not write ", link.Problem);
+        Assert.Contains(log, l => l.StartsWith("batc: could not write ", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(ConnectionMode.Automatic, false, true)]
+    [InlineData(ConnectionMode.Automatic, true, false)]
+    [InlineData(ConnectionMode.AlwaysOn, false, false)]
+    public void Guard_removes_the_files_only_when_nothing_else_needs_them(ConnectionMode mode, bool portInUse, bool release)
+    {
+        Assert.Equal(release, BatcLink.GuardShouldRelease(mode, portInUse));
+    }
+
+    [Fact]
+    public void Port_in_use_sees_a_listener()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            Assert.True(Cli.PortInUse(((System.Net.IPEndPoint)listener.LocalEndpoint).Port));
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
     public void Dispose() => Directory.Delete(_batc, recursive: true);
 }
