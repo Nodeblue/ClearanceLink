@@ -19,14 +19,8 @@ namespace {
 
 constexpr double FeetPerMeter = 3.28083989501;
 constexpr double Pi = 3.14159265358979323846;
-// Terrain under an aircraft is probed again when it has moved this far (or turned this much) on the ground, or after
-// this long: parked aircraft every few seconds, airborne ones a few times a second for the ground height report.
-constexpr float ReprobeMeters = 0.25f;
-constexpr float ReprobeTurnDeg = 1.0f;
-constexpr float ReprobeParkedSeconds = 5.0f;
-constexpr float ReprobeAirborneSeconds = 0.25f;
-// Ground slope is measured this far ahead of and behind the aircraft's reference point.
-constexpr double SlopeProbeMeters = 8.0;
+// Ground slope is measured this far ahead of and behind the aircraft's reference point (Motion.h).
+constexpr double SlopeProbeMeters = GroundSlopeProbeMeters;
 // Steeper "slopes" are terrain mesh edges or buildings, not aprons.
 constexpr double MaxGroundSlopeDeg = 4.0;
 
@@ -172,8 +166,8 @@ TrafficAircraft::TrafficAircraft(const Add& add)
     SetVisible(false);  // until the first position arrives
 }
 
-std::optional<float> TrafficAircraft::GroundSlopeDeg(float centreY) {
-    const double heading = track_.Latest().heading * Pi / 180.0;
+std::optional<float> TrafficAircraft::GroundSlopeDeg(float centreY, float headingDeg) {
+    const double heading = headingDeg * Pi / 180.0;
     // X-Plane local coordinates: x east, z south.
     const float dx = float(std::sin(heading) * SlopeProbeMeters);
     const float dz = float(-std::cos(heading) * SlopeProbeMeters);
@@ -214,15 +208,15 @@ void TrafficAircraft::Apply(const Pos& pos, float now) {
 
 bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     const float dx = drawInfo.x - probeX_, dz = drawInfo.z - probeZ_;
-    float turned = std::fabs(std::fmod(drawInfo.heading - probeHeading_ + 540.0f, 360.0f) - 180.0f);
-    const bool moved = dx * dx + dz * dz > ReprobeMeters * ReprobeMeters || turned > ReprobeTurnDeg;
-    const float maxAge = onGround ? ReprobeParkedSeconds : ReprobeAirborneSeconds;
-    if (now - probeTime_ < maxAge && !(onGround && moved)) return groundFt_.has_value();
+    const float turned = HeadingDelta(probeHeading_, drawInfo.heading);
+    if (!ShouldReprobeGround(onGround, probeOnGround_, std::sqrt(dx * dx + dz * dz), turned, now - probeTime_))
+        return groundFt_.has_value();
 
     probeTime_ = now;
     probeX_ = drawInfo.x;
     probeZ_ = drawInfo.z;
     probeHeading_ = drawInfo.heading;
+    probeOnGround_ = onGround;
     XPLMProbeInfo_t info{};
     info.structSize = sizeof(info);
     if (XPLMProbeTerrainXYZ(probe_, drawInfo.x, drawInfo.y, drawInfo.z, &info) != xplm_ProbeHitTerrain) {
@@ -233,7 +227,7 @@ bool TrafficAircraft::ProbeGround(bool onGround, float now) {
     XPLMLocalToWorld(info.locationX, info.locationY, info.locationZ, &groundLat, &groundLon, &groundAltM);
     groundFt_ = groundAltM * FeetPerMeter;
     probeY_ = info.locationY;
-    slope_ = onGround ? GroundSlopeDeg(info.locationY) : std::nullopt;
+    slope_ = onGround ? GroundSlopeDeg(info.locationY, probeHeading_) : std::nullopt;
     return true;
 }
 
@@ -262,7 +256,11 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
             pitch += groundPitch_.value_or(0.0f);
             height = GetVertOfs() + float(groundOffsetFt_ / FeetPerMeter);
         }
-        drawInfo.y = probeY_ + height;
+        // Between probes (at most every 0.1 s when moving, Motion.h) the terrain height is carried along the slope
+        // measured at the last probe, so the aircraft rolls smoothly up and down taxiway slopes instead of stepping.
+        drawInfo.y = GroundYAlongSlope(probeY_, slope_.value_or(0.0f), probeHeading_, drawInfo.x - probeX_,
+                                       drawInfo.z - probeZ_) +
+                     height;
         // Follow the slope of the apron or taxiway along the aircraft, so both nose and main wheels touch it.
         SetPitch(pitch + slope_.value_or(0.0f));
     }
