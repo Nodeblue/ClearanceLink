@@ -725,7 +725,7 @@ namespace ClearanceLink.Host
             }
 
             var icao = (options.Get("airport") ?? "YBBN").ToUpperInvariant();
-            var airport = AptDatIndex.Build(xplane.AirportFiles()).Load(icao);
+            var airport = AptDatIndex.Build(xplane.AirportFiles(), AppFolders.Default.AptIndex, Console.Error.WriteLine).Load(icao);
             if (airport is null || airport.Runways.Count == 0) return Fail($"{icao}: no airport with runways in {xplane.Root}");
 
             // Runway: the end asked for (line up from it), else the longest runway from its first end.
@@ -1115,7 +1115,7 @@ namespace ClearanceLink.Host
 
             if (FindXPlane(options) is { } install)
             {
-                var airports = new XPlaneAirports(install, PacketConsole.Info);
+                var airports = new XPlaneAirports(install, PacketConsole.Info, AppFolders.Default.AptIndex);
                 airports.Start();
                 sources.Add(new XPlaneFacilitySource(airports, ground));
                 PacketConsole.Info($"Airports: from X-Plane at {install.Root}");
@@ -1133,7 +1133,7 @@ namespace ClearanceLink.Host
             var icao = options.Positional.FirstOrDefault() ?? throw new ArgumentException("airport needs an ICAO code");
             var install = FindXPlane(options)
                 ?? throw new ArgumentException("X-Plane folder not found; pass --xplane-root <dir>");
-            var airport = new XPlaneAirports(install, Console.Error.WriteLine).Find(icao);
+            var airport = new XPlaneAirports(install, Console.Error.WriteLine, AppFolders.Default.AptIndex).Find(icao);
             if (airport is null)
             {
                 Console.Error.WriteLine($"{icao}: no scenery pack in {install.Root} defines it");
