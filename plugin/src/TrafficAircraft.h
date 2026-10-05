@@ -21,7 +21,7 @@ class TrafficAircraft : public XPMP2::Aircraft {
 public:
     // The CSL packages (FindCslPackages) for reading models' wheel positions; set after the CSL folders load.
     static void SetCslPackages(CslPackages packages);
-    // Drops the cached wheel positions (waits for reads still running).
+    // Drops the cached wheel positions, cancelling reads still queued or running (waits for at most one .obj file).
     static void ForgetModelFits();
     // Adds the bogie datarefs some models use besides XPMP2's own (World Traffic's main gear deflection). Call after
     // XPMPMultiplayerInit and before any aircraft exists; returns false when XPMP2 refused.

@@ -51,7 +51,9 @@ add_library(ClearanceLinkPlugin MODULE
     src/GroundFit.h
     src/GroundFit.cpp
     src/Motion.h
-    src/Motion.cpp)
+    src/Motion.cpp
+    src/Worker.h
+    src/Worker.cpp)
 
 target_include_directories(ClearanceLinkPlugin PRIVATE src "${xpmp2_SOURCE_DIR}/inc")
 target_compile_definitions(ClearanceLinkPlugin PRIVATE
@@ -102,8 +104,11 @@ add_custom_command(TARGET ClearanceLinkPlugin POST_BUILD
 
 # Tests for the X-Plane-independent parts. Run: ctest --test-dir build/plugin -C Release
 enable_testing()
-add_executable(ClearanceLinkPluginTests tests/PluginTests.cpp src/Protocol.cpp src/CslFolders.cpp src/GroundFit.cpp src/Motion.cpp)
+add_executable(ClearanceLinkPluginTests tests/PluginTests.cpp src/Protocol.cpp src/CslFolders.cpp src/GroundFit.cpp src/Motion.cpp
+    src/Worker.cpp)
 target_include_directories(ClearanceLinkPluginTests PRIVATE src)
+find_package(Threads REQUIRED)
+target_link_libraries(ClearanceLinkPluginTests PRIVATE Threads::Threads)
 add_test(NAME PluginTests COMMAND ClearanceLinkPluginTests)
 
 # Checks the ground fit against a whole CSL library: clearancelink-groundfit <CSL folder>... > table.csv

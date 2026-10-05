@@ -3,15 +3,22 @@
 #include "GroundFit.h"
 #include "Motion.h"
 #include "Protocol.h"
+#include "Worker.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
+#include <memory>
+#include <stdexcept>
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -523,6 +530,49 @@ void ReadsAnimationsKeyedHighToLow() {
     CHECK(model.all.size() == 1 && std::fabs(model.all[0].y) < 1e-6f);
 }
 
+void RunsJobsInTurnAndCancels() {
+    clink::Worker worker;
+    std::vector<int> order;
+    std::promise<void> doneA, doneB;
+    auto a = doneA.get_future(), b = doneB.get_future();
+    CHECK(worker.Post([&](const std::atomic<bool>&) { order.push_back(1); doneA.set_value(); }));
+    CHECK(worker.Post([&](const std::atomic<bool>&) { order.push_back(2); doneB.set_value(); }));
+    CHECK(b.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+    CHECK(order == std::vector<int>({1, 2}));
+
+    // A long job sees the cancel flag; queued jobs are dropped, so their promises break and nothing waits on them.
+    std::atomic<bool> started{false}, sawCancel{false};
+    CHECK(worker.Post([&](const std::atomic<bool>& cancel) {
+        started = true;
+        while (!cancel) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        sawCancel = true;
+    }));
+    auto never = std::make_shared<std::promise<int>>();
+    auto dropped = never->get_future();
+    CHECK(worker.Post([never](const std::atomic<bool>&) { never->set_value(1); }));
+    never.reset();
+    while (!started) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    worker.Stop();
+    CHECK(sawCancel);
+    CHECK(worker.Pending() == 0);
+    bool broken = false;
+    try {
+        dropped.get();
+    } catch (const std::future_error& e) {
+        broken = e.code() == std::future_errc::broken_promise;
+    }
+    CHECK(broken);
+
+    // Usable again after Stop; a throwing job does not end the thread.
+    std::promise<void> again;
+    auto c = again.get_future();
+    CHECK(worker.Post([](const std::atomic<bool>&) { throw std::runtime_error("bad model"); }));
+    CHECK(worker.Post([&](const std::atomic<bool>&) { again.set_value(); }));
+    CHECK(c.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+    worker.Stop();
+    worker.Stop();  // twice is fine
+}
+
 }  // namespace
 
 int main() {
@@ -556,6 +606,7 @@ int main() {
     EasesHeightAcrossLiftOff();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
+    RunsJobsInTurnAndCancels();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }
