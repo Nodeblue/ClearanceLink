@@ -234,7 +234,10 @@ namespace ClearanceLink.Host
                 + SessionLog.Prune(AppFolders.Default.Recordings, "*.jsonl", settings.KeepDays, DateTime.Now)
                 + SessionLog.Prune(AppFolders.Default.Recordings, "*.md", settings.KeepDays, DateTime.Now)
                 + SessionLog.Prune(AppFolders.Default.SupportFiles, "*.zip", settings.KeepDays, DateTime.Now);
-            PacketConsole.Info($"session log: {SessionLog.Path ?? "off"}" + (pruned > 0 ? $"; removed {pruned} files older than {settings.KeepDays} days" : ""));
+            var oversize = SessionLog.PruneToSize(AppFolders.Default.Recordings, ["*.jsonl", "*.md"], SessionLog.MaxRecordingBytes);
+            PacketConsole.Info($"session log: {SessionLog.Path ?? "off"}"
+                + (pruned > 0 ? $"; removed {pruned} files older than {settings.KeepDays} days" : "")
+                + (oversize > 0 ? $"; removed {oversize} oldest recordings to stay under {SessionLog.MaxRecordingBytes / (1024 * 1024 * 1024)} GB" : ""));
         }
 
         /// <summary>--batc when given, else the folder saved in settings when it still holds BeyondATC, else found automatically.</summary>

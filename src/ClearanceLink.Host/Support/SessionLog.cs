@@ -61,6 +61,46 @@ public static class SessionLog
         }
     }
 
+    /// <summary>Most the recordings folder may hold; the oldest recordings go first when it is over.</summary>
+    public const long MaxRecordingBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>
+    /// Deletes the oldest files (by last write) matching any of the patterns until the rest total at most
+    /// <paramref name="maxBytes"/>; the newest file is always kept. Files that cannot be deleted are skipped.
+    /// Returns how many went.
+    /// </summary>
+    public static int PruneToSize(string folder, IReadOnlyList<string> patterns, long maxBytes)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return 0;
+        }
+
+        var files = patterns
+            .SelectMany(p => new DirectoryInfo(folder).EnumerateFiles(p))
+            .DistinctBy(f => f.FullName)
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .ToList();
+        var total = files.Sum(f => f.Length);
+        var deleted = 0;
+        for (var i = files.Count - 1; i > 0 && total > maxBytes; i--)
+        {
+            try
+            {
+                var length = files[i].Length;
+                files[i].Delete();
+                total -= length;
+                deleted++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // In use (another ClearanceLink recording) or read-only: leave it for next time.
+            }
+        }
+
+        return deleted;
+    }
+
     /// <summary>Deletes files matching the pattern older than keepDays (by last write). Returns how many went.</summary>
     public static int Prune(string folder, string pattern, int keepDays, DateTime now)
     {
