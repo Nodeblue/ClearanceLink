@@ -48,7 +48,9 @@ public sealed class PanelTests
     {
         var long_ = Ready with { BatcFolder = @"D:\Games\Flight Sim Add-ons\BeyondATC Install", LastAirportSource = "Global Airports (X-Plane 12 default scenery)" };
         var update = Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://github.com/Nodeblue/ClearanceLink/releases/tag/v10.12.13") };
-        foreach (var state in new[] { Ready, long_, Ready with { BatcFolder = null, Serving = false }, update })
+        var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3112, XPlaneRunning = true };
+        var converting = fsltl with { FsltlConverting = true, FsltlProgress = new Fsltl.ImportProgress(Fsltl.ImportStage.Textures, 12345, 99999) };
+        foreach (var state in new[] { Ready, long_, Ready with { BatcFolder = null, Serving = false }, update, fsltl with { FsltlOutOfDate = true }, converting, Ready with { MsfsInstalled = false } })
         {
             var built = CduPages.Build(page, state);
             Assert.True(built.Title.Length <= CduPages.Width, built.Title);
@@ -188,7 +190,7 @@ public sealed class PanelTests
     [MemberData(nameof(AllPages))]
     public void Messages_fit_above_the_first_row_with_content(PanelPage page)
     {
-        foreach (var state in new[] { Ready, Ready with { BatcFolder = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }, Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://example.invalid/") } })
+        foreach (var state in new[] { Ready, Ready with { BatcFolder = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }, Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://example.invalid/") }, Ready with { MsfsInstalled = false } })
         {
             var built = CduPages.Build(page, state);
             if (built.Message is null)
@@ -377,5 +379,106 @@ public sealed class PanelTests
         }
 
         window.Close();
+    }
+
+    private static readonly PanelState Converted = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3112 };
+
+    [Fact]
+    public void Models_page_says_when_fsltl_needs_converting_again()
+    {
+        var row = CduPages.Build(PanelPage.StartModels, Converted with { FsltlOutOfDate = true }).Rows[4];
+        Assert.Equal(("UPDATE NEEDED", CduColor.Amber), (row.Left.Text, row.Left.Color));
+        Assert.Equal(("UPDATE>", CduKey.ConvertFsltl), (row.Right.Text, row.KeyRight));
+
+        var upToDate = CduPages.Build(PanelPage.StartModels, Converted).Rows[4];
+        Assert.Equal(("3112 LIVERIES", CduColor.Green), (upToDate.Left.Text, upToDate.Left.Color));
+    }
+
+    [Fact]
+    public void Status_mentions_out_of_date_models_in_turn_only_when_nothing_is_more_urgent()
+    {
+        var turn = TimeSpan.FromSeconds(CduPages.UpdateTurnSeconds);
+        var waiting = Converted with { BatcHelper = false, BatcApp = false, FsltlOutOfDate = true };
+
+        Assert.Equal("START BEYONDATC", CduPages.Advice(waiting with { Uptime = turn * 2 }).Text);
+        var notice = CduPages.Advice(waiting with { Uptime = turn * 3 });
+        Assert.Equal(("FSLTL MODELS OUT OF DATE", CduColor.Amber), (notice.Text, notice.Color));
+        Assert.True(notice.Text.Length <= CduPages.Width);
+
+        // With a new release too, the three take turns.
+        var update = new UpdateInfo("0.6.0", "https://example.invalid/");
+        Assert.Equal(["START BEYONDATC", "NEW VERSION 0.6.0", "FSLTL MODELS OUT OF DATE"],
+            Enumerable.Range(0, 3).Select(i => CduPages.Advice(waiting with { Update = update, Uptime = turn * i }).Text));
+
+        // Not over something to fix, not in flight, not while converting.
+        Assert.Equal("CLOSE MSFS TO CONNECT", CduPages.Advice(waiting with { MsfsRunning = true, Uptime = turn * 3 }).Text);
+        Assert.Equal("READY FOR CLEARANCE", CduPages.Advice(Converted with { FsltlOutOfDate = true, Uptime = turn * 3 }).Text);
+        Assert.Equal("START BEYONDATC", CduPages.Advice(waiting with { FsltlConverting = true, Uptime = turn * 3 }).Text);
+    }
+
+    [Fact]
+    public void Models_page_shows_how_far_a_conversion_is()
+    {
+        var converting = Converted with { FsltlConverting = true };
+        string Shown(Fsltl.ImportProgress? p) => CduPages.Build(PanelPage.StartModels, converting with { FsltlProgress = p }).Rows[4].Left.Text;
+
+        Assert.Equal("CONVERTING...", Shown(null));
+        Assert.Equal("MODELS 40/412", Shown(new(Fsltl.ImportStage.Models, 40, 412)));
+        Assert.Equal("TEXTURES 1200/3112", Shown(new(Fsltl.ImportStage.Textures, 1200, 3112)));
+        Assert.Equal("SAVING...", Shown(new(Fsltl.ImportStage.Saving, 0, 0)));
+        Assert.Equal(CduKey.None, CduPages.Build(PanelPage.StartModels, converting).Rows[4].KeyRight);
+        Assert.Equal("KEEP THIS WINDOW OPEN", CduPages.Build(PanelPage.StartModels, converting).Scratchpad.Text);
+    }
+
+    [Fact]
+    public void Models_page_asks_to_close_x_plane_only_while_it_runs()
+    {
+        var found = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
+        Assert.Equal("", CduPages.Build(PanelPage.StartModels, found).Scratchpad.Text);
+        Assert.Equal("CLOSE X-PLANE TO CONVERT", CduPages.Build(PanelPage.StartModels, found with { XPlaneRunning = true }).Scratchpad.Text);
+        Assert.Equal("CLOSE X-PLANE TO UPDATE", CduPages.Build(PanelPage.StartModels, Converted with { FsltlOutOfDate = true, XPlaneRunning = true }).Scratchpad.Text);
+        Assert.Equal("", CduPages.Build(PanelPage.StartModels, Converted with { XPlaneRunning = true }).Scratchpad.Text);
+    }
+
+    [Fact]
+    public void Models_page_says_fsltl_comes_from_msfs_when_msfs_is_not_installed()
+    {
+        var page = CduPages.Build(PanelPage.StartModels, Ready with { MsfsInstalled = false });
+        var row = page.Rows[4];
+        Assert.Equal("NEEDS MSFS", row.Left.Text);
+        Assert.Equal(("CHOOSE>", CduKey.ChooseFsltlFolder), (row.Right.Text, row.KeyRight));
+        Assert.Contains(page.Message!, m => m.Text.Contains("FSLTL comes from MSFS", StringComparison.Ordinal));
+
+        // A copy chosen by hand is just FOUND (not in MSFS).
+        Assert.Equal("FOUND", CduPages.Build(PanelPage.StartModels, Ready with { MsfsInstalled = false, FsltlFolder = @"D:\fsltl-traffic-base" }).Rows[4].Left.Text);
+    }
+
+    [Fact]
+    public void X_plane_settings_page_names_the_ai_aircraft_screen()
+    {
+        Assert.Contains(CduPages.Build(PanelPage.StartXPlane, Ready).Message!, m => m.Text.Contains("Flight Configuration > AI Aircraft: none", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public void Closing_while_converting_asks_for_a_second_close()
+    {
+        var converting = true;
+        var window = new PanelWindow(() => Converted with { FsltlConverting = converting });
+        window.Show();
+
+        window.Close();
+        Assert.True(window.IsVisible);
+        Assert.Equal(PanelPage.StartModels, window.Page);
+        Assert.Equal(PanelWindow.CloseAgainText, window.Shown!.Scratchpad.Text);
+
+        window.Close();
+        Assert.False(window.IsVisible);
+
+        // Not converting: closes at once.
+        converting = false;
+        window = new PanelWindow(() => Converted with { FsltlConverting = converting });
+        window.Show();
+        window.Close();
+        Assert.False(window.IsVisible);
     }
 }

@@ -26,13 +26,17 @@ public static class UpdateCheck
     /// <summary>The newest release, checked once per run in the background. Null while checking, when up to date, or when the check is off.</summary>
     public static UpdateInfo? Available
     {
+        get => AppSettings.Load(AppFolders.Default.Settings).CheckForUpdates ? Result : null;
+    }
+
+    /// <summary>
+    /// As <see cref="Available"/> without reading settings.json, for a caller that already has the settings and checks
+    /// <see cref="AppSettings.CheckForUpdates"/> itself (the window, once a second). Starts the check on first use.
+    /// </summary>
+    public static UpdateInfo? Result
+    {
         get
         {
-            if (!AppSettings.Load(AppFolders.Default.Settings).CheckForUpdates)
-            {
-                return null;
-            }
-
             var task = Once.Value;
             return task.IsCompletedSuccessfully ? task.Result : null;
         }
