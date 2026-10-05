@@ -8,6 +8,7 @@ namespace ClearanceLink.Host.Panel;
 public enum PanelPage
 {
     Status,
+    FlightPlan,
     Setup,
     Support,
     About,
@@ -61,6 +62,9 @@ public enum CduKey
     ConvertFsltl,
     OpenUpdatePage,
     GoModels,
+    GoFlightPlan,
+    RequestPlan,
+    LoadPlan,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -107,7 +111,8 @@ public sealed record PanelState(
     ImportProgress? FsltlProgress = null,
     bool XPlaneRunning = false,
     bool MsfsInstalled = true,
-    string? FlightPlan = null);
+    FlightPlanView? FlightPlan = null,
+    bool LoadArmed = false);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -122,13 +127,17 @@ public static class CduPages
     public const string ModelsHelp = HelpPage + "#aircraft-models-for-traffic";
 
     /// <summary>The page keys under the screen; the getting-started pages are reached from SUPPORT or on first run.</summary>
-    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.Setup, PanelPage.Support, PanelPage.About];
+    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.FlightPlan, PanelPage.Setup, PanelPage.Support, PanelPage.About];
+
+    /// <summary>The name on a page key under the screen.</summary>
+    public static string KeyName(PanelPage page) => page == PanelPage.FlightPlan ? "FPLN" : page.ToString().ToUpperInvariant();
 
     /// <summary>The getting-started pages in order.</summary>
     public static readonly ImmutableArray<PanelPage> StartPages = [PanelPage.Welcome, PanelPage.StartFolders, PanelPage.StartTraffic, PanelPage.StartModels, PanelPage.StartXPlane, PanelPage.StartDone];
 
     public static CduPage Build(PanelPage page, PanelState s, string? flash = null) => page switch
     {
+        PanelPage.FlightPlan => FlightPlan(s, flash),
         PanelPage.Setup => Setup(s, flash),
         PanelPage.Support => Support(s, flash),
         PanelPage.About => About(s, flash),
@@ -163,7 +172,7 @@ public static class CduPages
                 { TrafficAircraft: null } => CduKey.GoSetup,
                 _ => CduKey.None,
             }),
-            Row("", "", new("<SETUP"), new("SUPPORT>"), CduKey.GoSetup, CduKey.GoSupport),
+            Row("", "", new("<SETUP"), new("FPLN>"), CduKey.GoSetup, CduKey.GoFlightPlan),
         };
         return new($"{AppName} STATUS", rows, flash is null ? Advice(s) : new(flash));
     }
@@ -192,10 +201,10 @@ public static class CduPages
             turns.Add(new("FSLTL MODELS OUT OF DATE", CduColor.Amber));
         }
 
-        // The SimBrief plan ClearanceLink saved for the FMS (SimbriefPlan), by the name to load.
-        if (s.FlightPlan is { } plan)
+        // A plan received on the FPLN page but not loaded yet: say where it is (the FSLTL notice lesson).
+        if (s.FlightPlan is { Plan: not null, SavedAs: null })
         {
-            turns.Add(new(Fit($"FMS PLAN {Path.GetFileNameWithoutExtension(plan)} SAVED", Width), CduColor.Green));
+            turns.Add(new("FLIGHT PLAN READY: FPLN", CduColor.Green));
         }
 
         return turns[(int)(s.Uptime.TotalSeconds / UpdateTurnSeconds) % turns.Count];
@@ -218,6 +227,49 @@ public static class CduPages
             _ => new("READY FOR CLEARANCE", CduColor.Green),
         };
     }
+
+    /// <summary>
+    /// The SimBrief uplink, like a jet's FMC route request: REQUEST shows the latest plan without touching X-Plane;
+    /// LOAD (pressed twice, as it replaces the FMS's plan) saves it into Output/FMS plans and sends it to X-Plane's FMS.
+    /// </summary>
+    private static CduPage FlightPlan(PanelState s, string? flash)
+    {
+        var view = s.FlightPlan ?? new FlightPlanView();
+        var p = view.Plan;
+        CduCell None() => new("-----");
+        var fms = view switch
+        {
+            { FmsProblem: not null } => new CduCell("NOT TAKEN", CduColor.Amber),
+            { SentAt: { } at } => new CduCell($"SENT {Zulu(at)}", CduColor.Green),
+            { SavedAs: not null } => new CduCell("FILE SAVED", CduColor.Green),
+            _ => None(),
+        };
+        var rows = new[]
+        {
+            Row("SIMBRIEF PLAN", "CRUISE", p is null ? None() : new($"{p.Origin}-{p.Destination}", CduColor.Green),
+                p?.CruiseFeet is { } feet ? new($"FL{feet / 100:000}") : None()),
+            Row("RWY/SID", "STAR/RWY", p is null ? None() : new($"{p.OriginRunway ?? "-"}/{p.Sid ?? "-"}"),
+                p is null ? None() : new($"{p.Star ?? "-"}/{p.DestinationRunway ?? "-"}")),
+            Row("ROUTE", "", p?.Route is { } route ? new(Fit(route.StartsWith("DCT ", StringComparison.Ordinal) ? route[4..] : route, Width)) : None(), new("")),
+            Row("MADE", "FMS", p?.Generated is { } made ? new(Zulu(made)) : None(), fms),
+            Row("", "", new(view.Requesting ? " REQUESTING" : "<REQUEST"),
+                p is null ? new("") : s.LoadArmed ? new("CONFIRM>", CduColor.Amber) : new("LOAD>"),
+                view.Requesting ? CduKey.None : CduKey.RequestPlan, p is null ? CduKey.None : CduKey.LoadPlan),
+            Row("", "", new("<STATUS"), new("SETUP>"), CduKey.GoStatus, CduKey.GoSetup),
+        };
+        var hint = view switch
+        {
+            _ when s.LoadArmed => new CduCell("REPLACES THE FMS PLAN", CduColor.Amber),
+            { FmsProblem: { } why } => new CduCell(Fit($"FMS: {why}".ToUpperInvariant(), Width), CduColor.Amber),
+            { Plan: null } => new CduCell("PRESS REQUEST"),
+            { SavedAs: null } => new CduCell("CHECK, THEN LOAD"),
+            { SentAt: not null } => new CduCell("CHECK RWY/SID/STAR"),
+            _ => new CduCell(Fit($"LOAD {Path.GetFileNameWithoutExtension(view.SavedAs)} IN THE FMS", Width)),
+        };
+        return new($"{AppName} FPLN", rows, flash is null ? hint : new(flash));
+    }
+
+    private static string Zulu(DateTimeOffset at) => at.UtcDateTime.ToString("HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
     private static CduPage Setup(PanelState s, string? flash)
     {

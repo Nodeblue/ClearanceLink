@@ -22,6 +22,7 @@ public sealed class PanelController : IAsyncDisposable
     private CancellationTokenSource? _stop;
     private Task? _serve;
     private StatusBoard? _board;
+    private DateTimeOffset _loadArmedUntil = DateTimeOffset.MinValue;
     private volatile Found _folders = new();
     private Task? _refresh;
     private volatile bool _refreshDue = true;
@@ -150,7 +151,8 @@ public sealed class PanelController : IAsyncDisposable
             _fsltlProgress,
             found.XPlaneRunning,
             found.MsfsInstalled,
-            snapshot?.FlightPlan);
+            _board?.FlightPlans?.View,
+            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -158,6 +160,19 @@ public sealed class PanelController : IAsyncDisposable
     {
         switch (key)
         {
+            case CduKey.RequestPlan:
+                _loadArmedUntil = DateTimeOffset.MinValue;
+                return _board?.FlightPlans is { } request ? await request.RequestAsync().ConfigureAwait(false) : "STARTING...";
+            case CduKey.LoadPlan:
+                // Loading replaces whatever is in the FMS: the first press asks, a second within 10 s loads.
+                if (DateTimeOffset.UtcNow >= _loadArmedUntil)
+                {
+                    _loadArmedUntil = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+                    return null;
+                }
+
+                _loadArmedUntil = DateTimeOffset.MinValue;
+                return _board?.FlightPlans?.Load() ?? "STARTING...";
             case CduKey.ConnectionAutomatic:
             case CduKey.ConnectionAlwaysOn:
                 return await SetConnectionAsync(key == CduKey.ConnectionAutomatic ? ConnectionMode.Automatic : ConnectionMode.AlwaysOn).ConfigureAwait(false);

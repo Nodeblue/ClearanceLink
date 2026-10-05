@@ -34,8 +34,8 @@ public sealed class StatusBoard(
 
     public string? Recording { get; set; }
 
-    /// <summary>The SimBrief plan last saved into X-Plane's Output/FMS plans (e.g. YBBNYSSY.fms), or null.</summary>
-    public string? FlightPlan { get; set; }
+    /// <summary>The FPLN page's SimBrief uplink; null until serve starts.</summary>
+    public ClearanceLink.Host.Support.FlightPlans? FlightPlans { get; set; }
 
     /// <summary>True while the real MSFS runs (it holds the default connection).</summary>
     public Func<bool>? MsfsRunning { get; set; }
@@ -93,8 +93,7 @@ public sealed class StatusBoard(
                 Math.Round(o.HeadingTrue),
                 Math.Round(o.GroundSpeedKnots),
                 o.OnGround,
-                Math.Round((now - o.LastUpdate).TotalSeconds, 1))).ToList(),
-            FlightPlan);
+                Math.Round((now - o.LastUpdate).TotalSeconds, 1))).ToList());
     }
 
     public string ToJson() => JsonSerializer.Serialize(Snapshot(), Json);
@@ -160,8 +159,7 @@ public sealed record StatusSnapshot(
     string? Recording,
     bool MsfsRunning = false,
     PluginSummary? Plugin = null,
-    IReadOnlyList<TrafficStatus>? Traffic = null,
-    string? FlightPlan = null);
+    IReadOnlyList<TrafficStatus>? Traffic = null);
 
 public sealed record PluginSummary(string Version, int Models, int Aircraft, IReadOnlyList<string> CslFolders);
 

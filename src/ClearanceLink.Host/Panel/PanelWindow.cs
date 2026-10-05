@@ -11,7 +11,7 @@ namespace ClearanceLink.Host.Panel;
 
 /// <summary>
 /// The FMS-style panel: a 24-column screen with six line select keys each side and page keys below. Keys 1-6 press
-/// the left keys, Shift+1-6 the right ones, F1-F4 change page; clicking either half of a row presses its key too.
+/// the left keys, Shift+1-6 the right ones, F1-F5 change page; clicking either half of a row presses its key too.
 /// </summary>
 public sealed class PanelWindow : Window
 {
@@ -180,6 +180,9 @@ public sealed class PanelWindow : Window
             case CduKey.GoAbout:
                 ShowPage(PanelPage.About);
                 return;
+            case CduKey.GoFlightPlan:
+                ShowPage(PanelPage.FlightPlan);
+                return;
             case CduKey.ChooseBatcFolder:
             case CduKey.ChooseXPlaneFolder:
             case CduKey.ChooseFsltlFolder:
@@ -294,6 +297,7 @@ public sealed class PanelWindow : Window
             Key.F2 => PanelPage.Setup,
             Key.F3 => PanelPage.Support,
             Key.F4 => PanelPage.About,
+            Key.F5 => PanelPage.FlightPlan,
             _ => (PanelPage?)null,
         };
         if (page is { } p)
@@ -381,7 +385,7 @@ public sealed class PanelWindow : Window
         {
             var button = new Button
             {
-                Content = page.ToString().ToUpperInvariant(),
+                Content = CduPages.KeyName(page),
                 FontFamily = CduFont,
                 FontWeight = FontWeight.Bold,
                 FontSize = 12,

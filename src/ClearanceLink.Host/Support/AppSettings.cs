@@ -41,9 +41,6 @@ public sealed class AppSettings
     /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
     public bool CheckForUpdates { get; set; } = true;
 
-    /// <summary>Save the latest SimBrief plan into X-Plane's Output/FMS plans while ClearanceLink runs.</summary>
-    public bool SimbriefPlans { get; set; } = true;
-
     /// <summary>SimBrief pilot ID (or username) when the user set one; null to use BeyondATC's.</summary>
     public string? SimbriefId { get; set; }
 
