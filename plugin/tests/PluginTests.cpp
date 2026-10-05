@@ -77,6 +77,29 @@ void RejectsBadLines() {
     CHECK(std::get<clink::Hello>(*clink::Parse("hello 0.4.0")).version == "0.4.0");
 }
 
+void ChecksLightsAndClampsRatios() {
+    std::string error;
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 -1", &error) && error.find("bad pos") != std::string::npos);
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 32", &error));
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 1e30", &error));
+    CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 2.5", &error));
+    CHECK(std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 31")).lights == 31);
+    auto pos = std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 1.5 -0.2 7 0.5 0"));
+    CHECK(pos.gear == 1.0f && pos.flaps == 0.0f && pos.spoilers == 1.0f && pos.thrust == 0.5f);
+}
+
+void ParsesNumbersStrictly() {
+    std::string error;
+    auto pos = std::get<clink::Pos>(*clink::Parse("pos 1 -0.5 1e-3 3.25e2 4 5 6 7 0 0 0 0 0 0"));
+    CHECK(pos.lat == -0.5 && pos.lon == 1e-3 && pos.altFt == 325);
+    CHECK(!clink::Parse("pos 1 nan 2 3 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 inf 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 1e999 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 3x 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("pos 1 1 2 0x10 4 5 6 7 0 0 0 0 0 0", &error));
+    CHECK(!clink::Parse("del 1.5", &error));
+}
+
 void SplitsDatagrams() {
     const char data[] = "hello 1\r\npos 1 0 0 0 0 0 0 0 0 0 0 0 0 0\n\nclear";
     auto lines = clink::Lines(data, std::strlen(data));
@@ -507,6 +530,8 @@ int main() {
     ParsesOffset();
     ParsesAddWithLabelAndUnknowns();
     RejectsBadLines();
+    ChecksLightsAndClampsRatios();
+    ParsesNumbersStrictly();
     SplitsDatagrams();
     FormatsReplies();
     FindsCslFolders();
