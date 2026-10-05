@@ -894,6 +894,11 @@ namespace ClearanceLink.Host
                     Console.WriteLine(package is null ? "FSLTL: not found (pass --fsltl <folder>)" : $"FSLTL: {package}");
                     var catalogue = FsltlImporter.LoadCatalogue(output);
                     Console.WriteLine(catalogue.Count == 0 ? $"Imported: none ({output})" : $"Imported: {catalogue.Count} liveries in {output}");
+                    if (package is not null && catalogue.Count > 0 && FsltlImporter.OutOfDate(package, output) is { } why)
+                    {
+                        Console.WriteLine($"Out of date: {why}. Run: fsltl import");
+                    }
+
                     return 0;
                 case "import":
                     if (package is null)

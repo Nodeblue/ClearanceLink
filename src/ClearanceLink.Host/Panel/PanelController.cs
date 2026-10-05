@@ -163,7 +163,15 @@ public sealed class PanelController : IAsyncDisposable
             case CduKey.RemoveOldFiles:
                 if (Folders().Batc is { } folder)
                 {
-                    new BatcRedirect(folder).SwitchOff();
+                    try
+                    {
+                        new BatcRedirect(folder).SwitchOff();
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        PacketConsole.Info($"panel: could not remove BeyondATC's old files: {ex.Message}");
+                        return "RUN AS ADMINISTRATOR";
+                    }
                 }
 
                 return "OLD FILES REMOVED";
@@ -257,9 +265,11 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         settings.Connection = mode;
-        if (Cli.ApplyConnection(settings, Folders().Batc) is not null)
+        if (Cli.ApplyConnection(settings, Folders().Batc) is { } problem)
         {
-            return "SET BEYONDATC FOLDER";
+            // A read-only BeyondATC folder (under Program Files) needs administrator rights to take the two files.
+            PacketConsole.Info($"panel: connection not changed: {problem}");
+            return problem == Cli.BatcNotFoundProblem ? "SET BEYONDATC FOLDER" : "RUN AS ADMINISTRATOR";
         }
 
         settings.Save(AppFolders.Default.Settings);
@@ -354,17 +364,23 @@ public sealed class PanelController : IAsyncDisposable
             return "CLOSE X-PLANE FIRST";
         }
 
+        var install = new PluginInstall(xplane);
         try
         {
-            new PluginInstall(xplane).Install().ToList().ForEach(l => PacketConsole.Info($"plugin: {l}"));
+            install.Install().ToList().ForEach(l => PacketConsole.Info($"plugin: {l}"));
             _plugin = null;
             RefreshFolders();
             return "PLUGIN INSTALLED";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            PacketConsole.Info($"plugin: could not install: {ex.Message}");
-            return "CLOSE X-PLANE FIRST";
+            PacketConsole.Info($"plugin: could not install: {install.Describe(ex)}");
+            return PluginInstall.Classify(ex) switch
+            {
+                PluginInstall.Failure.XPlaneRunning => "CLOSE X-PLANE FIRST",
+                PluginInstall.Failure.NoPermission => "RUN AS ADMINISTRATOR",
+                _ => "INSTALL FAILED: SEE LIVE LOG",
+            };
         }
     }
 
