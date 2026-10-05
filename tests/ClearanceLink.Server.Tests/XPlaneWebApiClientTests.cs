@@ -123,6 +123,17 @@ public sealed class XPlaneWebApiClientTests : IDisposable
         Assert.Equal(["PATCH /api/v2/datarefs/5/value {\"data\":118850}", "POST /api/v2/command/77/activate {\"duration\":0}"], _api.Calls);
     }
 
+    [Fact]
+    public async Task Command_presence_is_asked_fresh_each_time()
+    {
+        using var client = new XPlaneWebApiClient(_api.BaseUri, _ => { });
+
+        Assert.False(await client.HasCommandAsync("BetterPushback/start"));
+        _api.ExtraCommands["BetterPushback/start"] = 3138; // the plugin is loaded later
+        Assert.True(await client.HasCommandAsync("BetterPushback/start"));
+        Assert.True(await client.HasCommandAsync("sim/radios/com1_standy_flip"));
+    }
+
     public void Dispose() => _api.Dispose();
 
     private static async Task WaitForAsync(Func<bool> condition, CancellationToken ct)
@@ -161,6 +172,9 @@ public sealed class XPlaneWebApiClientTests : IDisposable
         public List<string> Calls { get; } = [];
 
         public volatile bool RestFails;
+
+        /// <summary>Plugin commands the fake has, besides the radio one; may change while a test runs.</summary>
+        public System.Collections.Concurrent.ConcurrentDictionary<string, long> ExtraCommands { get; } = new();
 
         public void Dispose()
         {
@@ -222,10 +236,12 @@ public sealed class XPlaneWebApiClientTests : IDisposable
                     };
                     break;
                 case ("GET", "/api/v2/commands"):
+                    var command = request.QueryString["filter[name]"] ?? "";
+                    long? commandId = command == "sim/radios/com1_standy_flip" ? 77 : ExtraCommands.TryGetValue(command, out var extra) ? extra : null;
                     response = new JsonObject
                     {
-                        ["data"] = request.QueryString["filter[name]"] == "sim/radios/com1_standy_flip"
-                            ? new JsonArray(new JsonObject { ["id"] = 77, ["name"] = "sim/radios/com1_standy_flip" })
+                        ["data"] = commandId is { } found
+                            ? new JsonArray(new JsonObject { ["id"] = found, ["name"] = command })
                             : new JsonArray(),
                     };
                     break;

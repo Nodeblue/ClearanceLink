@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Server;
 
 namespace ClearanceLink.Host.Status;
@@ -42,6 +43,9 @@ public sealed class StatusBoard(
 
     /// <summary>The X-Plane traffic plugin's last report; null when not connected or not started.</summary>
     public Func<ClearanceLink.Host.Traffic.PluginStatus?>? Plugin { get; set; }
+
+    /// <summary>Whether Better Pushback is loaded in X-Plane.</summary>
+    public Func<PushbackAddOn>? Pushback { get; set; }
 
     /// <summary>BATC's AI objects, when traffic is on.</summary>
     public Func<IReadOnlyList<TrafficObject>>? Traffic { get; set; }
@@ -93,7 +97,8 @@ public sealed class StatusBoard(
                 Math.Round(o.HeadingTrue),
                 Math.Round(o.GroundSpeedKnots),
                 o.OnGround,
-                Math.Round((now - o.LastUpdate).TotalSeconds, 1))).ToList());
+                Math.Round((now - o.LastUpdate).TotalSeconds, 1))).ToList(),
+            Pushback?.Invoke() ?? PushbackAddOn.Unknown);
     }
 
     public string ToJson() => JsonSerializer.Serialize(Snapshot(), Json);
@@ -159,7 +164,8 @@ public sealed record StatusSnapshot(
     string? Recording,
     bool MsfsRunning = false,
     PluginSummary? Plugin = null,
-    IReadOnlyList<TrafficStatus>? Traffic = null);
+    IReadOnlyList<TrafficStatus>? Traffic = null,
+    PushbackAddOn Pushback = PushbackAddOn.Unknown);
 
 public sealed record PluginSummary(string Version, int Models, int Aircraft, IReadOnlyList<string> CslFolders);
 

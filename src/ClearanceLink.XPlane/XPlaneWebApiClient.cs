@@ -158,6 +158,13 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
         await EnsureOkAsync(response, $"command {command}", ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Whether X-Plane has <paramref name="command"/> right now, asked fresh every time (not cached, and not logged as
+    /// NOT FOUND): used to find out which plugins are loaded, which can change while X-Plane runs.
+    /// </summary>
+    public async Task<bool> HasCommandAsync(string command, CancellationToken ct = default) =>
+        await FindAsync("api/v2/commands", command, ct).ConfigureAwait(false) is not null;
+
     /// <summary>Connects, keeps the subscription up to date and reconnects until cancelled.</summary>
     public async Task RunAsync(CancellationToken ct)
     {

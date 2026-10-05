@@ -152,7 +152,8 @@ public sealed class PanelController : IAsyncDisposable
             found.XPlaneRunning,
             found.MsfsInstalled,
             _board?.FlightPlans?.View,
-            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil);
+            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
+            Pushback: snapshot?.Pushback ?? Pushback.PushbackAddOn.Unknown);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>

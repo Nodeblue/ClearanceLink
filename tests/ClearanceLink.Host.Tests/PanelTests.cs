@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using ClearanceLink.Host.Panel;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
 
@@ -140,6 +141,17 @@ public sealed class PanelTests
     }
 
     [Fact]
+    public void Status_says_whether_Better_Pushback_is_in_X_Plane()
+    {
+        CduCell Pushback(PanelState state) => Assert.Single(CduPages.Build(PanelPage.Status, state).Rows, r => r.LabelLeft == "PUSHBACK").Left;
+
+        Assert.Equal(new CduCell("BETTER PB", CduColor.Green), Pushback(Ready with { Pushback = PushbackAddOn.Installed }));
+        Assert.Equal(new CduCell("NOT FOUND"), Pushback(Ready with { Pushback = PushbackAddOn.NotInstalled }));
+        Assert.Equal(new CduCell("-"), Pushback(Ready));
+        // Not known while X-Plane is away, whatever was found before.
+        Assert.Equal(new CduCell("-"), Pushback(Ready with { XPlaneConnected = false, Pushback = PushbackAddOn.NotInstalled }));
+    }
+    [Fact]
     public void Getting_started_pages_are_whole_and_say_the_project_is_unofficial()
     {
         foreach (var page in CduPages.StartPages)
@@ -166,7 +178,8 @@ public sealed class PanelTests
 
         // ABOUT is a message too; only the keys are rows.
         var about = CduPages.Build(PanelPage.About, Ready);
-        Assert.All(about.Rows.Take(5), r => Assert.Equal(CduRow.Empty, r));
+        Assert.All(about.Rows.Take(4), r => Assert.Equal(CduRow.Empty, r));
+        Assert.Equal(("RUNNING FOR", "1 HR 12 MIN"), (about.Rows[4].LabelLeft, about.Rows[4].Left.Text));
         Assert.Contains(about.Message!, m => m.Text.Contains("Not affiliated with BeyondATC.", StringComparison.Ordinal));
         Assert.Contains(CduPages.Build(PanelPage.Status, Ready).Rows, r => r.LabelLeft == "ATC AIRPORT" && r.LabelRight == "SCENERY");
 

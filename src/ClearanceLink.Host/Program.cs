@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using ClearanceLink.Airports;
 using ClearanceLink.Fsltl;
 using ClearanceLink.Host;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Status;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
@@ -646,6 +647,8 @@ namespace ClearanceLink.Host
 
             var msfsTask = msfs.RunAsync(ct);
             var xplaneTask = xplane.RunAsync(ct);
+            var pushback = new BetterPushback(() => xplane.IsConnected, xplane.HasCommandAsync, PacketConsole.Info);
+            var pushbackTask = pushback.RunAsync(ct);
             await using var plugin = StartPluginLink();
 
             // BATC's traffic goes to the X-Plane plugin, and the plugin's terrain answers BATC's ground questions.
@@ -660,6 +663,7 @@ namespace ClearanceLink.Host
                 Traffic = () => traffic.Objects,
             };
             board.Plugin = () => plugin?.Status;
+            board.Pushback = () => pushback.State;
             var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowBatcAsync(stub, server, msfs, ct);
             var xplaneRoot = FindXPlane(options)?.Root;
             var plans = new FlightPlans(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot, path => plugin?.LoadFms(path) == true);
@@ -683,6 +687,7 @@ namespace ClearanceLink.Host
             finally
             {
                 await xplaneTask;
+                await pushbackTask;
                 await msfsTask;
                 await bridgeTask;
                 await stubTask;

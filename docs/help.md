@@ -23,14 +23,14 @@ Shift+1 to 6 the right ones, and F1 to F5 change page (F5 is FPLN).
 |---|---|---|---|
 | ![STATUS page](images/panel-status-flying.png) | ![FPLN page](images/panel-flightplan-flying.png) | ![SETUP page](images/panel-setup-flying.png) | ![SUPPORT page](images/panel-support.png) |
 
-- **STATUS** shows what is connected. Its bottom line says what to do next, and **READY FOR CLEARANCE** when all is
-  well.
+- **STATUS** shows what is connected, and whether X-Plane has the Better Pushback plugin (**PUSHBACK**). Its bottom
+  line says what to do next, and **READY FOR CLEARANCE** when all is well.
 - **FPLN** fetches your latest SimBrief plan and loads it into X-Plane's FMS when you ask. See
   [Flight plans](#flight-plans).
 - **SETUP** shows the BeyondATC and X-Plane folders, the connection mode and the X-Plane plugin, starts BeyondATC and
   opens a web page in your browser with the same status.
 - **SUPPORT** makes a support file, shows the live log, and reopens the WELCOME pages.
-- **ABOUT** shows the version, and **NEW VERSION** when a newer release is out.
+- **ABOUT** shows the version, how long ClearanceLink has been running, and **NEW VERSION** when a newer release is out.
 
 ## First start
 Double-click `ClearanceLink.exe`. The first time, six **WELCOME** pages take you through the set-up. Press **NEXT**
@@ -178,7 +178,10 @@ own connection instead, while MSFS is closed. Running ClearanceLink as administr
 - Airports whose X-Plane scenery has no taxiways get a simple generated taxi network.
 - STATUS shows the airport BeyondATC is using and which scenery it came from.
 
-Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equivalent of (those are ignored).
+Not yet: pushback from BeyondATC (it asks GSX in MSFS; in X-Plane it will go to the free Better Pushback plugin), and
+a few things BeyondATC asks MSFS for that X-Plane has no equivalent of (those are ignored). PUSHBACK on STATUS already
+says **BETTER PB** when X-Plane has Better Pushback and **NOT FOUND** when it doesn't; without it, nothing is sent to
+X-Plane for pushback.
 
 ## Problems
 | What you see | What to do |
@@ -195,6 +198,7 @@ Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equiv
 | FMS on FPLN says NOT TAKEN | X-Plane's FMS refused the plan (the reason is on the bottom line). Load the saved `.fms` file from the aircraft's own FMS menu instead. |
 | Another X-Plane add-on (SPAD.neXt, for example) can't use UDP port 49707 | Windows has reserved a block of ports for Hyper-V. Rebooting usually moves it. To keep 49707 free, run in an admin command prompt: `net stop winnat`, then `netsh int ipv4 add excludedportrange protocol=udp startport=49707 numberofports=1`, then `net start winnat`. ClearanceLink's plugin picks a free port by itself. |
 | X-Plane talks over BeyondATC | In X-Plane, Settings > Sound, set the Radios slider to 0. |
+| PUSHBACK on STATUS says NOT FOUND | X-Plane doesn't have the Better Pushback plugin, or it is disabled in X-Plane's Plugin Admin. ATC still works; push back another way. |
 | OTHER ADD-ONS on STATUS shows a number | Other MSFS add-ons tried to connect while MSFS was closed. They are ignored; nothing to do. |
 | BeyondATC can't find MSFS after ClearanceLink crashed or the PC lost power | Start ClearanceLink and close it again. That removes its files from BeyondATC's folder. |
 

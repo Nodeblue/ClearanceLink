@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using ClearanceLink.Fsltl;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
 
@@ -111,7 +112,8 @@ public sealed record PanelState(
     bool XPlaneRunning = false,
     bool MsfsInstalled = true,
     FlightPlanView? FlightPlan = null,
-    bool LoadArmed = false);
+    bool LoadArmed = false,
+    PushbackAddOn Pushback = PushbackAddOn.Unknown);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -164,7 +166,7 @@ public static class CduPages
             Row("ATC AIRPORT", "SCENERY", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
             Row("CONNECTION", "SESSION LOG", new(s.Connection == ConnectionMode.Automatic ? "AUTOMATIC" : "ALWAYS ON", CduColor.Magenta),
                 s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport),
-            Row("RUNNING FOR", Traffic(s).Text == UpdateModels ? "FSLTL MODELS" : "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
+            Row("PUSHBACK", Traffic(s).Text == UpdateModels ? "FSLTL MODELS" : "TRAFFIC", Pushback(s), Traffic(s), CduKey.None, s switch
             {
                 { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
                 { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
@@ -326,8 +328,8 @@ public static class CduPages
         {
             CduRow.Empty, CduRow.Empty, CduRow.Empty, CduRow.Empty,
             s.Update is { } update
-                ? Row("", "NEW VERSION", new(""), new($"{update.Version}>", CduColor.Magenta), CduKey.None, CduKey.OpenUpdatePage)
-                : CduRow.Empty,
+                ? Row("RUNNING FOR", "NEW VERSION", new(Duration(s.Uptime)), new($"{update.Version}>", CduColor.Magenta), CduKey.None, CduKey.OpenUpdatePage)
+                : Row("RUNNING FOR", "", new(Duration(s.Uptime)), new("")),
             Row("", "", new("<STATUS"), new("WEBSITE>"), CduKey.GoStatus, CduKey.OpenWebsite),
         };
         CduCell[] message =
@@ -501,6 +503,17 @@ public static class CduPages
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SEE SETUP", CduColor.Amber),
         { TrafficAddOn: PluginInstall.State.Installed } => new("WAITING"),
+        _ => new("-"),
+    };
+
+    /// <summary>
+    /// The status page's pushback half: whether Better Pushback is in X-Plane. Without it, BeyondATC's pushback
+    /// requests are not passed on, so the tug never comes (not a fault: white, not amber).
+    /// </summary>
+    private static CduCell Pushback(PanelState s) => (s.XPlaneConnected, s.Pushback) switch
+    {
+        (true, PushbackAddOn.Installed) => new("BETTER PB", CduColor.Green),
+        (true, PushbackAddOn.NotInstalled) => new("NOT FOUND"),
         _ => new("-"),
     };
 
