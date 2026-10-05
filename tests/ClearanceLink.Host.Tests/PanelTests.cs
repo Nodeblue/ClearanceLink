@@ -363,11 +363,26 @@ public sealed class PanelTests
         }
 
         // The same pages once everything is set up and a flight is on: the plugin installed and drawing traffic.
-        var flying = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154 };
+        // The FPLN page shows a SimBrief plan already sent to X-Plane's FMS (fixed times so the picture stays the same).
+        var sent = new DateTimeOffset(2026, 10, 5, 7, 40, 0, TimeSpan.Zero);
+        var plan = new SimbriefFlight("1", "YBBN", "YSSY", new Uri("https://www.simbrief.com/ofp/flightplans/YBBNYSSY_XPE.fms"))
+        {
+            Generated = sent.AddMinutes(-12),
+            Route = "DCT SANEG H91 ADMAR Q404 ADMOD Y50 BOREE BORE5A",
+            CruiseFeet = 43000,
+            OriginRunway = "01L",
+            DestinationRunway = "34L",
+            Star = "BORE5A",
+        };
+        var flying = Ready with
+        {
+            TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154,
+            FlightPlan = new FlightPlanView(plan, sent.AddMinutes(-2), SavedAs: plan.FileName, SentAt: sent),
+        };
         window.Close();
         window = new PanelWindow(() => flying);
         window.Show();
-        foreach (var page in new[] { PanelPage.Status, PanelPage.Setup, PanelPage.StartModels })
+        foreach (var page in new[] { PanelPage.Status, PanelPage.FlightPlan, PanelPage.Setup, PanelPage.StartModels })
         {
             window.ShowPage(page);
             var frame = window.CaptureRenderedFrame();
