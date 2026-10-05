@@ -96,7 +96,10 @@ public sealed class AppSettings
 
 public enum ConnectionMode
 {
-    /// <summary>ClearanceLink answers on MSFS's default connection while MSFS is closed; BeyondATC's folder is untouched.</summary>
+    /// <summary>
+    /// BeyondATC's SimConnect.cfg files point at ClearanceLink only while it runs and MSFS is closed (ADR-0012); MSFS's
+    /// default connection while MSFS is closed when BeyondATC's folder can't be written.
+    /// </summary>
     Automatic,
 
     /// <summary>BeyondATC's SimConnect.cfg files point at ClearanceLink, so it reaches X-Plane even while MSFS is open.</summary>

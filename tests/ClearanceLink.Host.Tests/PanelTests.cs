@@ -32,7 +32,7 @@ public sealed class PanelTests
         LastAirportSource: "Orbx YBBN",
         MsfsRunning: false,
         Connection: ConnectionMode.Automatic,
-        OldConfigFiles: false,
+        BatcRedirected: false,
         SessionLog: true,
         SessionLogBytes: 2_500_000,
         KeepDays: 7,
@@ -116,12 +116,15 @@ public sealed class PanelTests
     }
 
     [Fact]
-    public void Setup_offers_to_remove_old_files_only_in_automatic_mode()
+    public void Setup_says_where_BeyondATC_goes()
     {
-        var old = Ready with { OldConfigFiles = true };
+        string Help(PanelState state) => CduPages.Build(PanelPage.Setup, state).Scratchpad.Text;
 
-        Assert.Contains(CduPages.Build(PanelPage.Setup, old).Rows, r => r.KeyRight == CduKey.RemoveOldFiles);
-        Assert.DoesNotContain(CduPages.Build(PanelPage.Setup, old with { Connection = ConnectionMode.AlwaysOn }).Rows, r => r.KeyRight == CduKey.RemoveOldFiles);
+        Assert.Equal(CduPages.BatcUntilClose, Help(Ready with { BatcRedirected = true }));
+        Assert.True(CduPages.BatcUntilClose.Length <= CduPages.Width);
+        Assert.Equal("CLOSE MSFS BEFORE FLYING", Help(Ready with { BatcRedirected = true, MsfsRunning = true }));
+        Assert.Equal("", Help(Ready));
+        Assert.Equal("BATC SET TO X-PLANE", Help(Ready with { Connection = ConnectionMode.AlwaysOn, BatcRedirected = true }));
     }
 
     [Fact]
@@ -130,9 +133,6 @@ public sealed class PanelTests
         var missing = Ready with { TrafficAddOn = PluginInstall.State.NotInstalled };
         Assert.Contains(CduPages.Build(PanelPage.Setup, missing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn && r.Right.Text == "INSTALL>");
         Assert.Contains(CduPages.Build(PanelPage.Status, missing).Rows, r => r.Right.Text == "SEE SETUP");
-
-        // Old BeyondATC files take that row until they are removed.
-        Assert.DoesNotContain(CduPages.Build(PanelPage.Setup, missing with { OldConfigFiles = true }).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
 
         var drawing = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 42 };
         Assert.Contains(CduPages.Build(PanelPage.Status, drawing).Rows, r => r.Right.Text == "42 AIRCRAFT");

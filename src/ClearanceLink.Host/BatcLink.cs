@@ -1,0 +1,84 @@
+using ClearanceLink.Host.Support;
+
+namespace ClearanceLink.Host;
+
+/// <summary>
+/// Connection automatic: BeyondATC is pointed at ClearanceLink's TCP port only while ClearanceLink runs and MSFS is
+/// closed, so MSFS's default SimConnect pipe stays free and other MSFS add-ons (SPAD.neXt, SayIntentions) never see
+/// a half-there MSFS (ADR-0012). The two SimConnect.cfg files are written when serve starts or MSFS closes, and
+/// removed when MSFS starts or ClearanceLink stops. A guard process (<c>batc-guard</c>) removes them if ClearanceLink
+/// ends without doing so (a crash, or killed).
+/// </summary>
+public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? startGuard = null)
+{
+    private readonly Lock _gate = new();
+    private bool _guardStarted;
+
+    /// <summary>Why the files could not be written or removed the last time; null when that worked.</summary>
+    public string? Problem { get; private set; }
+
+    public BatcRedirect Redirect => redirect;
+
+    /// <summary>
+    /// True when serve should use the redirect: BeyondATC's folder is known and both its folders can be written.
+    /// Otherwise serve falls back to answering on MSFS's default pipe.
+    /// </summary>
+    public static bool Usable(BatcRedirect redirect) => redirect.CanWrite();
+
+    /// <summary>Follows MSFS (<see cref="Transport.MsfsGate.Changed"/>): files off while it runs, on while it is closed.</summary>
+    public void Follow(bool msfsRunning)
+    {
+        lock (_gate)
+        {
+            if (msfsRunning)
+            {
+                Apply(redirect.SwitchOff, "batc: MSFS is running; BeyondATC pointed back at MSFS");
+                return;
+            }
+
+            if (!_guardStarted && startGuard is not null)
+            {
+                _guardStarted = true;
+                startGuard();
+            }
+
+            Apply(redirect.SwitchOn, "batc: BeyondATC pointed at ClearanceLink until it closes");
+        }
+    }
+
+    /// <summary>Serve is stopping: BeyondATC goes back to MSFS, unless the user has just chosen always on.</summary>
+    public void Release(ConnectionMode now)
+    {
+        lock (_gate)
+        {
+            if (now == ConnectionMode.Automatic)
+            {
+                Apply(redirect.SwitchOff, "batc: ClearanceLink closing; BeyondATC pointed back at MSFS");
+            }
+        }
+    }
+
+    /// <summary>
+    /// What the guard does once ClearanceLink has gone: remove the files, unless always on was chosen meanwhile or
+    /// another ClearanceLink is already serving on the port (it has written them again).
+    /// </summary>
+    public static bool GuardShouldRelease(ConnectionMode now, bool portInUse) => now == ConnectionMode.Automatic && !portInUse;
+
+    private void Apply(Func<IReadOnlyList<string>> change, string line)
+    {
+        try
+        {
+            var done = change();
+            Problem = null;
+            if (done.Any(d => !d.StartsWith("already set", StringComparison.Ordinal) && !d.StartsWith("left alone", StringComparison.Ordinal)))
+            {
+                log($"{line} ({string.Join("; ", done)})");
+            }
+        }
+        catch (RedirectFailedException ex)
+        {
+            Problem = ex.Message;
+            log($"batc: {ex.Message}");
+        }
+    }
+}
