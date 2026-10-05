@@ -43,6 +43,7 @@ public sealed class SessionTests
         Assert.InRange(BinaryPrimitives.ReadDoubleLittleEndian(block[16..]), 10, 20);
         Assert.Equal(ExpectedDefine17Size, block.Length);
         Assert.Empty(session.Stats.UnmappedNames.Where(n => !n.StartsWith("L:", StringComparison.Ordinal)).Intersect(Define17Names));
+        Assert.DoesNotContain(_log, l => l.Contains("UNITS", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -168,6 +169,36 @@ public sealed class SessionTests
 
         Assert.Null(Assert.Single(source.Requests).Definition);
         Assert.Equal(RecvId.Exception, (RecvId)_sent[^1].TypeField);
+    }
+
+    [Fact]
+    public async Task Units_that_cannot_be_converted_are_logged_once()
+    {
+        var session = NewSession();
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "PLANE LATITUDE", "degrees"));
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "PLANE ALTITUDE", "knots"));
+        await session.HandleAsync(TestPackets.RequestDataOnSimObject(1004, 17, period: 1));
+        await session.HandleAsync(TestPackets.RequestDataOnSimObject(1005, 17, period: 1));
+
+        Assert.Equal(2, _sent.Count(p => (RecvId)p.TypeField == RecvId.SimObjectData));
+        var line = Assert.Single(_log, l => l.Contains("UNITS", StringComparison.Ordinal));
+        Assert.StartsWith("#1 UNITS cannot convert '", line);
+        Assert.Contains("'knots'", line);
+        Assert.Contains("PLANE ALTITUDE", line);
+    }
+
+    [Fact]
+    public async Task One_time_messages_are_bounded_per_connection()
+    {
+        var session = NewSession();
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "PLANE LATITUDE", "degrees"));
+        for (uint id = 1; id <= SimConnectSession.MaxLoggedOnce + 50; id++)
+        {
+            await session.HandleAsync(TestPackets.RequestDataOnSimObject(id, 17, period: 1, objectId: 1_000_000 + id));
+        }
+
+        Assert.Equal(SimConnectSession.MaxLoggedOnce, _log.Count(l => l.Contains("which does not exist", StringComparison.Ordinal)));
+        Assert.Single(_log, l => l == $"#1 {SimConnectSession.MaxLoggedOnce} one-time messages logged; further one-time messages suppressed for this connection");
     }
 
     [Fact]
