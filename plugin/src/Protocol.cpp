@@ -79,6 +79,10 @@ std::optional<Message> Parse(const std::string& line, std::string* error) {
 
     if (type == "hello") return Hello{rest};
     if (type == "clear") return Clear{};
+    if (type == "fms") {
+        if (rest.empty() || rest.size() > 1024) return fail("bad fms: " + line);
+        return Fms{rest};
+    }
     if (type == "del") {
         auto w = Words(rest, 1, nullptr);
         Del del;
@@ -173,6 +177,28 @@ std::string FormatError(uint32_t id, const std::string& message) {
     for (auto& c : clean)
         if (c == '\n' || c == '\r') c = ' ';
     return "error " + std::to_string(id) + " " + clean;
+}
+
+std::string FormatFms(const std::string& error) {
+    if (error.empty()) return "fms ok";
+    std::string clean = error;
+    for (auto& c : clean)
+        if (c == '\n' || c == '\r') c = ' ';
+    return "fms error " + clean;
+}
+
+bool LooksLikeFms(const std::string& text) {
+    auto lines = Lines(text.data(), std::min<size_t>(text.size(), 256));
+    auto trim = [](std::string s) {
+        while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.pop_back();
+        while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());
+        return s;
+    };
+    if (lines.size() < 2) return false;
+    auto first = trim(lines[0]), second = trim(lines[1]);
+    const std::string version = "Version";
+    return (first == "I" || first == "A") && second.size() > version.size() &&
+           second.compare(second.size() - version.size(), version.size(), version) == 0;
 }
 
 }  // namespace clink

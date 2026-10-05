@@ -91,6 +91,16 @@ void ChecksLightsAndClampsRatios() {
     CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 1e30", &error));
     CHECK(!clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 2.5", &error));
     CHECK(std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 0 0 0 0 31")).lights == 31);
+
+    // fms: a .fms path (spaces kept) to load into X-Plane's FMS, answered with "fms ok" or "fms error <why>".
+    CHECK(std::get<clink::Fms>(*clink::Parse("fms C:\\X-Plane 12\\Output\\FMS plans\\YBBNYSSY.fms")).path ==
+          "C:\\X-Plane 12\\Output\\FMS plans\\YBBNYSSY.fms");
+    CHECK(!clink::Parse("fms", &error) && error.find("bad fms") != std::string::npos);
+    CHECK(clink::FormatFms("") == "fms ok");
+    CHECK(clink::FormatFms("no\nfile") == "fms error no file");
+    CHECK(clink::LooksLikeFms("I\r\n1100 Version\r\nCYCLE 2610\r\n"));
+    CHECK(clink::LooksLikeFms("A\n3 version\n") == false);
+    CHECK(!clink::LooksLikeFms("<html>Not found</html>"));
     auto pos = std::get<clink::Pos>(*clink::Parse("pos 1 1 2 3 4 5 6 7 0 1.5 -0.2 7 0.5 0"));
     CHECK(pos.gear == 1.0f && pos.flaps == 0.0f && pos.spoilers == 1.0f && pos.thrust == 0.5f);
 }

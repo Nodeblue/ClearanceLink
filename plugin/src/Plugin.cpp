@@ -91,6 +91,28 @@ void LoadCsl() {
     Log(std::to_string(XPMPGetNumberOfInstalledModels()) + " CSL models from " + std::to_string(g_cslFolders.size()) + " folders");
 }
 
+// Loads an X-Plane .fms file into X-Plane's own FMS/GPS (pilot side). XPLMLoadFMSFlightPlan is X-Plane 12.1+ (XPLM410),
+// so it is looked up at run time: on an older X-Plane the plugin still loads and answers with an error.
+std::string LoadFlightPlan(const std::string& path) {
+    using LoadFn = void (*)(int, const char*, unsigned int);
+    static auto load = reinterpret_cast<LoadFn>(XPLMFindSymbol("XPLMLoadFMSFlightPlan"));
+    if (!load) return "this X-Plane cannot load flight plans from plugins (needs 12.1 or later)";
+
+    std::error_code error;
+    const auto file = std::filesystem::u8path(path);
+    if (file.extension() != ".fms" || !std::filesystem::is_regular_file(file, error)) return "not an .fms file: " + path;
+    const auto size = std::filesystem::file_size(file, error);
+    if (error || size == 0 || size > 512 * 1024) return "flight plan file is empty or too large";
+    std::ifstream in(file, std::ios::binary);
+    std::string text(static_cast<size_t>(size), '\0');
+    if (!in.read(text.data(), static_cast<std::streamsize>(text.size()))) return "cannot read " + path;
+    if (!clink::LooksLikeFms(text)) return "not an X-Plane flight plan: " + path;
+
+    load(0, text.data(), static_cast<unsigned int>(text.size()));
+    Log("flight plan loaded into the FMS from " + path);
+    return {};
+}
+
 void RemoveAll() {
     g_aircraft.clear();
     g_refusedForNoModels.clear();
@@ -105,7 +127,7 @@ void Handle(const clink::Message& message, float now) {
         // a failure) every time ClearanceLink re-sends the add.
         if (XPMPGetNumberOfInstalledModels() == 0 && g_aircraft.find(add->id) == g_aircraft.end()) {
             if (g_refusedForNoModels.insert(add->id).second)
-                g_socket.Send(clink::ClearanceLinkPort, clink::FormatError(add->id, "no CSL models installed"));
+                g_socket.Reply(clink::FormatError(add->id, "no CSL models installed"));
             LogOnce("no CSL aircraft models found; BeyondATC's traffic is not drawn (install Bluebell or convert FSLTL)");
             return;
         }
@@ -124,7 +146,7 @@ void Handle(const clink::Message& message, float now) {
                 }
             }
         } catch (const std::exception& e) {
-            g_socket.Send(clink::ClearanceLinkPort, clink::FormatError(add->id, e.what()));
+            g_socket.Reply(clink::FormatError(add->id, e.what()));
             LogOnce(std::string("cannot create ") + add->icaoType + " " + add->icaoAirline + ": " + e.what());
         }
     } else if (auto pos = std::get_if<clink::Pos>(&message)) {
@@ -141,6 +163,10 @@ void Handle(const clink::Message& message, float now) {
         g_refusedForNoModels.erase(del->id);
     } else if (std::holds_alternative<clink::Clear>(message)) {
         RemoveAll();
+    } else if (auto fms = std::get_if<clink::Fms>(&message)) {
+        const auto problem = LoadFlightPlan(fms->path);
+        if (!problem.empty()) Log("flight plan not loaded: " + problem);
+        g_socket.Reply(clink::FormatFms(problem));
     }
 }
 
@@ -194,17 +220,16 @@ void FlightLoopBody(float now) {
         for (const auto& [id, aircraft] : g_aircraft) {
             if (auto ground = aircraft->GroundElevationFt()) lines += clink::FormatGround(id, *ground) + "\n";
             if (lines.size() > 60000) {
-                g_socket.Send(clink::ClearanceLinkPort, lines);
+                g_socket.Reply(lines);
                 lines.clear();
             }
         }
-        if (!lines.empty()) g_socket.Send(clink::ClearanceLinkPort, lines);
+        if (!lines.empty()) g_socket.Reply(lines);
     }
 
     if (now - g_lastStatus >= StatusReportSeconds) {
         g_lastStatus = now;
-        g_socket.Send(clink::ClearanceLinkPort,
-                      clink::FormatStatus(Version, g_aircraft.size(), XPMPGetNumberOfInstalledModels(), g_cslFolders));
+        g_socket.Reply(clink::FormatStatus(Version, g_aircraft.size(), XPMPGetNumberOfInstalledModels(), g_cslFolders));
     }
 }
 
@@ -258,12 +283,17 @@ PLUGIN_API int XPluginEnable() {
     }
     ApplyLabels(LabelsSetting(), false);
 
-    std::string socketError;
-    if (!g_socket.Open(clink::PluginPort, socketError)) {
-        Log("cannot listen for ClearanceLink: " + socketError);
-    } else {
-        Log(std::string("plugin ") + Version + " listening on 127.0.0.1:" + std::to_string(clink::PluginPort));
+    std::string socketErrors;
+    for (const auto port : clink::PluginPorts) {
+        std::string error;
+        if (g_socket.Open(port, error)) {
+            Log(std::string("plugin ") + Version + " listening on 127.0.0.1:" + std::to_string(port));
+            break;
+        }
+        socketErrors += (socketErrors.empty() ? "" : "; ") + error;
     }
+    if (!g_socket.IsOpen()) Log("cannot listen for ClearanceLink (traffic will not be drawn): " + socketErrors);
+    else if (!socketErrors.empty()) Log("ports not available: " + socketErrors);
     XPLMRegisterFlightLoopCallback(FlightLoop, -1.0f, nullptr);
     return 1;
 }

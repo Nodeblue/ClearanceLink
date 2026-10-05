@@ -7,15 +7,34 @@ namespace ClearanceLink.Host.Support;
 /// <summary>The user's latest SimBrief flight and where SimBrief keeps its X-Plane 11/12 flight plan.</summary>
 public sealed record SimbriefFlight(string RequestId, string Origin, string Destination, Uri FmsFile)
 {
+    /// <summary>When SimBrief made the plan, when it says.</summary>
+    public DateTimeOffset? Generated { get; init; }
+
+    /// <summary>The route (general.route, e.g. DCT SANEG H91 ADMAR Q404 ADMOD Y50 BOREE BORE5A); null when not given.</summary>
+    public string? Route { get; init; }
+
+    /// <summary>Initial cruise altitude in feet, when given.</summary>
+    public int? CruiseFeet { get; init; }
+
+    public string? OriginRunway { get; init; }
+
+    public string? DestinationRunway { get; init; }
+
+    /// <summary>SID and STAR names; null when the plan has none (SimBrief sends an empty object then).</summary>
+    public string? Sid { get; init; }
+
+    public string? Star { get; init; }
+
     /// <summary>The name the plan is saved under in X-Plane's Output/FMS plans, e.g. YBBNYSSY.fms. The same route overwrites itself.</summary>
     public string FileName => $"{Origin}{Destination}.fms";
 }
 
 /// <summary>
-/// Saves the user's latest SimBrief plan as an X-Plane flight plan (.fms) so it loads in the aircraft's FMS by name,
-/// matching the plan BeyondATC downloads from SimBrief itself. SimBrief has already expanded the airways and added the
-/// runways, SID and STAR. The SimBrief pilot ID comes from BeyondATC's own setting, or from settings simbrief-id.
-/// Any failure (offline, no plan, SimBrief error) gives null and a log line, never an error.
+/// Fetches the user's latest SimBrief plan (the one BeyondATC downloads from SimBrief itself) and its X-Plane 11/12
+/// flight plan (.fms), in which SimBrief has already expanded the airways and added the runways, SID and STAR. Used by
+/// the window's FPLN page and `clearancelink simbrief`; nothing is fetched unless the user asks. The SimBrief pilot ID
+/// comes from BeyondATC's own setting, or from settings simbrief-id. Any failure (offline, no plan, SimBrief error)
+/// gives null and a log line, never an error.
 /// </summary>
 public static class SimbriefPlan
 {
@@ -23,9 +42,6 @@ public static class SimbriefPlan
     public const string BatcPrefsKey = @"Software\Skirmish Mode Games, Inc\BeyondATC";
 
     public const string BatcPrefsValue = "simbriefId_h";
-
-    /// <summary>How often a running ClearanceLink asks SimBrief for a newer plan.</summary>
-    public static readonly TimeSpan CheckEvery = TimeSpan.FromMinutes(2);
 
     /// <summary>X-Plane's flight plan folder, relative to the X-Plane folder.</summary>
     public static readonly string PlansFolder = Path.Combine("Output", "FMS plans");
@@ -95,7 +111,22 @@ public static class SimbriefPlan
             return null;
         }
 
-        return new SimbriefFlight(request, origin, destination, uri);
+        var generated = long.TryParse(Text(root, "params", "time_generated"), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var unix)
+            ? DateTimeOffset.FromUnixTimeSeconds(unix)
+            : (DateTimeOffset?)null;
+        var cruise = int.TryParse(Text(root, "general", "initial_altitude"), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var feet)
+            ? feet
+            : (int?)null;
+        return new SimbriefFlight(request, origin, destination, uri)
+        {
+            Generated = generated,
+            Route = Text(root, "general", "route") is { Length: > 0 } route ? string.Join(' ', route.Split(' ', StringSplitOptions.RemoveEmptyEntries)) : null,
+            CruiseFeet = cruise,
+            OriginRunway = Ident(Text(root, "origin", "plan_rwy")),
+            DestinationRunway = Ident(Text(root, "destination", "plan_rwy")),
+            Sid = Ident(Text(root, "general", "sid_ident")),
+            Star = Ident(Text(root, "general", "star_ident")),
+        };
     }
 
     /// <summary>True when the text looks like an X-Plane .fms flight plan (first line I or A, then the format version).</summary>
@@ -127,70 +158,45 @@ public static class SimbriefPlan
         }
     }
 
-    /// <summary>Downloads the plan into X-Plane's Output/FMS plans; returns the file written, or null.</summary>
-    public static async Task<string?> SaveAsync(SimbriefFlight flight, string xplaneRoot, HttpMessageHandler? handler = null, CancellationToken cancel = default)
+    /// <summary>Downloads the plan's .fms text; null (and a log line) when it fails or is not an X-Plane flight plan.</summary>
+    public static async Task<string?> DownloadAsync(SimbriefFlight flight, HttpMessageHandler? handler = null, CancellationToken cancel = default)
     {
         try
         {
             using var http = Client(handler);
             var text = await http.GetStringAsync(flight.FmsFile, cancel).ConfigureAwait(false);
-            if (!LooksLikeFms(text))
+            if (LooksLikeFms(text))
             {
-                PacketConsole.Info($"simbrief: {flight.FmsFile} is not an X-Plane flight plan; not saved");
-                return null;
+                return text;
             }
 
+            PacketConsole.Info($"simbrief: {flight.FmsFile} is not an X-Plane flight plan");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            PacketConsole.Info($"simbrief: could not download the flight plan: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    /// <summary>Writes the plan into X-Plane's Output/FMS plans (via a .tmp file); returns the path, or null.</summary>
+    public static string? Save(SimbriefFlight flight, string fms, string xplaneRoot)
+    {
+        try
+        {
             var folder = Path.Combine(xplaneRoot, PlansFolder);
             Directory.CreateDirectory(folder);
             var path = Path.Combine(folder, flight.FileName);
             var tmp = path + ".tmp";
-            await File.WriteAllTextAsync(tmp, text, cancel).ConfigureAwait(false);
+            File.WriteAllText(tmp, fms);
             File.Move(tmp, path, overwrite: true);
             return path;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             PacketConsole.Info($"simbrief: could not save the flight plan: {ex.Message}");
             return null;
-        }
-    }
-
-    /// <summary>
-    /// While ClearanceLink runs: saves the latest plan now and whenever SimBrief has a newer one. <paramref name="saved"/>
-    /// gets the saved file's name (e.g. YBBNYSSY.fms) for the window.
-    /// </summary>
-    public static async Task FollowAsync(Func<AppSettings> settings, Func<string?> xplaneRoot, Action<string> saved, HttpMessageHandler? handler,
-        TimeSpan every, CancellationToken cancel)
-    {
-        string? last = null;
-        var told = false;
-        try
-        {
-            while (!cancel.IsCancellationRequested)
-            {
-                var now = settings();
-                if (now.SimbriefPlans && PilotId(now) is { } id && xplaneRoot() is { } root)
-                {
-                    if (await FindAsync(id, handler, cancel).ConfigureAwait(false) is { } flight && flight.RequestId != last
-                        && await SaveAsync(flight, root, handler, cancel).ConfigureAwait(false) is { } path)
-                    {
-                        last = flight.RequestId;
-                        PacketConsole.Info($"simbrief: saved {flight.Origin}-{flight.Destination} as {path}");
-                        saved(flight.FileName);
-                    }
-                }
-                else if (!told && now.SimbriefPlans)
-                {
-                    told = true;
-                    PacketConsole.Info("simbrief: no SimBrief pilot ID (link SimBrief in BeyondATC, or: settings simbrief-id <id>) or no X-Plane folder; no flight plan saved");
-                }
-
-                await Task.Delay(every, cancel).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Closing.
         }
     }
 
@@ -211,6 +217,10 @@ public static class SimbriefPlan
                 _ => null,
             }
             : null;
+
+    // Every SimBrief value is a string (numbers too); an empty one comes as {} (read on Ben's PC, 2026-10-05).
+    private static string? Ident(string? text) =>
+        text is { Length: > 0 and <= 12 } && text.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-') ? text.ToUpperInvariant() : null;
 
     private static string? Icao(string? code) =>
         code is { Length: >= 3 and <= 4 } && code.All(char.IsAsciiLetterOrDigit) ? code.ToUpperInvariant() : null;

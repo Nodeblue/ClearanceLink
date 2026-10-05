@@ -281,7 +281,7 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
             if (last != quietSince)
             {
                 // Once per quiet spell, not every probe, so a long pause does not fill the log.
-                _log($"xplane no dataref update for {age.TotalSeconds:0}s; X-Plane answers, keeping the connection (paused?)");
+                _log($"xplane no dataref update for {age.TotalSeconds:0}s; X-Plane answers, keeping the connection (X-Plane loading or paused)");
                 quietSince = last;
             }
 

@@ -19,12 +19,16 @@ public:
     void Close();
     bool IsOpen() const;
 
-    // Next waiting datagram, or 0 when none. Never blocks.
+    // Next waiting datagram, or 0 when none. Never blocks. Remembers who sent it for Reply.
     size_t Receive(char* buffer, size_t size);
 
     bool Send(uint16_t port, const std::string& text);
 
+    // Sends to the 127.0.0.1 port the last datagram came from; false before anything was received.
+    bool Reply(const std::string& text);
+
 private:
+    uint16_t replyPort_ = 0;
 #ifdef _WIN32
     uintptr_t socket_ = ~uintptr_t(0);
 #else

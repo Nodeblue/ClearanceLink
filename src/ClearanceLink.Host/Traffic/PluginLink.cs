@@ -43,14 +43,21 @@ public sealed record PluginStatus(string Version, int Aircraft, int Models, IRea
 /// </summary>
 public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
 {
-    public const int PluginPort = 49710;
-    public const int ClearanceLinkPort = 49711;
+    /// <summary>
+    /// The ports the plugin (0.5.3+) may listen on, first choice first; it answers whichever port wrote to it, so
+    /// ClearanceLink listens on any free port. The old 49710/49711 could fall in a block Windows reserves for
+    /// Hyper-V/WinNAT (Ben's PC, 2026-10-05). Keep in step with PluginPorts in plugin/src/Protocol.h.
+    /// </summary>
+    public static readonly int[] PluginPorts = [34710, 38710, 42710, 46710, 49710];
 
     /// <summary>The plugin counts as connected while its status lines keep arriving.</summary>
     public static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(5);
 
     private readonly UdpClient _udp;
-    private readonly IPEndPoint _plugin;
+    private readonly IPEndPoint[] _candidates;
+
+    // Where the plugin last answered from; while it is not answering, lines go to every candidate port.
+    private volatile IPEndPoint? _plugin;
     private readonly string _version;
     private readonly Action<string> _log;
     private readonly TimeProvider _time;
@@ -61,7 +68,8 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
     private Task? _hello;
     private PluginStatus? _status;
 
-    public PluginLink(string version, Action<string> log, int listenPort = ClearanceLinkPort, int pluginPort = PluginPort, TimeProvider? time = null)
+    public PluginLink(string version, Action<string> log, int listenPort = 0, int pluginPort = 0, TimeProvider? time = null,
+        IReadOnlyList<int>? pluginPorts = null)
     {
         _version = version;
         _log = log;
@@ -74,7 +82,7 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
             _udp.Client.IOControl(SioUdpConnReset, [0, 0, 0, 0], null);
         }
 
-        _plugin = new IPEndPoint(IPAddress.Loopback, pluginPort);
+        _candidates = (pluginPorts ?? (pluginPort == 0 ? PluginPorts : [pluginPort])).Select(p => new IPEndPoint(IPAddress.Loopback, p)).ToArray();
     }
 
     public int ListenPort => ((IPEndPoint)_udp.Client.LocalEndPoint!).Port;
@@ -83,6 +91,24 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
     public PluginStatus? Status => _status is { } s && _time.GetUtcNow() - s.At <= StatusTimeout ? s : null;
 
     public event Action<uint, string>? AircraftError;
+
+    /// <summary>The plugin's answer to <see cref="LoadFms"/>: null when X-Plane's FMS took the plan, else why not.</summary>
+    public event Action<string?>? FmsAnswered;
+
+    /// <summary>
+    /// Asks the plugin (0.5.3+) to load an X-Plane .fms file into X-Plane's own FMS/GPS. False when no plugin is
+    /// connected; the answer comes as <see cref="FmsAnswered"/> (an older plugin gives none).
+    /// </summary>
+    public bool LoadFms(string path)
+    {
+        if (Status is null || path.Contains('\n', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        Send($"fms {path}");
+        return true;
+    }
 
     public void Start()
     {
@@ -143,6 +169,12 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
                 }
 
                 break;
+            case ["fms", "ok", ..]:
+                FmsAnswered?.Invoke(null);
+                break;
+            case ["fms", "error", ..]:
+                FmsAnswered?.Invoke(line.Split(' ', 3) is { Length: 3 } why ? why[2] : "unknown");
+                break;
             case ["error", var id, ..] when uint.TryParse(id, CultureInfo.InvariantCulture, out var aircraft):
                 var message = line.Split(' ', 3) is { Length: 3 } e ? e[2] : "";
                 if (_errors.TryAdd(aircraft, message))
@@ -160,7 +192,23 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
         var bytes = Encoding.UTF8.GetBytes(line + "\n");
         try
         {
-            _udp.Send(bytes, bytes.Length, _plugin);
+            if (Status is not null && _plugin is { } plugin)
+            {
+                _udp.Send(bytes, bytes.Length, plugin);
+                return;
+            }
+
+            foreach (var candidate in _candidates)
+            {
+                try
+                {
+                    _udp.Send(bytes, bytes.Length, candidate);
+                }
+                catch (SocketException)
+                {
+                    // Nothing on that port.
+                }
+            }
         }
         catch (SocketException)
         {
@@ -191,6 +239,11 @@ public sealed class PluginLink : IPluginTraffic, IAsyncDisposable
             catch (SocketException)
             {
                 continue;
+            }
+
+            if (IPAddress.IsLoopback(result.RemoteEndPoint.Address))
+            {
+                _plugin = result.RemoteEndPoint;
             }
 
             foreach (var line in Encoding.UTF8.GetString(result.Buffer).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))

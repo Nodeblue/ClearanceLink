@@ -55,8 +55,8 @@ namespace ClearanceLink.Host
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
               clearancelink simbrief [--xplane-root <dir>]
                   Save your latest SimBrief plan into X-Plane's Output\FMS plans (e.g. YBBNYSSY.fms) to load in the FMS.
-                  The pilot ID comes from BeyondATC's SimBrief link, or settings simbrief-id. serve does this on its own
-                  every 2 minutes unless settings simbrief-plans off.
+                  The pilot ID comes from BeyondATC's SimBrief link, or settings simbrief-id. The window's FPLN page does
+                  the same and can also load it into X-Plane's FMS.
               clearancelink update
                   Ask GitHub whether a newer ClearanceLink release exists and print where to download it. The window does
                   this on its own at start-up (ABOUT page) unless update-check is off. Nothing is downloaded.
@@ -373,14 +373,6 @@ namespace ClearanceLink.Host
                             _ => throw new ArgumentException("update-check takes on or off"),
                         };
                         break;
-                    case "simbrief-plans":
-                        settings.SimbriefPlans = value switch
-                        {
-                            "on" => true,
-                            "off" => false,
-                            _ => throw new ArgumentException("simbrief-plans takes on or off"),
-                        };
-                        break;
                     case "simbrief-id":
                         settings.SimbriefId = auto ? null
                             : value.Length is > 0 and <= 64 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
@@ -393,7 +385,7 @@ namespace ClearanceLink.Host
                             : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
                         break;
                     default:
-                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days, update-check, simbrief-plans or simbrief-id.");
+                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days, update-check or simbrief-id.");
                 }
             }
 
@@ -411,7 +403,7 @@ namespace ClearanceLink.Host
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
             Console.WriteLine($"  Update check      {(settings.CheckForUpdates ? "on (asks GitHub for a newer release at start-up)" : "off")}");
             var pilot = settings.SimbriefId ?? (SimbriefPlan.PilotIdFromBatc() is null ? "not found" : "BeyondATC's");
-            Console.WriteLine($"  SimBrief plans    {(settings.SimbriefPlans ? $"on (saved into X-Plane's Output\\FMS plans; pilot ID: {pilot})" : "off")}");
+            Console.WriteLine($"  SimBrief pilot ID {pilot}");
             return 0;
         }
 
@@ -544,8 +536,13 @@ namespace ClearanceLink.Host
             board.Plugin = () => plugin?.Status;
             var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowBatcAsync(stub, server, msfs, ct);
             var xplaneRoot = FindXPlane(options)?.Root;
-            var simbriefTask = SimbriefPlan.FollowAsync(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot,
-                file => board.FlightPlan = file, null, SimbriefPlan.CheckEvery, ct);
+            var plans = new FlightPlans(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot, path => plugin?.LoadFms(path) == true);
+            if (plugin is not null)
+            {
+                plugin.FmsAnswered += plans.FmsAnswered;
+            }
+
+            board.FlightPlans = plans;
             onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -563,7 +560,6 @@ namespace ClearanceLink.Host
                 await msfsTask;
                 await bridgeTask;
                 await stubTask;
-                await simbriefTask;
             }
         }
 
@@ -642,7 +638,8 @@ namespace ClearanceLink.Host
                 return 1;
             }
 
-            if (await SimbriefPlan.FindAsync(id) is not { } flight || await SimbriefPlan.SaveAsync(flight, root) is not { } path)
+            if (await SimbriefPlan.FindAsync(id) is not { } flight || await SimbriefPlan.DownloadAsync(flight) is not { } fms
+                || SimbriefPlan.Save(flight, fms, root) is not { } path)
             {
                 Console.WriteLine("No flight plan saved (see the line above).");
                 return 1;
@@ -749,7 +746,7 @@ namespace ClearanceLink.Host
             }
             catch (System.Net.Sockets.SocketException ex)
             {
-                PacketConsole.Info($"plugin: cannot listen on 127.0.0.1:{PluginLink.ClearanceLinkPort} ({ex.Message}); traffic will not be drawn");
+                PacketConsole.Info($"plugin: cannot open a UDP port on 127.0.0.1 ({ex.Message}); traffic will not be drawn");
                 return null;
             }
         }
@@ -867,7 +864,7 @@ namespace ClearanceLink.Host
             }
             catch (System.Net.Sockets.SocketException ex)
             {
-                return Fail($"Cannot listen on 127.0.0.1:{PluginLink.ClearanceLinkPort} ({ex.Message}). Close ClearanceLink first.");
+                return Fail($"Cannot open a UDP port on 127.0.0.1 ({ex.Message}).");
             }
 
             await using var _ = link;
