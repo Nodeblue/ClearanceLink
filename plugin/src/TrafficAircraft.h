@@ -50,8 +50,8 @@ public:
 
 private:
     void SetLabel(const Add& add);
-    // Pitch of the ground along the aircraft's heading (degrees, nose up positive), from two terrain probes.
-    std::optional<float> GroundSlopeDeg(float centreY);
+    // Pitch of the ground along `headingDeg` (degrees, nose up positive), from two terrain probes.
+    std::optional<float> GroundSlopeDeg(float centreY, float headingDeg);
     // The model's nose and main wheels once read from its .obj files (in the background, once per model).
     const Wheels* ModelWheels();
     // Sets the model's bogie dataref: the level the fit found on the ground, 0 (unloaded, tilted) otherwise.
@@ -63,8 +63,8 @@ private:
     float groundOffsetFt_ = 0;
     std::optional<float> groundPitch_;
     std::string requested_;  // type, airline and livery last asked for, to skip re-matching on a repeated add
-    // Probes the terrain under the aircraft now, or reuses the last probe while it has not moved (parked) or is
-    // airborne (only the reported ground height needs it). Returns false when there is no terrain under it.
+    // Probes the terrain under the aircraft now, or reuses the last probe (ShouldReprobeGround, Motion.h). Returns false
+    // when there is no terrain under it.
     bool ProbeGround(bool onGround, float now);
 
     Track track_;  // ClearanceLink's updates, blended between (Motion.h)
@@ -74,6 +74,7 @@ private:
     // Last terrain probe: where (local x, z), when, what it found and the slope along the heading then.
     float probeX_ = 0, probeZ_ = 0, probeTime_ = -1000, probeY_ = 0;
     float probeHeading_ = 0;
+    bool probeOnGround_ = false;  // the last probe was taken on the ground (with the slope)
     std::optional<float> slope_;
     // Propeller and wheel angles the plugin turns each frame (XPMP2 does not turn them from rpm itself).
     float engineAngle_ = 0, tireAngle_ = 0;

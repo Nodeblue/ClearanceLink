@@ -36,6 +36,26 @@ private:
 // Heading change from `from` to `to` in degrees, the short way round (-180..180).
 float HeadingDelta(float from, float to);
 
+// Ground slope is measured this far ahead of and behind an aircraft (metres), with two extra terrain probes.
+constexpr float GroundSlopeProbeMeters = 8.0f;
+
+// Whether to probe the terrain under an aircraft again this frame. Each probe on the ground is three
+// XPLMProbeTerrainXYZ calls (under it, and ahead and behind for the slope). An aircraft on the ground is probed again
+// once it has moved 25 cm or turned 1 degree, but at most every 0.1 s, unless it has moved further than the slope
+// was measured (8 m: fast on the runway, or placed by BATC); parked, every 5 s. Airborne, every 0.25 s (only the
+// `ground` report needs it). Taxiing at 15 m/s used to probe every frame; now it is 10 times a second.
+// `movedM` and `turnedDeg` are since the last probe, `ageS` its age; `probedOnGround` whether it was taken on the
+// ground (with the slope), so touchdown probes at once.
+bool ShouldReprobeGround(bool onGround, bool probedOnGround, float movedM, float turnedDeg, float ageS);
+
+// The terrain height (X-Plane local y) under an aircraft that moved (`dx`, `dz`, local metres: x east, z south) since
+// the terrain was probed at `probeY`, carried along the slope measured then (`slopeDeg`, nose up positive, along
+// `headingDeg` true). Between probes the drawn height follows the taxiway's slope instead of standing still and
+// stepping at each probe; at the next probe only the slope's curvature over the distance moved remains (millimetres
+// to a few centimetres at taxi speeds). Sideways movement keeps the height. Distances beyond the measured slope
+// (GroundSlopeProbeMeters) are capped there, as nothing is known about the terrain further on.
+float GroundYAlongSlope(float probeY, float slopeDeg, float headingDeg, float dx, float dz);
+
 // One aircraft's updates from ClearanceLink and where to draw it between them. It is drawn one update interval behind,
 // blending from where it was drawn when the latest update came to that update, so turns, climbs and pitch changes are
 // smooth. Once that runs out (updates stopped), it moves on at the speed measured between the last two updates

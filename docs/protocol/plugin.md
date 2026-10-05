@@ -69,7 +69,10 @@ overshot, back and forth, until 0.4.3 (YBBN, 2026-10-03). Since 0.4.3 the move-o
 lines received (not the blended point), and is 0 when they are more than 1 s apart (ClearanceLink's keep-alives).
 
 Terrain probes are kept cheap: on the ground an aircraft is probed again only when it has moved 25 cm or turned 1°,
-or every 5 s when parked; in the air every 0.25 s (for the `ground` report).
+or every 5 s when parked; in the air every 0.25 s (for the `ground` report). Since 0.5.2 a moving aircraft is probed
+at most every 0.1 s (sooner only once it has moved 8 m, beyond the measured slope), and between probes its height
+follows the slope measured at the last one, so it does not step on taxiway slopes; before, anything faster than
+about 15 m/s was probed (three probes) every frame.
 
 ## plugin → ClearanceLink
 

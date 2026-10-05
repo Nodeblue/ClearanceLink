@@ -530,6 +530,50 @@ void ReadsAnimationsKeyedHighToLow() {
     CHECK(model.all.size() == 1 && std::fabs(model.all[0].y) < 1e-6f);
 }
 
+void ProbesTerrainAtMostTenTimesASecondWhenMoving() {
+    using clink::ShouldReprobeGround;
+    // Parked: every 5 s only.
+    CHECK(!ShouldReprobeGround(true, true, 0.0f, 0.0f, 4.9f));
+    CHECK(ShouldReprobeGround(true, true, 0.0f, 0.0f, 5.0f));
+    // Taxiing at 15 m/s (25 cm a frame at 60 fps): not every frame, but every 0.1 s.
+    CHECK(!ShouldReprobeGround(true, true, 0.25f * 3, 0.0f, 0.05f));
+    CHECK(ShouldReprobeGround(true, true, 1.5f, 0.0f, 0.1f));
+    // Turning in place, likewise; a tiny move or turn waits for the parked interval.
+    CHECK(!ShouldReprobeGround(true, true, 0.0f, -5.0f, 0.05f));
+    CHECK(ShouldReprobeGround(true, true, 0.0f, -5.0f, 0.1f));
+    CHECK(!ShouldReprobeGround(true, true, 0.2f, 0.5f, 1.0f));
+    // Beyond the measured slope (take-off roll, BATC placing it): at once.
+    CHECK(ShouldReprobeGround(true, true, clink::GroundSlopeProbeMeters, 0.0f, 0.02f));
+    // Airborne every 0.25 s whatever it does; touchdown and lift-off at once.
+    CHECK(!ShouldReprobeGround(false, false, 50.0f, 10.0f, 0.2f));
+    CHECK(ShouldReprobeGround(false, false, 0.0f, 0.0f, 0.25f));
+    CHECK(ShouldReprobeGround(true, false, 0.0f, 0.0f, 0.0f));
+    CHECK(ShouldReprobeGround(false, true, 0.0f, 0.0f, 0.0f));
+}
+
+void CarriesTerrainHeightAlongTheSlope() {
+    using clink::GroundYAlongSlope;
+    const float rise = float(std::tan(2.0 * 3.14159265358979 / 180.0));  // per metre up a 2 degree slope
+    // Heading north is -z in X-Plane's local coordinates: 1 m north up a 2 degree slope.
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 0, 0, -1) - (100 + rise)) < 1e-4f);
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 0, 0, 1) - (100 - rise)) < 1e-4f);  // backwards: down
+    // Heading east is +x; sideways movement keeps the height.
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 90, 3, 0) - (100 + 3 * rise)) < 1e-4f);
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 90, 0, 3) - 100) < 1e-4f);
+    // Capped at the measured slope's length; level ground stays level.
+    CHECK(std::fabs(GroundYAlongSlope(100, 2, 0, 0, -50) - (100 + clink::GroundSlopeProbeMeters * rise)) < 1e-3f);
+    CHECK(GroundYAlongSlope(100, 0, 37, 4, -2) == 100);
+    // Taxiing up a 2 degree slope at 15 m/s probed every 0.1 s: the drawn height rises each frame, no step.
+    float last = GroundYAlongSlope(100, 2, 0, 0, 0);
+    bool rising = true;
+    for (int frame = 1; frame <= 6; ++frame) {
+        const float y = GroundYAlongSlope(100, 2, 0, 0, -0.25f * frame);
+        rising = rising && y > last;
+        last = y;
+    }
+    CHECK(rising && std::fabs(last - (100 + 1.5f * rise)) < 1e-4f);
+}
+
 void RunsJobsInTurnAndCancels() {
     clink::Worker worker;
     std::vector<int> order;
@@ -606,6 +650,8 @@ int main() {
     EasesHeightAcrossLiftOff();
     MovesOnWhenUpdatesStop();
     DrawsBatcPlacingAnAircraftAtOnce();
+    ProbesTerrainAtMostTenTimesASecondWhenMoving();
+    CarriesTerrainHeightAlongTheSlope();
     RunsJobsInTurnAndCancels();
     std::printf(g_failures == 0 ? "All plugin tests passed\n" : "%d failures\n", g_failures);
     return g_failures == 0 ? 0 : 1;
