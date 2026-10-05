@@ -110,6 +110,29 @@ public sealed class ConnectionTests
     }
 
     [Fact]
+    public void Settings_that_cannot_be_read_or_kept_give_the_defaults()
+    {
+        var dir = Directory.CreateTempSubdirectory("clearancelink-settings").FullName;
+        try
+        {
+            var file = Path.Combine(dir, "settings.json");
+            new AppSettings { Connection = ConnectionMode.AlwaysOn }.Save(file);
+            using (new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.Equal(ConnectionMode.Automatic, AppSettings.Load(file).Connection); // locked: IOException
+            }
+
+            File.WriteAllText(file, "{ not json");
+            Directory.CreateDirectory(file + ".bad"); // the .bad copy fails too
+            Assert.Equal(ConnectionMode.Automatic, AppSettings.Load(file).Connection);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Connection_setting_is_saved_as_plain_words()
     {
         var file = Path.Combine(Directory.CreateTempSubdirectory("clearancelink-settings").FullName, "settings.json");

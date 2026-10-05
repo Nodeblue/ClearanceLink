@@ -41,21 +41,42 @@ public sealed class AppSettings
     /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
     public bool CheckForUpdates { get; set; } = true;
 
-    /// <summary>Reads the file; a missing file gives the defaults, a damaged one is kept as .bad and gives the defaults.</summary>
+    /// <summary>
+    /// Reads the file; a missing or unreadable file gives the defaults, a damaged one is kept as .bad (when it can be)
+    /// and gives the defaults. Never throws, so a bad settings file cannot stop the window or a command starting.
+    /// </summary>
     public static AppSettings Load(string file)
     {
-        if (!File.Exists(file))
+        string text;
+        try
+        {
+            if (!File.Exists(file))
+            {
+                return new AppSettings();
+            }
+
+            text = File.ReadAllText(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new AppSettings();
         }
 
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), Json) ?? new AppSettings();
+            return JsonSerializer.Deserialize<AppSettings>(text, Json) ?? new AppSettings();
         }
         catch (JsonException)
         {
-            File.Copy(file, file + ".bad", overwrite: true);
+            try
+            {
+                File.Copy(file, file + ".bad", overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Keeping the damaged file is only a courtesy; the defaults still apply.
+            }
+
             return new AppSettings();
         }
     }
