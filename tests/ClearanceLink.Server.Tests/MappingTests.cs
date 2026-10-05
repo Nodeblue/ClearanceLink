@@ -127,6 +127,27 @@ public sealed class MappingTests
     }
 
     [Theory]
+    [InlineData("feet", "meters", false)]
+    [InlineData("number", "enum", false)] // two unit-less names: nothing to convert
+    [InlineData("knots", "knots", false)]
+    [InlineData("meters", "", false)] // empty: the client's default units (BATC's WING SPAN)
+    [InlineData("feet", "knots", true)] // different dimensions
+    [InlineData("furlongs", "feet", true)] // unknown name
+    [InlineData("number", "feet", true)]
+    public void Unconvertible_unit_pairs_pass_through_and_are_reported(string from, string to, bool reported)
+    {
+        var seen = new List<(string, string)>();
+        var value = Units.Convert(12, from, to, (f, t) => seen.Add((f, t)));
+
+        Assert.Equal(reported, seen.Count == 1);
+        if (reported)
+        {
+            Assert.Equal(12, value);
+            Assert.Equal((from, to), seen[0]);
+        }
+    }
+
+    [Theory]
     [InlineData(1200, 0x1200)]
     [InlineData(7700, 0x7700)]
     [InlineData(4521, 0x4521)]

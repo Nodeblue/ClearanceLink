@@ -128,6 +128,30 @@ public sealed class TrafficTests
         Assert.Equal(onGround, traffic.Objects.Single().OnGround);
     }
     [Fact]
+    public async Task A_periodic_request_for_an_ai_aircraft_is_answered_once_and_logged()
+    {
+        var traffic = new TrafficRegistry();
+        var log = new List<string>();
+        var sent = new List<Packet>();
+        var session = new SimConnectSession(
+            2, ServerIdentity.Msfs2024, new SimVarResolver(Fixtures.Mappings(), Fixtures.ParkedAtYbbn()), Fixtures.ParkedAtYbbn(),
+            p => { sent.Add(p); return Task.CompletedTask; }, log.Add, traffic: traffic, ground: new FixedGround(YbbnElevationMeters));
+        await session.HandleAsync(PacketBuilder.Client(0x0C, 6, 1).U32(18).Str("PLANE ALTITUDE", 256).Str("feet", 256).U32(4).F32(0).U32(uint.MaxValue).Build());
+        await session.HandleAsync(PacketBuilder.Client(0x29, 6, 2).Str("FSLTL_A320_IAE_JST", 256).Str("VHVFJ", 12).Bytes(new byte[InitPosition.Size]).U32(1).Build());
+        var id = traffic.Objects.Single().ObjectId;
+
+        for (uint request = 10; request < 13; request++)
+        {
+            await session.HandleAsync(PacketBuilder.Client(0x0E, 6, 3 + request).U32(request).U32(18).U32(id).U32(4).U32(0).U32(0).U32(0).U32(0).Build());
+        }
+
+        await session.TickAsync();
+        Assert.Equal(3, sent.Count(p => (RecvId)p.TypeField == RecvId.SimObjectData));
+        var line = Assert.Single(log, l => l.Contains("periodic AI data is not supported", StringComparison.Ordinal));
+        Assert.StartsWith($"#2 RequestDataOnSimObject request 10 define 18 period Second for AI object {id}: answered once", line);
+    }
+
+    [Fact]
     public void Init_position_reads_the_recorded_struct()
     {
         // VHXZE's AICreateNonATCAircraft init position: a B738 parked at YBBN, heading 263 degrees.

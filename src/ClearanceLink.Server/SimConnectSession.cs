@@ -25,6 +25,9 @@ public sealed class SimConnectSession(
     /// <summary>Object id MSFS 2024 reports for the user aircraft in SimObjectData (recorded 2026-09-30).</summary>
     public const uint UserObjectId = 524288;
 
+    /// <summary>Most distinct one-time messages a connection logs; then one line says the rest are suppressed.</summary>
+    public const int MaxLoggedOnce = 1000;
+
     private static readonly TimeSpan FramePeriod = TimeSpan.FromMilliseconds(1000.0 / 30);
     private static readonly TimeSpan SecondPeriod = TimeSpan.FromSeconds(1);
 
@@ -35,6 +38,7 @@ public sealed class SimConnectSession(
     private readonly Dictionary<uint, FacilityDefinition> _facilityDefinitions = [];
     private FacilityEncoder? _facilityEncoder;
     private readonly HashSet<string> _loggedOnce = new(StringComparer.Ordinal);
+    private bool _suppressedLogged;
     private readonly Lock _gate = new();
     private uint _protocol = 6;
 
@@ -237,6 +241,13 @@ public sealed class SimConnectSession(
             if (traffic?.Find(request.ObjectId) is { } ai)
             {
                 // BATC polls its AI aircraft with ONCE requests (defines 18, 19, 20) to keep them on the ground.
+                if (request.Period is not (SimConnectPeriod.Once or SimConnectPeriod.Never))
+                {
+                    LogOnce(
+                        $"ai-periodic:{request.DefineId}:{request.Period}",
+                        $"#{connectionId} RequestDataOnSimObject request {request.RequestId} define {request.DefineId} period {request.Period} for AI object {request.ObjectId}: answered once; periodic AI data is not supported");
+                }
+
                 await SendTrafficDataAsync(request, ai).ConfigureAwait(false);
                 return;
             }
@@ -294,7 +305,7 @@ public sealed class SimConnectSession(
         using var data = new MemoryStream();
         foreach (var datum in datums)
         {
-            var (value, status) = resolver.Resolve(datum.Name, datum.Units);
+            var (value, status) = resolver.Resolve(datum.Name, datum.Units, (from, to) => UnitsPassedThrough(datum.Name, from, to));
             if (status == ResolveStatus.Pending)
             {
                 Stats.Pending(datum.Name);
@@ -385,7 +396,7 @@ public sealed class SimConnectSession(
             }
             else if (map.Dataref is { } dataref)
             {
-                var value = Units.Convert(unchecked((int)data), map.FromUnits, map.ToUnits);
+                var value = Units.Convert(unchecked((int)data), map.FromUnits, map.ToUnits, (from, to) => UnitsPassedThrough(name, from, to));
                 await xplane.WriteAsync(dataref, value).ConfigureAwait(false);
                 log($"#{connectionId} {name}({data}) -> {dataref} = {value}");
             }
@@ -508,7 +519,7 @@ public sealed class SimConnectSession(
         var canonical = TrafficObject.CanonicalUnits(datum.Name);
         if (canonical.Length > 0 && Units.IsKnown(datum.Units) && Units.IsKnown(canonical))
         {
-            value = Units.Convert(value, datum.Units, canonical);
+            value = Units.Convert(value, datum.Units, canonical, (from, to) => UnitsPassedThrough(datum.Name, from, to));
         }
 
         target.Set(datum.Name, value, now);
@@ -582,7 +593,7 @@ public sealed class SimConnectSession(
             var canonical = feet is not null ? "feet" : TrafficObject.CanonicalUnits(datum.Name);
             if (canonical.Length > 0 && Units.IsKnown(datum.Units) && Units.IsKnown(canonical))
             {
-                value = Units.Convert(value, canonical, datum.Units);
+                value = Units.Convert(value, canonical, datum.Units, (from, to) => UnitsPassedThrough(datum.Name, from, to));
             }
 
             if (request.Flags.HasFlag(DataRequestFlags.Tagged))
@@ -663,13 +674,32 @@ public sealed class SimConnectSession(
     private Task SendExceptionAsync(SimConnectException exception, uint sendId, uint index = 0) =>
         send(PacketBuilder.Server(RecvId.Exception, _protocol).U32((uint)exception).U32(sendId).U32(index).Build());
 
+    private void UnitsPassedThrough(string name, string from, string to) =>
+        LogOnce($"units:{from}>{to}", $"#{connectionId} UNITS cannot convert '{from}' to '{to}' (first seen for {name}); value passed on unchanged");
+
     private void LogOnce(string key, string message)
     {
         lock (_gate)
         {
-            if (!_loggedOnce.Add(key))
+            if (_loggedOnce.Contains(key))
             {
                 return;
+            }
+
+            // Keys include client-chosen ids (object ids, define ids, names), so bound the set for long sessions.
+            if (_loggedOnce.Count >= MaxLoggedOnce)
+            {
+                if (_suppressedLogged)
+                {
+                    return;
+                }
+
+                _suppressedLogged = true;
+                message = $"#{connectionId} {MaxLoggedOnce} one-time messages logged; further one-time messages suppressed for this connection";
+            }
+            else
+            {
+                _loggedOnce.Add(key);
             }
         }
 
