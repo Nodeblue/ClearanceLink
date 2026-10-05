@@ -187,6 +187,8 @@ public sealed class PanelController : IAsyncDisposable
                 return _board?.Pushbacks?.Start() ?? "STARTING...";
             case CduKey.PushStop:
                 return _board?.Pushbacks?.Stop() ?? "STARTING...";
+            case CduKey.PushAutomatic:
+                return SetPushAutomatic();
             case CduKey.ConnectionAutomatic:
             case CduKey.ConnectionAlwaysOn:
                 return await SetConnectionAsync(key == CduKey.ConnectionAutomatic ? ConnectionMode.Automatic : ConnectionMode.AlwaysOn).ConfigureAwait(false);
@@ -310,6 +312,22 @@ public sealed class PanelController : IAsyncDisposable
             PacketConsole.Info($"panel: could not start BeyondATC: {ex.Message}");
             return "COULD NOT START BATC";
         }
+    }
+
+    /// <summary>AUTOMATIC / BY KEY on the PUSH page: saved, and used from the next clearance on.</summary>
+    private string? SetPushAutomatic()
+    {
+        if (_board?.Pushbacks is not { } pushbacks)
+        {
+            return "STARTING...";
+        }
+
+        var settings = AppSettings.Load(AppFolders.Default.Settings);
+        settings.PushAutomatic = !pushbacks.Automatic;
+        settings.Save(AppFolders.Default.Settings);
+        pushbacks.Automatic = settings.PushAutomatic;
+        PacketConsole.Info($"panel: pushback start {(settings.PushAutomatic ? "automatic" : "by key")}");
+        return null;
     }
 
     /// <summary>Saves that the getting-started pages are done; restarts the server when a folder was chosen meanwhile.</summary>

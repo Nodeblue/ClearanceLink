@@ -41,6 +41,12 @@ public sealed class AppSettings
     /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
     public bool CheckForUpdates { get; set; } = true;
 
+    /// <summary>
+    /// Call Better Pushback's tug as soon as BeyondATC approves the pushback, as BeyondATC does with GSX in MSFS
+    /// (ADR-0013). Off: the PUSH page waits for START PUSH.
+    /// </summary>
+    public bool PushAutomatic { get; set; } = true;
+
     /// <summary>SimBrief pilot ID (or username) when the user set one; null to use BeyondATC's.</summary>
     public string? SimbriefId { get; set; }
 

@@ -380,7 +380,7 @@ public sealed class PanelTests
             TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154,
             FlightPlan = new FlightPlanView(plan, sent.AddMinutes(-2), SavedAs: plan.FileName, SentAt: sent),
         };
-        var cleared = new PushView(new PushClearance(sent.AddMinutes(4), 90, "EAST", "pushback approved. Face east."), Preview: new PushPlan(21, 90, 39, "B"), XPlane: true, BetterPushback: true);
+        var cleared = new PushView(new PushClearance(sent.AddMinutes(4), 90, "EAST", "pushback approved. Face east."), Preview: new PushPlan(21, 90, 39, "B"), XPlane: true, BetterPushback: true, Automatic: true);
         window.Close();
         window = new PanelWindow(() => flying);
         // The PUSH page with BeyondATC's clearance; the other pages without, so STATUS shows READY FOR CLEARANCE.
