@@ -106,7 +106,8 @@ public sealed record PanelState(
     bool FsltlOutOfDate = false,
     ImportProgress? FsltlProgress = null,
     bool XPlaneRunning = false,
-    bool MsfsInstalled = true);
+    bool MsfsInstalled = true,
+    string? FlightPlan = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -189,6 +190,12 @@ public static class CduPages
         if (s.FsltlOutOfDate && !s.FsltlConverting)
         {
             turns.Add(new("FSLTL MODELS OUT OF DATE", CduColor.Amber));
+        }
+
+        // The SimBrief plan ClearanceLink saved for the FMS (SimbriefPlan), by the name to load.
+        if (s.FlightPlan is { } plan)
+        {
+            turns.Add(new(Fit($"FMS PLAN {Path.GetFileNameWithoutExtension(plan)} SAVED", Width), CduColor.Green));
         }
 
         return turns[(int)(s.Uptime.TotalSeconds / UpdateTurnSeconds) % turns.Count];

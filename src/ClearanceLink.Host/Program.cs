@@ -53,6 +53,10 @@ namespace ClearanceLink.Host
               clearancelink support
                   Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
+              clearancelink simbrief [--xplane-root <dir>]
+                  Save your latest SimBrief plan into X-Plane's Output\FMS plans (e.g. YBBNYSSY.fms) to load in the FMS.
+                  The pilot ID comes from BeyondATC's SimBrief link, or settings simbrief-id. serve does this on its own
+                  every 2 minutes unless settings simbrief-plans off.
               clearancelink update
                   Ask GitHub whether a newer ClearanceLink release exists and print where to download it. The window does
                   this on its own at start-up (ABOUT page) unless update-check is off. Nothing is downloaded.
@@ -136,6 +140,7 @@ namespace ClearanceLink.Host
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
                     "update" => await UpdateCommandAsync(),
+                    "simbrief" => await SimbriefCommandAsync(options),
                     "plugin" => Plugin(options),
                     "fsltl" => Fsltl(options),
                     "showcase" => await ShowcaseAsync(options),
@@ -368,13 +373,27 @@ namespace ClearanceLink.Host
                             _ => throw new ArgumentException("update-check takes on or off"),
                         };
                         break;
+                    case "simbrief-plans":
+                        settings.SimbriefPlans = value switch
+                        {
+                            "on" => true,
+                            "off" => false,
+                            _ => throw new ArgumentException("simbrief-plans takes on or off"),
+                        };
+                        break;
+                    case "simbrief-id":
+                        settings.SimbriefId = auto ? null
+                            : value.Length is > 0 and <= 64 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
+                                ? value
+                                : throw new ArgumentException("simbrief-id takes your SimBrief pilot ID (a number) or username, or auto");
+                        break;
                     case "keep-days":
                         settings.KeepDays = int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var days) && days > 0
                             ? days
                             : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
                         break;
                     default:
-                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days or update-check.");
+                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days, update-check, simbrief-plans or simbrief-id.");
                 }
             }
 
@@ -391,6 +410,8 @@ namespace ClearanceLink.Host
             Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
             Console.WriteLine($"  Update check      {(settings.CheckForUpdates ? "on (asks GitHub for a newer release at start-up)" : "off")}");
+            var pilot = settings.SimbriefId ?? (SimbriefPlan.PilotIdFromBatc() is null ? "not found" : "BeyondATC's");
+            Console.WriteLine($"  SimBrief plans    {(settings.SimbriefPlans ? $"on (saved into X-Plane's Output\\FMS plans; pilot ID: {pilot})" : "off")}");
             return 0;
         }
 
@@ -522,6 +543,9 @@ namespace ClearanceLink.Host
             };
             board.Plugin = () => plugin?.Status;
             var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowBatcAsync(stub, server, msfs, ct);
+            var xplaneRoot = FindXPlane(options)?.Root;
+            var simbriefTask = SimbriefPlan.FollowAsync(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot,
+                file => board.FlightPlan = file, null, SimbriefPlan.CheckEvery, ct);
             onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -539,6 +563,7 @@ namespace ClearanceLink.Host
                 await msfsTask;
                 await bridgeTask;
                 await stubTask;
+                await simbriefTask;
             }
         }
 
@@ -601,6 +626,30 @@ namespace ClearanceLink.Host
             await cts.CancelAsync();
             await run;
             return missing.Count == 0 ? 0 : 3;
+        }
+
+        private static async Task<int> SimbriefCommandAsync(Options options)
+        {
+            if (SimbriefPlan.PilotId(AppSettings.Load(AppFolders.Default.Settings)) is not { } id)
+            {
+                Console.WriteLine("No SimBrief pilot ID: link SimBrief in BeyondATC, or run: settings simbrief-id <your SimBrief pilot ID>");
+                return 1;
+            }
+
+            if (FindXPlane(options)?.Root is not { } root)
+            {
+                Console.WriteLine("X-Plane 12 not found; use --xplane-root <dir> or: settings xplane-folder <dir>");
+                return 1;
+            }
+
+            if (await SimbriefPlan.FindAsync(id) is not { } flight || await SimbriefPlan.SaveAsync(flight, root) is not { } path)
+            {
+                Console.WriteLine("No flight plan saved (see the line above).");
+                return 1;
+            }
+
+            Console.WriteLine($"Saved {flight.Origin}-{flight.Destination} as {path}. Load it in the aircraft's FMS as {Path.GetFileNameWithoutExtension(path)}.");
+            return 0;
         }
 
         private static async Task<int> UpdateCommandAsync()

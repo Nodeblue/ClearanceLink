@@ -41,6 +41,12 @@ public sealed class AppSettings
     /// <summary>Ask GitHub at start-up whether a newer release exists (only looks; nothing is downloaded).</summary>
     public bool CheckForUpdates { get; set; } = true;
 
+    /// <summary>Save the latest SimBrief plan into X-Plane's Output/FMS plans while ClearanceLink runs.</summary>
+    public bool SimbriefPlans { get; set; } = true;
+
+    /// <summary>SimBrief pilot ID (or username) when the user set one; null to use BeyondATC's.</summary>
+    public string? SimbriefId { get; set; }
+
     /// <summary>
     /// Reads the file; a missing or unreadable file gives the defaults, a damaged one is kept as .bad (when it can be)
     /// and gives the defaults. Never throws, so a bad settings file cannot stop the window or a command starting.

@@ -149,7 +149,8 @@ public sealed class PanelController : IAsyncDisposable
             found.FsltlOutOfDate,
             _fsltlProgress,
             found.XPlaneRunning,
-            found.MsfsInstalled);
+            found.MsfsInstalled,
+            snapshot?.FlightPlan);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
