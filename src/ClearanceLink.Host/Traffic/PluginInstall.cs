@@ -25,6 +25,19 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
         Installed,
     }
 
+    /// <summary>Why an install, update or removal failed; see <see cref="Classify"/>.</summary>
+    public enum Failure
+    {
+        /// <summary>X-Plane has the plugin loaded (a sharing violation): close X-Plane and try again.</summary>
+        XPlaneRunning,
+
+        /// <summary>No permission to write in X-Plane's plugins folder: run as administrator or fix the folder's permissions.</summary>
+        NoPermission,
+
+        /// <summary>Anything else (disk full, damaged file): show the message.</summary>
+        Other,
+    }
+
     public string Bundled { get; } = bundledFolder ?? Path.Combine(AppContext.BaseDirectory, "X-Plane plugin", FolderName);
 
     public string Target { get; } = Path.Combine(xplaneRoot, "Resources", "plugins", FolderName);
@@ -52,7 +65,30 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
         return Files(Bundled).All(f => SameFile(Path.Combine(Bundled, f), Path.Combine(Target, f))) ? State.Installed : State.Outdated;
     }
 
-    /// <summary>Returns lines for the console. Throws IOException when X-Plane has the plugin loaded.</summary>
+    /// <summary>
+    /// Tells apart the exceptions <see cref="Install"/> and <see cref="Remove"/> throw: <see cref="PluginInUseException"/>
+    /// or a sharing violation is X-Plane running; <see cref="UnauthorizedAccessException"/> is a permissions problem.
+    /// </summary>
+    public static Failure Classify(Exception ex) => ex switch
+    {
+        PluginInUseException => Failure.XPlaneRunning,
+        UnauthorizedAccessException => Failure.NoPermission,
+        IOException io when IsSharingViolation(io) => Failure.XPlaneRunning,
+        _ => Failure.Other,
+    };
+
+    /// <summary>A one-line message for the console and the log.</summary>
+    public string Describe(Exception ex) => Classify(ex) switch
+    {
+        Failure.XPlaneRunning => $"X-Plane has the plugin loaded ({ex.Message}). Close X-Plane, then try again.",
+        Failure.NoPermission => $"no permission to write in {Path.GetDirectoryName(Target)} ({ex.Message}). Run ClearanceLink as administrator, or make the X-Plane folder writable.",
+        _ => ex.Message,
+    };
+
+    /// <summary>
+    /// Returns lines for the console. Throws <see cref="PluginInUseException"/> when X-Plane has the plugin loaded,
+    /// <see cref="UnauthorizedAccessException"/> when the folder is not writable, other IOExceptions otherwise.
+    /// </summary>
     public IReadOnlyList<string> Install()
     {
         if (!Directory.Exists(Bundled))
@@ -129,9 +165,19 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
 
         foreach (var xpl in Directory.EnumerateFiles(folder, "*.xpl", SearchOption.AllDirectories))
         {
-            using var _ = new FileStream(xpl, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            try
+            {
+                using var _ = new FileStream(xpl, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException ex) when (ex is not FileNotFoundException and not DirectoryNotFoundException)
+            {
+                throw new PluginInUseException(xpl, ex);
+            }
         }
     }
+
+    // ERROR_SHARING_VIOLATION and ERROR_LOCK_VIOLATION as HRESULTs.
+    private static bool IsSharingViolation(IOException ex) => (ex.HResult & 0xFFFF) is 32 or 33 && (ex.HResult >> 16 & 0x1FFF) == 7;
 
     private static IEnumerable<string> Files(string root) =>
         Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
@@ -149,4 +195,11 @@ public sealed class PluginInstall(string xplaneRoot, string? bundledFolder = nul
         using var fb = File.OpenRead(b);
         return SHA256.HashData(fa).AsSpan().SequenceEqual(SHA256.HashData(fb));
     }
+}
+
+/// <summary>A plugin binary is open in another process (X-Plane has the plugin loaded).</summary>
+public sealed class PluginInUseException(string file, Exception inner)
+    : IOException($"{file} is in use (X-Plane has the plugin loaded)", inner)
+{
+    public string FilePath { get; } = file;
 }

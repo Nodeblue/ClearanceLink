@@ -68,6 +68,35 @@ public sealed class PluginTests : IDisposable
     }
 
     [Fact]
+    public void Install_failures_tell_x_plane_running_from_missing_permissions()
+    {
+        Assert.Equal(PluginInstall.Failure.XPlaneRunning, PluginInstall.Classify(new PluginInUseException("win.xpl", new IOException())));
+        Assert.Equal(PluginInstall.Failure.XPlaneRunning, PluginInstall.Classify(new IOException("sharing", unchecked((int)0x80070020))));
+        Assert.Equal(PluginInstall.Failure.NoPermission, PluginInstall.Classify(new UnauthorizedAccessException("Access denied")));
+        Assert.Equal(PluginInstall.Failure.Other, PluginInstall.Classify(new IOException("There is not enough space on the disk.", unchecked((int)0x80070070))));
+
+        var install = new PluginInstall(Path.Combine(_dir, "X-Plane 12"), _dir);
+        Assert.StartsWith("no permission to write in ", install.Describe(new UnauthorizedAccessException("Access denied")));
+        Assert.Contains("Close X-Plane", install.Describe(new PluginInUseException("win.xpl", new IOException())));
+    }
+
+    [Fact]
+    public void Installing_while_the_plugin_is_loaded_throws_plugin_in_use()
+    {
+        var bundled = Path.Combine(_dir, "package", "X-Plane plugin", "ClearanceLink");
+        Directory.CreateDirectory(Path.Combine(bundled, "64"));
+        File.WriteAllText(Path.Combine(bundled, "64", "win.xpl"), "v1");
+        var install = new PluginInstall(Path.Combine(_dir, "X-Plane 12"), bundled);
+        install.Install();
+
+        // X-Plane holding the binary open stands in for a loaded plugin.
+        using var loaded = new FileStream(Path.Combine(install.Target, "64", "win.xpl"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var ex = Assert.ThrowsAny<IOException>(() => install.Install());
+
+        Assert.Equal(PluginInstall.Failure.XPlaneRunning, PluginInstall.Classify(ex));
+    }
+
+    [Fact]
     public void Installs_updates_and_removes_the_plugin_keeping_the_users_csl_list()
     {
         var bundled = Path.Combine(_dir, "package", "X-Plane plugin", "ClearanceLink");

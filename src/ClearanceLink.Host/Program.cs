@@ -391,23 +391,33 @@ namespace ClearanceLink.Host
             return 0;
         }
 
+        /// <summary>The problem <see cref="ApplyConnection"/> returns when BeyondATC's folder is unknown.</summary>
+        public const string BatcNotFoundProblem = "BeyondATC not found; set its folder first: settings batc-folder \"<BeyondATC folder>\"";
+
         /// <summary>
         /// Always on writes BeyondATC's two config files; automatic removes ClearanceLink's (a user's own are put back).
-        /// Returns a problem to show, or null.
+        /// Returns a problem to show, or null: <see cref="BatcNotFoundProblem"/> when BeyondATC's folder is unknown,
+        /// otherwise a message starting "could not " when a file in BeyondATC's folder cannot be written or removed
+        /// (read-only or protected folder). Never throws for that.
         /// </summary>
-        internal static string? ApplyConnection(AppSettings settings, string? batcFolder)
+        public static string? ApplyConnection(AppSettings settings, string? batcFolder)
         {
             if (batcFolder is null)
             {
-                return settings.Connection == ConnectionMode.AlwaysOn
-                    ? "BeyondATC not found; set its folder first: settings batc-folder \"<BeyondATC folder>\""
-                    : null;
+                return settings.Connection == ConnectionMode.AlwaysOn ? BatcNotFoundProblem : null;
             }
 
             var redirect = new BatcRedirect(batcFolder);
-            var done = settings.Connection == ConnectionMode.AlwaysOn ? redirect.SwitchOn() : redirect.SwitchOff();
-            done.ToList().ForEach(l => Console.WriteLine("  " + l));
-            return null;
+            try
+            {
+                var done = settings.Connection == ConnectionMode.AlwaysOn ? redirect.SwitchOn() : redirect.SwitchOff();
+                done.ToList().ForEach(l => Console.WriteLine("  " + l));
+                return null;
+            }
+            catch (RedirectFailedException ex)
+            {
+                return ex.Message;
+            }
         }
 
         private static int SupportCommand()
@@ -592,7 +602,15 @@ namespace ClearanceLink.Host
                 var redirect = new BatcRedirect(folder);
                 if (settings.Connection == ConnectionMode.AlwaysOn && !redirect.IsOn)
                 {
-                    redirect.SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    try
+                    {
+                        redirect.SwitchOn().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    }
+                    catch (RedirectFailedException ex)
+                    {
+                        Console.WriteLine($"  {ex.Message}");
+                    }
+
                     Console.WriteLine();
                 }
                 else if (settings.Connection == ConnectionMode.Automatic && redirect.IsOn)
@@ -604,7 +622,14 @@ namespace ClearanceLink.Host
                     var answer = Console.IsInputRedirected ? "n" : Console.ReadLine();
                     if (answer is null || answer.Trim().Length == 0 || answer.Trim().StartsWith('y') || answer.Trim().StartsWith('Y'))
                     {
-                        redirect.SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                        try
+                        {
+                            redirect.SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                        }
+                        catch (RedirectFailedException ex)
+                        {
+                            Console.WriteLine($"  {ex.Message}");
+                        }
                     }
 
                     Console.WriteLine();
@@ -685,7 +710,7 @@ namespace ClearanceLink.Host
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Console.WriteLine($"  Could not install the plugin ({ex.Message}). Close X-Plane, then start ClearanceLink again.");
+                Console.WriteLine($"  Could not install the plugin: {plugin.Describe(ex)}");
             }
 
             Console.WriteLine();
@@ -935,7 +960,7 @@ namespace ClearanceLink.Host
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return Fail($"{ex.Message} Close X-Plane first.");
+                return Fail($"Could not {action} the plugin: {plugin.Describe(ex)}");
             }
         }
 
@@ -955,6 +980,18 @@ namespace ClearanceLink.Host
 
             var port = int.Parse(options.Get("port") ?? BatcRedirect.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
             var redirect = new BatcRedirect(folder, port);
+            try
+            {
+                return BatcAction(action, folder, redirect);
+            }
+            catch (RedirectFailedException ex)
+            {
+                return Fail(ex.Message);
+            }
+        }
+
+        private static int BatcAction(string action, string folder, BatcRedirect redirect)
+        {
             switch (action)
             {
                 case "on":
