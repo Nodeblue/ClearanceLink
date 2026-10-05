@@ -152,7 +152,8 @@ public sealed class PanelController : IAsyncDisposable
             found.XPlaneRunning,
             found.MsfsInstalled,
             _board?.FlightPlans?.View,
-            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil);
+            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
+            Push: _board?.Pushbacks?.View);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -173,6 +174,19 @@ public sealed class PanelController : IAsyncDisposable
 
                 _loadArmedUntil = DateTimeOffset.MinValue;
                 return _board?.FlightPlans?.Load() ?? "STARTING...";
+            case CduKey.PushTailLeft:
+            case CduKey.PushTailRight:
+            case CduKey.PushStraight:
+                return _board?.Pushbacks?.Choose(key switch
+                {
+                    CduKey.PushTailLeft => Pushback.PushChoice.TailLeft,
+                    CduKey.PushTailRight => Pushback.PushChoice.TailRight,
+                    _ => Pushback.PushChoice.Straight,
+                }) is { Length: > 0 } chosen ? chosen : null;
+            case CduKey.PushStart:
+                return _board?.Pushbacks?.Start() ?? "STARTING...";
+            case CduKey.PushStop:
+                return _board?.Pushbacks?.Stop() ?? "STARTING...";
             case CduKey.ConnectionAutomatic:
             case CduKey.ConnectionAlwaysOn:
                 return await SetConnectionAsync(key == CduKey.ConnectionAutomatic ? ConnectionMode.Automatic : ConnectionMode.AlwaysOn).ConfigureAwait(false);

@@ -37,6 +37,9 @@ public sealed class StatusBoard(
     /// <summary>The FPLN page's SimBrief uplink; null until serve starts.</summary>
     public ClearanceLink.Host.Support.FlightPlans? FlightPlans { get; set; }
 
+    /// <summary>The PUSH page's pushback; null until serve starts.</summary>
+    public ClearanceLink.Host.Pushback.Pushbacks? Pushbacks { get; set; }
+
     /// <summary>True while the real MSFS runs (it holds the default connection).</summary>
     public Func<bool>? MsfsRunning { get; set; }
 

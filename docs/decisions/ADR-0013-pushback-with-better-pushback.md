@@ -1,0 +1,40 @@
+# ADR-0013: Pushback with Better Pushback, from BeyondATC's clearance
+
+Date: 2026-10-05. Status: accepted.
+
+## Context
+In MSFS, BeyondATC (1.8.21) drives GSX for pushback: it subscribes to `L:FSDT_GSX_PUSHBACK_STATUS`, opens GSX's menu
+and picks item 4 ("Request pushback") through `L:FSDT_GSX_MENU_OPEN` / `L:FSDT_GSX_MENU_CHOICE`, and reads GSX's menu
+text from a file in GSX's own folder, found through the registry (`HKCU\Software\Fsdreamteam`, `root`). X-Plane has no
+GSX. Ben uses Better Pushback 1.14 (the maintained olivierbutler fork) and asked whether BeyondATC's pushback, including
+its "face east" instruction, could drive it. Research and test results: `docs/research/batc-gsx-pushback.md`.
+
+## Decision
+- **The clearance comes from BeyondATC's log.** BeyondATC writes each instruction to its `Player.log` as plain text
+  (`[Instruction] ..., pushback and engine start approved. Face east.`). ClearanceLink follows the log (new lines only)
+  and shows the approval and direction on a new PUSH page. BeyondATC's GSX L:var writes stay ignored.
+- **The pilot starts the push.** START PUSH on the PUSH page; TAIL LEFT, TAIL RIGHT and STRAIGHT override the
+  clearance. STATUS says PUSHBACK APPROVED: PUSH in place of READY FOR CLEARANCE.
+- **Better Pushback's manual push, closed loop, over the Web API.** `BetterPushback/manual_push_start_no_yoke` starts
+  (and pauses) the push, `manual_push_left/right` steer in 10% steps, `stop` ends it, and once the pilot sets the
+  parking brake `disconnect` and `acknowledge_clear` send the tug away. ClearanceLink watches position, heading and
+  ground speed and decides when to turn, centre and stop. Better Pushback is found by its `bp/started` dataref; without
+  it the PUSH page says BETTER PUSHBACK MISSING and nothing is sent.
+- **The push ends on a taxiway.** The taxiway behind the aircraft (apt.dat 1202 edges, the stand's own lead-in left
+  out) sets how far to push before turning and the final heading, the way along it closest to the cleared direction.
+  Without one: 15 m straight, then a turn toward the direction (at most 135 degrees).
+
+## Alternatives
+- **Pretend to be GSX** (registry key, menu file, L:var status 1-2-3-0 back to BeyondATC). Writes into the registry and
+  a fake GSX folder, and GSX's menu protocol isn't documented; the direction still isn't in it.
+- **Better Pushback's planned push.** Its routes are saved per stand and chosen with a key or a click in its planner;
+  there is no command or dataref to set a route or heading.
+- **A change to Better Pushback** adding a route command. Possible later; the manual push works with 1.14 today.
+
+## Consequences
+- Tested by hand on Ben's PC (Citation X at YBBN, commands sent over the Web API): straight push, a 90 degree turn
+  with the tail right, pause and stop. The page as a whole is not yet run there.
+- Better Pushback can't move some aircraft at all (the Aerobask Phenom 300, even with its own planned push); the page
+  says NOT MOVING: SEE HELP after 40 s with the brake off.
+- Depends on the wording of BeyondATC's log lines; a change there stops the clearance showing, and the TAIL keys
+  still work.

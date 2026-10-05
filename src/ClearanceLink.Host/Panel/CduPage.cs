@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using ClearanceLink.Fsltl;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
 
@@ -9,6 +10,7 @@ public enum PanelPage
 {
     Status,
     FlightPlan,
+    Push,
     Setup,
     Support,
     About,
@@ -64,6 +66,12 @@ public enum CduKey
     GoFlightPlan,
     RequestPlan,
     LoadPlan,
+    GoPush,
+    PushTailLeft,
+    PushTailRight,
+    PushStraight,
+    PushStart,
+    PushStop,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -111,7 +119,8 @@ public sealed record PanelState(
     bool XPlaneRunning = false,
     bool MsfsInstalled = true,
     FlightPlanView? FlightPlan = null,
-    bool LoadArmed = false);
+    bool LoadArmed = false,
+    PushView? Push = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -126,7 +135,7 @@ public static class CduPages
     public const string ModelsHelp = HelpPage + "#aircraft-models-for-traffic";
 
     /// <summary>The page keys under the screen; the getting-started pages are reached from SUPPORT or on first run.</summary>
-    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.FlightPlan, PanelPage.Setup, PanelPage.Support, PanelPage.About];
+    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.FlightPlan, PanelPage.Push, PanelPage.Setup, PanelPage.Support, PanelPage.About];
 
     /// <summary>The name on a page key under the screen.</summary>
     public static string KeyName(PanelPage page) => page == PanelPage.FlightPlan ? "FPLN" : page.ToString().ToUpperInvariant();
@@ -137,6 +146,7 @@ public static class CduPages
     public static CduPage Build(PanelPage page, PanelState s, string? flash = null) => page switch
     {
         PanelPage.FlightPlan => FlightPlan(s, flash),
+        PanelPage.Push => Push(s, flash),
         PanelPage.Setup => Setup(s, flash),
         PanelPage.Support => Support(s, flash),
         PanelPage.About => About(s, flash),
@@ -184,6 +194,14 @@ public static class CduPages
     public static CduCell Advice(PanelState s)
     {
         var advice = NextStep(s);
+
+        // BATC cleared the pushback: the PUSH page carries it out when the pilot presses START PUSH. It comes only
+        // once everything is connected, so it takes the place of READY FOR CLEARANCE.
+        if (s.Push is { Clearance: not null, Running: false, BetterPushback: not false } && advice.Color == CduColor.Green)
+        {
+            return new("PUSHBACK APPROVED: PUSH", CduColor.Green);
+        }
+
         if (advice.Color != CduColor.White || !s.Serving)
         {
             return advice;
@@ -267,6 +285,55 @@ public static class CduPages
         };
         return new($"{AppName} FPLN", rows, flash is null ? hint : new(flash));
     }
+
+    /// <summary>
+    /// The pushback page: BeyondATC's clearance ("FACE EAST"), the push it plans, keys to choose the tail's way
+    /// instead, and START PUSH, which has Better Pushback's tug do it (ADR-0013). Nothing moves until it is pressed.
+    /// </summary>
+    private static CduPage Push(PanelState s, string? flash)
+    {
+        var v = s.Push ?? new PushView();
+        CduCell Choice(string text, PushChoice choice) => new(text, v.Choice == choice ? CduColor.Magenta : CduColor.White);
+        var cleared = v.Clearance is { } c
+            ? new CduCell(c.FaceWord is { } w ? $"FACE {w}" : "APPROVED", v.Choice is null ? CduColor.Green : CduColor.White)
+            : new CduCell("-----");
+        var plan = v.Preview is { } p
+            ? new CduCell(p.Turns ? $"BACK {p.StraightMeters:0}M TAIL {(p.TailLeft ? "L" : "R")}" : $"BACK {p.StraightMeters:0}M")
+            : new CduCell("-----");
+        var rows = new[]
+        {
+            Row("ATC CLEARANCE", "AT", cleared, new(v.Clearance is { } at ? Zulu(at.At) : "")),
+            Row("PUSH", "THEN FACE", plan, new(v.Preview is { Turns: true } f ? $"{f.FinalHeading:000}" + (f.Taxiway is { } t ? $" {t}" : "") : "")),
+            Row("", "", Choice("<TAIL LEFT", PushChoice.TailLeft), Choice("TAIL RIGHT>", PushChoice.TailRight), CduKey.PushTailLeft, CduKey.PushTailRight),
+            Row("", "", Choice("<STRAIGHT", PushChoice.Straight), new(""), CduKey.PushStraight),
+            v.Running
+                ? Row("", "", new(""), new("STOP>", CduColor.Amber), CduKey.None, CduKey.PushStop)
+                : Row("", "", new(v.CanStart ? "<START PUSH" : ""), new(""), v.CanStart ? CduKey.PushStart : CduKey.None),
+            Row("", "", new("<STATUS"), new("FPLN>"), CduKey.GoStatus, CduKey.GoFlightPlan),
+        };
+        return new($"{AppName} PUSH", rows, flash is null ? PushLine(v) : new(flash));
+    }
+
+    /// <summary>The PUSH page's bottom line: where the push is, or what to do next.</summary>
+    public static CduCell PushLine(PushView v) => v switch
+    {
+        { Stage: PushStage.Failed, Problem: { } why } => new(Fit(why, Width), CduColor.Amber),
+        { Stage: PushStage.CallingTug } => new("TUG ON THE WAY"),
+        { Stage: PushStage.WaitingForBrake, Stalled: true } => new("NOT MOVING: SEE HELP", CduColor.Amber),
+        { Stage: PushStage.WaitingForBrake, BrakeSet: true } => new("RELEASE PARKING BRAKE", CduColor.Amber),
+        { Stage: PushStage.WaitingForBrake } => new("PUSH STARTING"),
+        { Stage: PushStage.PushingBack } => new($"PUSHING BACK {v.Pushed:0}M", CduColor.Green),
+        { Stage: PushStage.Turning, Preview: { } p } => new($"TURNING TAIL {(p.TailLeft ? "LEFT" : "RIGHT")}", CduColor.Green),
+        { Stage: PushStage.Straightening } => new("STRAIGHTENING", CduColor.Green),
+        { Stage: PushStage.Stopping } => new("STOPPING"),
+        { Stage: PushStage.Disconnecting, BrakeSet: true } => new("DISCONNECTING TUG"),
+        { Stage: PushStage.Disconnecting } => new("SET PARKING BRAKE", CduColor.Amber),
+        { Stage: PushStage.Done } => new("PUSHBACK COMPLETE", CduColor.Green),
+        { XPlane: false } => new("START X-PLANE 12"),
+        { BetterPushback: false } => new("BETTER PUSHBACK MISSING", CduColor.Amber),
+        { Selected: null } => new("WAIT FOR PUSH CLEARANCE"),
+        _ => new("PRESS START PUSH"),
+    };
 
     private static string Zulu(DateTimeOffset at) => at.UtcDateTime.ToString("HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
