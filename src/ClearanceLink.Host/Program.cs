@@ -678,7 +678,10 @@ namespace ClearanceLink.Host
                 () => server.Sessions.SelectMany(s => s.Stats.Airports).OrderByDescending(a => a.At).Select(a => a.Icao).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 icao => xplaneAirports?.Airport(icao),
                 options.Has("no-batc-log") ? null : new BatcLogFollower(options.Get("batc-log") ?? BatcClearance.DefaultLog),
-                PacketConsole.Info);
+                PacketConsole.Info)
+            {
+                Automatic = AppSettings.Load(AppFolders.Default.Settings).PushAutomatic,
+            };
             var pushTask = pushbacks.RunAsync(ct);
             board.Pushbacks = pushbacks;
             onBoard?.Invoke(board);

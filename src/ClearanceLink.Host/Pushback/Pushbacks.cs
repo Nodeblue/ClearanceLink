@@ -14,7 +14,8 @@ public sealed record PushView(
     bool BrakeSet = false,
     double Pushed = 0,
     bool XPlane = false,
-    bool? BetterPushback = null)
+    bool? BetterPushback = null,
+    bool Automatic = false)
 {
     /// <summary>What START PUSH would do: the pilot's choice, else BATC's clearance.</summary>
     public PushChoice? Selected => Choice ?? (Clearance is null ? null : PushChoice.Face);
@@ -66,6 +67,7 @@ public sealed class Pushbacks(
     private bool _startRequested;
     private DateTimeOffset _lastLogPoll = DateTimeOffset.MinValue;
     private TimeSpan? _positionSince;
+    private bool _autoPending;
 
     public PushView View
     {
@@ -74,6 +76,29 @@ public sealed class Pushbacks(
             lock (_gate)
             {
                 return _view;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Start as soon as BeyondATC's approval arrives (the way BeyondATC drives GSX in MSFS), when Better Pushback is
+    /// there and no push is running. Off: wait for START PUSH.
+    /// </summary>
+    public bool Automatic
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _view.Automatic;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                _view = _view with { Automatic = value };
             }
         }
     }
@@ -182,6 +207,19 @@ public sealed class Pushbacks(
             }
 
             _view = _view with { XPlane = xplane.IsConnected, BrakeSet = inputs?.ParkingBrake >= 0.9, BetterPushback = found };
+
+            // ON CLEARANCE: BeyondATC's approval calls the tug, as it calls GSX in MSFS, once Better Pushback is known
+            // to be there. Without it the page says BETTER PUSHBACK MISSING and nothing is sent.
+            if (_autoPending && (!_view.Automatic || _view.Clearance is null || _view.Running || found is false))
+            {
+                _autoPending = false;
+            }
+            else if (_autoPending && found is true && inputs is not null)
+            {
+                _autoPending = false;
+                _startRequested = true;
+                log("pushback: automatic start on BATC's clearance");
+            }
         }
 
         if (inputs is not { } x)
@@ -331,6 +369,7 @@ public sealed class Pushbacks(
                 var clearance = found[^1];
                 log($"pushback: BATC cleared pushback{(clearance.FaceWord is { } w ? $", face {w}" : "")}: {clearance.Text}");
                 _view = _view with { Clearance = clearance, Choice = null, Stage = _view.Stage is PushStage.Done or PushStage.Failed ? null : _view.Stage };
+                _autoPending = _view.Automatic;
             }
             else if (_view.Clearance is { } old && now - old.At > ClearanceKept && !_view.Running)
             {

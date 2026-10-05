@@ -379,4 +379,67 @@ public sealed class PushbackTests
         await cts.CancelAsync();
         await run;
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task On_clearance_calls_the_tug_when_batc_approves(bool automatic)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"clearancelink-player-{Guid.NewGuid():N}.log");
+        File.WriteAllText(path, "[Comms] start\n");
+        var xplane = new InMemoryXPlane
+        {
+            ["sim/flightmodel/position/latitude"] = Stand.Latitude,
+            ["sim/flightmodel/position/longitude"] = Stand.Longitude,
+            ["sim/flightmodel/position/psi"] = Stand.Heading,
+            ["sim/flightmodel/position/groundspeed"] = 0,
+            ["sim/cockpit2/controls/parking_brake_ratio"] = 1,
+            ["bp/started"] = 0,
+        };
+        var pushbacks = new Pushbacks(xplane, () => [], _ => null, new BatcLogFollower(path), _ => { }) { Automatic = automatic };
+        using var cts = new CancellationTokenSource();
+        var run = pushbacks.RunAsync(cts.Token);
+        try
+        {
+            for (var i = 0; i < 30 && pushbacks.View.BetterPushback is null; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(1200); // the follower has had its first look
+            File.AppendAllText(path, "[Instruction] N123AB, Brisbane Ground, pushback and engine start approved. Face southwest.\n");
+            for (var i = 0; i < 40 && xplane.Commands.IsEmpty && pushbacks.View.Clearance is null; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(800);
+            Assert.Equal(225.0, pushbacks.View.Clearance?.FaceBearing);
+            if (automatic)
+            {
+                Assert.Contains(PushDriver.StartCommand, xplane.Commands);
+                Assert.True(pushbacks.View.Running);
+            }
+            else
+            {
+                Assert.Empty(xplane.Commands);
+                Assert.Equal("PRESS START PUSH", CduPages.PushLine(pushbacks.View).Text);
+            }
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await run;
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Push_page_switches_between_on_clearance_and_by_key()
+    {
+        var on = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true, Automatic: true) }).Rows[3];
+        Assert.Equal(("START", "ON CLEARANCE>", CduKey.PushAutomatic), (on.LabelRight, on.Right.Text, on.KeyRight));
+        var off = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true) }).Rows[3];
+        Assert.Equal("BY KEY>", off.Right.Text);
+    }
 }

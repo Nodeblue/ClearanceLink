@@ -72,6 +72,7 @@ public enum CduKey
     PushStraight,
     PushStart,
     PushStop,
+    PushAutomatic,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -305,7 +306,8 @@ public static class CduPages
             Row("ATC CLEARANCE", "AT", cleared, new(v.Clearance is { } at ? Zulu(at.At) : "")),
             Row("PUSH", "THEN FACE", plan, new(v.Preview is { Turns: true } f ? $"{f.FinalHeading:000}" + (f.Taxiway is { } t ? $" {t}" : "") : "")),
             Row("", "", Choice("<TAIL LEFT", PushChoice.TailLeft), Choice("TAIL RIGHT>", PushChoice.TailRight), CduKey.PushTailLeft, CduKey.PushTailRight),
-            Row("", "", Choice("<STRAIGHT", PushChoice.Straight), new(""), CduKey.PushStraight),
+            Row("", "START", Choice("<STRAIGHT", PushChoice.Straight),
+                v.Automatic ? new("ON CLEARANCE>", CduColor.Magenta) : new("BY KEY>", CduColor.Magenta), CduKey.PushStraight, CduKey.PushAutomatic),
             v.Running
                 ? Row("", "", new(""), new("STOP>", CduColor.Amber), CduKey.None, CduKey.PushStop)
                 : Row("", "", new(v.CanStart ? "<START PUSH" : ""), new(""), v.CanStart ? CduKey.PushStart : CduKey.None),
@@ -332,6 +334,7 @@ public static class CduPages
         { XPlane: false } => new("START X-PLANE 12"),
         { BetterPushback: false } => new("BETTER PUSHBACK MISSING", CduColor.Amber),
         { Selected: null } => new("WAIT FOR PUSH CLEARANCE"),
+        { Automatic: true, Clearance: not null, Choice: null, BetterPushback: null } => new("CHECKING BETTER PUSHBACK"),
         _ => new("PRESS START PUSH"),
     };
 

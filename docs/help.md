@@ -100,18 +100,21 @@ name to load.
 ## Pushback
 In MSFS, BeyondATC can call GSX for your pushback. X-Plane has no GSX, so the **PUSH** page does it with the free
 [Better Pushback](https://github.com/olivierbutler/BetterPusbackMod) plugin (version 1.14 or later) instead. It
-follows BeyondATC's clearance, including "face east". Nothing moves until you press **START PUSH**.
+follows BeyondATC's clearance, including "face east". Like GSX in MSFS, the tug comes as soon as BeyondATC approves
+your pushback; it only moves once you release the parking brake.
 
 <img src="images/panel-push-flying.png" width="330" alt="PUSH page with a clearance to face east">
 
-1. Ask BeyondATC for pushback as usual. When it approves, STATUS says **PUSHBACK APPROVED: PUSH** and the PUSH page
-   shows the clearance (**FACE EAST**) and the push it worked out: how far back, which way the tail goes, and the
-   heading and taxiway you'll end up on.
-2. If you'd rather go another way, press **TAIL LEFT**, **TAIL RIGHT** or **STRAIGHT**. Press it again to go back
-   to what ATC said.
-3. Press **START PUSH**. Better Pushback's tug comes to the aircraft.
-4. When the bottom line says **RELEASE PARKING BRAKE**, release it. The tug pushes you back, turns and stops.
-5. When it says **SET PARKING BRAKE**, set it. ClearanceLink tells the tug to disconnect for you.
+1. Ask BeyondATC for pushback as usual. When it approves, the PUSH page shows the clearance (**FACE EAST**) and the
+   push it worked out: how far back, which way the tail goes, and the heading and taxiway you'll end up on.
+   Better Pushback's tug comes to the aircraft.
+2. When the bottom line says **RELEASE PARKING BRAKE**, release it. The tug pushes you back, turns and stops.
+3. When it says **SET PARKING BRAKE**, set it. ClearanceLink tells the tug to disconnect for you.
+
+**START** says when the tug is called. **ON CLEARANCE** (the default) calls it when BeyondATC approves; press it to
+change to **BY KEY**, and the tug waits until you press **START PUSH**. With BY KEY you can first press **TAIL LEFT**,
+**TAIL RIGHT** or **STRAIGHT** to push another way than ATC said (press it again to go back to ATC's way); STATUS
+says **PUSHBACK APPROVED: PUSH** until you do.
 
 **STOP** ends the push where you are. The tug still disconnects once you set the parking brake.
 

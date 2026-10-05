@@ -13,8 +13,11 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
 - **The clearance comes from BeyondATC's log.** BeyondATC writes each instruction to its `Player.log` as plain text
   (`[Instruction] ..., pushback and engine start approved. Face east.`). ClearanceLink follows the log (new lines only)
   and shows the approval and direction on a new PUSH page. BeyondATC's GSX L:var writes stay ignored.
-- **The pilot starts the push.** START PUSH on the PUSH page; TAIL LEFT, TAIL RIGHT and STRAIGHT override the
-  clearance. STATUS says PUSHBACK APPROVED: PUSH in place of READY FOR CLEARANCE.
+- **The approval calls the tug, as with GSX, and the pilot can switch that off.** In MSFS BeyondATC requests GSX's
+  pushback itself at the approval; the pilot only releases the parking brake. START on the PUSH page is ON CLEARANCE
+  by default (Ben chose this on 2026-10-05 after first trying a key-only version) or BY KEY, saved as
+  `pushAutomatic` in settings.json. BY KEY waits for START PUSH, and TAIL LEFT, TAIL RIGHT and STRAIGHT override the
+  clearance; STATUS says PUSHBACK APPROVED: PUSH meanwhile. Either way the tug only pushes once the brake is off.
 - **Better Pushback's manual push, closed loop, over the Web API.** `BetterPushback/manual_push_start_no_yoke` starts
   (and pauses) the push, `manual_push_left/right` steer in 10% steps, `stop` ends it, and once the pilot sets the
   parking brake `disconnect` and `acknowledge_clear` send the tug away. ClearanceLink watches position, heading and
@@ -33,7 +36,8 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
 
 ## Consequences
 - Tested by hand on Ben's PC (Citation X at YBBN, commands sent over the Web API): straight push, a 90 degree turn
-  with the tail right, pause and stop. The page as a whole is not yet run there.
+  with the tail right, pause and stop. The PUSH page with START PUSH pushed the Citation X back 15 m to face
+  southwest and disconnected the tug (2026-10-05); ON CLEARANCE is not yet run there.
 - Better Pushback can't move some aircraft at all (the Aerobask Phenom 300, even with its own planned push); the page
   says NOT MOVING: SEE HELP after 40 s with the brake off.
 - Depends on the wording of BeyondATC's log lines; a change there stops the clearance showing, and the TAIL keys
