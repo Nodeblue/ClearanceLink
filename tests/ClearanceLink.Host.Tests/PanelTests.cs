@@ -417,6 +417,38 @@ public sealed class PanelTests
     }
 
     [Fact]
+    public void Out_of_date_models_have_an_update_key_on_status_and_setup()
+    {
+        // Ben could not find where to update (2026-10-05): the only UPDATE> was on a welcome page.
+        var outOfDate = Converted with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = null, FsltlOutOfDate = true };
+
+        var traffic = CduPages.Build(PanelPage.Status, outOfDate).Rows[4];
+        Assert.Equal(("FSLTL MODELS", "UPDATE>", CduColor.Amber, CduKey.GoModels),
+            (traffic.LabelRight, traffic.Right.Text, traffic.Right.Color, traffic.KeyRight));
+
+        // While aircraft are drawn the count stays, and the key still opens the models page.
+        var flying = CduPages.Build(PanelPage.Status, outOfDate with { TrafficAircraft = 12, PluginModels = 2027 }).Rows[4];
+        Assert.Equal(("12 AIRCRAFT", CduKey.GoModels), (flying.Right.Text, flying.KeyRight));
+
+        var setup = CduPages.Build(PanelPage.Setup, outOfDate).Rows[4];
+        Assert.Equal(("FSLTL MODELS", "OUT OF DATE", "UPDATE>", CduKey.GoModels),
+            (setup.LabelLeft, setup.Left.Text, setup.Right.Text, setup.KeyRight));
+
+        // Up to date, or converting: the plugin row and the plain traffic cell as before.
+        Assert.Equal("X-PLANE PLUGIN", CduPages.Build(PanelPage.Setup, outOfDate with { FsltlOutOfDate = false }).Rows[4].LabelLeft);
+        Assert.Equal("X-PLANE PLUGIN", CduPages.Build(PanelPage.Setup, outOfDate with { FsltlConverting = true }).Rows[4].LabelLeft);
+        Assert.Equal("WAITING", CduPages.Build(PanelPage.Status, outOfDate with { FsltlConverting = true }).Rows[4].Right.Text);
+    }
+
+    [Fact]
+    public void Setup_asks_to_close_msfs_only_while_it_runs()
+    {
+        // A standing "CLOSE MSFS BEFORE FLYING" read as if MSFS had been detected (Ben, 2026-10-05).
+        Assert.Equal("", CduPages.Build(PanelPage.Setup, Ready).Scratchpad.Text);
+        Assert.Equal("CLOSE MSFS BEFORE FLYING", CduPages.Build(PanelPage.Setup, Ready with { MsfsRunning = true }).Scratchpad.Text);
+    }
+
+    [Fact]
     public void Models_page_shows_how_far_a_conversion_is()
     {
         var converting = Converted with { FsltlConverting = true };

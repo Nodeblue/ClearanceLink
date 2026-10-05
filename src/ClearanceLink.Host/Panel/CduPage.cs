@@ -155,10 +155,11 @@ public static class CduPages
             Row("ATC AIRPORT", "SCENERY", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
             Row("CONNECTION", "SESSION LOG", new(s.Connection == ConnectionMode.Automatic ? "AUTOMATIC" : "ALWAYS ON", CduColor.Magenta),
                 s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport),
-            Row("RUNNING FOR", "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
+            Row("RUNNING FOR", Traffic(s).Text == UpdateModels ? "FSLTL MODELS" : "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
             {
+                { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
+                { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
                 { TrafficAircraft: null } => CduKey.GoSetup,
-                { PluginModels: 0 } => CduKey.GoModels,
                 _ => CduKey.None,
             }),
             Row("", "", new("<SETUP"), new("SUPPORT>"), CduKey.GoSetup, CduKey.GoSupport),
@@ -226,10 +227,13 @@ public static class CduPages
                 s.BatcFolder is null ? CduKey.None : CduKey.StartBatc, CduKey.OpenStatusPage),
             s.OldConfigFiles && automatic
                 ? Row("OLD BEYONDATC FILES", "", new("FOUND", CduColor.Amber), new("REMOVE>"), CduKey.None, CduKey.RemoveOldFiles)
-                : TrafficAddOn(s),
+                : s is { TrafficAddOn: PluginInstall.State.Installed, FsltlOutOfDate: true, FsltlConverting: false }
+                    ? Row("FSLTL MODELS", "", new("OUT OF DATE", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.GoModels)
+                    : TrafficAddOn(s),
             Row("", "", new("<STATUS"), new("ABOUT>"), CduKey.GoStatus, CduKey.GoAbout),
         };
-        var help = automatic ? "CLOSE MSFS BEFORE FLYING" : "BATC SET TO X-PLANE";
+        // Automatic mode only needs MSFS closed: say so while it runs, not as a standing warning.
+        var help = automatic ? s.MsfsRunning ? "CLOSE MSFS BEFORE FLYING" : "" : "BATC SET TO X-PLANE";
         return new($"{AppName} SETUP", rows, new(flash ?? help, flash is null && !automatic ? CduColor.Magenta : CduColor.White));
     }
 
@@ -419,10 +423,15 @@ public static class CduPages
     };
 
     /// <summary>The status page's traffic half: aircraft drawn in X-Plane, or why there are none.</summary>
+    private const string UpdateModels = "UPDATE>";
+
     private static CduCell Traffic(PanelState s) => s switch
     {
         // The plugin runs but has no CSL package to draw with: the key opens the aircraft models page.
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
+        // FSLTL changed since the models were converted: the key opens the aircraft models page, which has UPDATE.
+        // While aircraft are drawn the count stays (the old models still work); the key still opens that page.
+        { FsltlOutOfDate: true, FsltlConverting: false, TrafficAircraft: null or 0 } => new(UpdateModels, CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SEE SETUP", CduColor.Amber),
         { TrafficAddOn: PluginInstall.State.Installed } => new("WAITING"),
