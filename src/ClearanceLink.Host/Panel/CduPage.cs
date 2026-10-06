@@ -85,10 +85,26 @@ public sealed record CduCell(string Text, CduColor Color = CduColor.White);
 /// <summary>One of the six rows: a small cyan label line over a data line, each with a left and a right half.</summary>
 public sealed record CduRow(string LabelLeft, string LabelRight, CduCell Left, CduCell Right, CduKey KeyLeft = CduKey.None, CduKey KeyRight = CduKey.None)
 {
-    /// <summary>What the row means, in a sentence or two: shown when the mouse rests on it (an "i" marks the row).</summary>
+    /// <summary>What the row means, in a sentence or two: shown when the mouse rests on the row's "i".</summary>
     public string? Help { get; init; }
 
+    /// <summary>
+    /// Where the "i" goes: after the left label, or after the right label when only the right half has one (SUPPORT's
+    /// HELP), so it sits beside the words it explains. Rows without a label belong to the labelled row above: none.
+    /// </summary>
+    public HelpMark Mark => Help is null ? HelpMark.None
+        : LabelLeft.Length > 0 ? HelpMark.Left
+        : LabelRight.Length > 0 ? HelpMark.Right
+        : HelpMark.None;
+
     public static CduRow Empty { get; } = new("", "", new(""), new(""));
+}
+
+public enum HelpMark
+{
+    None,
+    Left,
+    Right,
 }
 
 /// <summary>A page; <paramref name="Message"/>, when set, is plain text in the empty rows above the first row with content.</summary>
