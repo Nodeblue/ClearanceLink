@@ -407,6 +407,23 @@ public sealed class PanelTests
         Assert.Equal("READY TO CONVERT", page.Scratchpad.Text);
         page = CduPages.Build(PanelPage.Fsltl, Ready);
         Assert.Equal(("NOT FOUND", "CHOOSE YOUR FSLTL FOLDER"), (page.Rows[0].Left.Text, page.Scratchpad.Text));
+
+        // A folder that can't be read (a drive not connected), and a UserCfg.opt that can't be read.
+        Assert.Equal("CAN'T READ THIS FOLDER", CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = null }).Scratchpad.Text);
+        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.Failed });
+        Assert.Equal(("CAN'T TELL", "BEYONDATC CHECK FAILED"), (page.Rows[2].Left.Text, page.Scratchpad.Text));
+
+        // A conversion started here that failed later, or needs a restart, says so here as well as on TRAFFIC.
+        page = CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "CONVERT FAILED: SEE LIVE LOG" });
+        Assert.Equal(("CONVERT FAILED: SEE LIVE LOG", CduColor.Amber), (page.Scratchpad.Text, page.Scratchpad.Color));
+        Assert.Equal("RESTART TO USE MODELS", CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "RESTART TO USE MODELS" }).Scratchpad.Text);
+        Assert.Equal("FSLTL READY", CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "3350 LIVERIES CONVERTED" }).Scratchpad.Text);
+
+        // Liveries but no models, and also out of date: UPDATE would convert nothing, so SETUP and STATUS send to the check.
+        var brokenAndOld = noModels with { FsltlLiveries = 3154, FsltlOutOfDate = true, TrafficAddOn = PluginInstall.State.Installed };
+        Assert.Contains(CduPages.Build(PanelPage.Setup, brokenAndOld).Rows, r => r.Left.Text == "CHECK FSLTL");
+        var status = CduPages.Build(PanelPage.Status, brokenAndOld).Rows[4];
+        Assert.Equal(("CHECK FSLTL", CduKey.GoFsltl), (status.Right.Text, status.KeyRight));
     }
 
     [Fact]

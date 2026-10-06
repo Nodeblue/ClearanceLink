@@ -155,7 +155,7 @@ public sealed class PanelController : IAsyncDisposable
             LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
             Push: _board?.Pushbacks?.View,
             BatcModels: found.BatcModels,
-            FsltlHealth: found.Fsltl is null ? null : found.FsltlHealth,
+            FsltlHealth: found.FsltlHealth,
             CslNames: found.CslNames);
     }
 
@@ -582,8 +582,13 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         var health = Fsltl.FsltlCheck.Check(fsltl);
-        _health = new HealthCheck(fsltl, version, health);
-        PacketConsole.Info(Fsltl.FsltlCheck.Describe(fsltl, health));
+        // An unreadable folder (a drive not connected) is tried again at the next lookup, but logged only once.
+        if (_health is not { Health: null } failed || failed.Folder != fsltl)
+        {
+            PacketConsole.Info(Fsltl.FsltlCheck.Describe(fsltl, health));
+        }
+
+        _health = new HealthCheck(fsltl, health is null ? "" : version, health);
         return health;
     }
 
