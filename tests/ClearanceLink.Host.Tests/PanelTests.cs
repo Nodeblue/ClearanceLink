@@ -342,6 +342,21 @@ public sealed class PanelTests
     }
 
     [Fact]
+    public void Beyondatc_finding_no_fsltl_is_an_amber_warning_on_traffic_setup_and_status()
+    {
+        // BeyondATC creates no traffic at all without FSLTL (ADR-0014): say so where traffic is set up and shown.
+        var none = Ready with { TrafficAddOn = PluginInstall.State.Installed, BatcNoModels = true };
+        var warning = Assert.Single(CduPages.Build(PanelPage.Traffic, none).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        Assert.Equal(("NO FSLTL: NO TRAFFIC", CduColor.Amber), (warning.Left.Text, warning.Left.Color));
+        Assert.False(string.IsNullOrEmpty(warning.Help));
+        Assert.DoesNotContain(CduPages.Build(PanelPage.Traffic, none with { BatcNoModels = false }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+
+        var status = CduPages.Build(PanelPage.Status, none).Rows[4];
+        Assert.Equal(("NO FSLTL", CduColor.Amber, CduKey.GoTraffic), (status.Right.Text, status.Right.Color, status.KeyRight));
+        Assert.Contains(CduPages.Build(PanelPage.Setup, none).Rows, r => r.Right.Text == "NO FSLTL" || r.Left.Text == "NO FSLTL");
+    }
+
+    [Fact]
     public void Status_says_no_models_when_the_plugin_runs_without_a_csl_package()
     {
         // BATC flies its traffic and the plugin runs, but there is nothing to draw it with: say so, and the key opens
