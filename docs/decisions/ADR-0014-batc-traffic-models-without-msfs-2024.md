@@ -17,8 +17,13 @@ While `serve` runs (the window or `start`), `BatcTrafficModels`:
   - the folder above `Community` when FSLTL sits in a Community folder (MSFS 2020), or
   - `%LOCALAPPDATA%\ClearanceLink\BeyondATC packages`, whose `Community\fsltl-traffic-base` is a directory junction to
     the chosen FSLTL folder (a junction needs no administrator rights or developer mode).
-- removes the file (and its folder, if left empty) when serve stops. The `batc-guard` process removes it after a
-  crash, in either connection mode, unless another ClearanceLink is serving. The junction stays; it is only a link.
+- removes the file (and its folder, if ClearanceLink made it and it is left empty) when serve stops, and while a real
+  MSFS runs, so an MSFS 2024 being installed and started never adopts ClearanceLink's InstalledPackagesPath. The file
+  names the ClearanceLink process that wrote it; another ClearanceLink leaves a running one's file alone, and a file
+  whose ClearanceLink has gone is removed. A stale file also goes once MSFS 2024 has its own UserCfg.opt.
+- refuses an FSLTL folder on a network share or with `%` or `"` in its path (a junction can't point at a share, and
+  `cmd` would expand `%`), with a log line saying so.
+- the `batc-guard` process removes it after a crash, in either connection mode. The junction stays; it is only a link.
 - ClearanceLink's own FSLTL lookup and its NEEDS MSFS check ignore the marked file.
 
 ## Alternatives
