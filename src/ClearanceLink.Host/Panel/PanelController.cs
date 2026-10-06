@@ -154,7 +154,9 @@ public sealed class PanelController : IAsyncDisposable
             _board?.FlightPlans?.View,
             LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
             Push: _board?.Pushbacks?.View,
-            BatcNoModels: found.BatcNoModels);
+            BatcModels: found.BatcModels,
+            FsltlHealth: found.Fsltl is null ? null : found.FsltlHealth,
+            CslNames: found.CslNames);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -237,6 +239,8 @@ public sealed class PanelController : IAsyncDisposable
         }
     }
 
+    public const string FsltlSaved = "FSLTL FOLDER SAVED";
+
     /// <summary>Saves a folder the user picked. Returns the scratchpad line.</summary>
     public string SetFolder(CduKey which, string folder)
     {
@@ -252,7 +256,7 @@ public sealed class PanelController : IAsyncDisposable
             settings.FsltlFolder = Path.GetFullPath(Fsltl.FsltlLocator.Find(folder)!);
             settings.Save(AppFolders.Default.Settings);
             RefreshFolders();
-            return "FSLTL FOLDER SAVED";
+            return FsltlSaved;
         }
 
         if (which == CduKey.ChooseBatcFolder)
@@ -364,30 +368,62 @@ public sealed class PanelController : IAsyncDisposable
     ];
 
     /// <summary>CSL packages (folders with an xsb_aircraft.txt, up to three levels down) where the traffic add-on looks.</summary>
-    public static int CountCslPackages(string xplaneRoot, string? except = null) => CslFolders
-        .Select(f => Path.Combine([xplaneRoot, .. f.Split('\\')]))
-        .Where(Directory.Exists)
-        .Sum(f => CountPackages(f, depth: 3, except is null ? null : Path.GetFullPath(except)));
+    public static int CountCslPackages(string xplaneRoot, string? except = null) => CslPackages(xplaneRoot, except).Count;
 
-    private static int CountPackages(string folder, int depth, string? except)
+    /// <summary>The CSL packages' folders, relative to X-Plane's folder.</summary>
+    public static List<string> CslPackages(string xplaneRoot, string? except = null)
+    {
+        var found = new List<string>();
+        foreach (var folder in CslFolders.Select(f => Path.Combine([xplaneRoot, .. f.Split('\\')])).Where(Directory.Exists))
+        {
+            FindPackages(folder, depth: 3, except is null ? null : Path.GetFullPath(except), found);
+        }
+
+        return [.. found.Select(f => Path.GetRelativePath(xplaneRoot, f))];
+    }
+
+    /// <summary>
+    /// What the CSL packages are, for the TRAFFIC page: "BLUEBELL + X-CSL". Bluebell's packages are named BB_*
+    /// (BB_Airbus, BB_Boeing1...); X-CSL's sit in a folder named X-CSL (its updater's and swift's default); anything
+    /// else is OTHER. Null when there are none.
+    /// </summary>
+    public static string? CslNames(IEnumerable<string> packages)
+    {
+        var kinds = new SortedSet<int>();
+        foreach (var package in packages)
+        {
+            var parts = package.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+            kinds.Add(parts.Any(p => p.Contains("X-CSL", StringComparison.OrdinalIgnoreCase)) ? 1
+                : parts.Any(p => p.StartsWith("BB_", StringComparison.OrdinalIgnoreCase) || p.Contains("Bluebell", StringComparison.OrdinalIgnoreCase)) ? 0
+                : 2);
+        }
+
+        return kinds.Count == 0 ? null : string.Join(" + ", kinds.Select(k => k switch { 0 => "BLUEBELL", 1 => "X-CSL", _ => "OTHER" }));
+    }
+
+    private static void FindPackages(string folder, int depth, string? except, List<string> found)
     {
         if (except is not null && string.Equals(Path.GetFullPath(folder), except, StringComparison.OrdinalIgnoreCase))
         {
-            return 0;
+            return;
         }
 
         if (File.Exists(Path.Combine(folder, "xsb_aircraft.txt")))
         {
-            return 1;
+            found.Add(folder);
+            return;
         }
 
         try
         {
-            return depth == 0 ? 0 : Directory.GetDirectories(folder).Sum(d => CountPackages(d, depth - 1, except));
+            if (depth > 0)
+            {
+                foreach (var d in Directory.GetDirectories(folder)) FindPackages(d, depth - 1, except, found);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return 0;
+            // An unreadable folder holds no packages we can use.
         }
     }
 
@@ -510,21 +546,45 @@ public sealed class PanelController : IAsyncDisposable
         var xplane = Cli.FindXPlane(none)?.Root;
         var fsltl = Cli.FsltlFolder(none);
         var output = xplane is null ? null : Cli.FsltlOutput(xplane);
+        var csl = xplane is null ? [] : CslPackages(xplane, except: output);
         return new Found
         {
             Batc = Cli.BatcFolder(none),
             XPlane = xplane,
             AddOn = PluginState(xplane),
-            Csl = xplane is null ? 0 : CountCslPackages(xplane, except: output),
+            Csl = csl.Count,
+            CslNames = CslNames(csl),
+            FsltlHealth = fsltl is null ? null : Health(fsltl),
             Fsltl = fsltl,
             FsltlLiveries = output is null ? 0 : Fsltl.FsltlImporter.LoadCatalogue(output).Count,
             FsltlOutOfDate = fsltl is not null && output is not null && Fsltl.FsltlImporter.OutOfDate(fsltl, output) is not null,
             XPlaneRunning = XPlaneRunning(),
             MsfsInstalled = Fsltl.FsltlLocator.MsfsInstalled(),
-            BatcNoModels = OperatingSystem.IsWindows()
-                && BatcTrafficModels.Default.Check(fsltl) is BatcTrafficModels.Outcome.NoFsltl or BatcTrafficModels.Outcome.NotInMsfs2024,
+            BatcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Check(fsltl) : null,
             At = DateTime.Now,
         };
+    }
+
+    private sealed record HealthCheck(string Folder, string Version, Fsltl.FsltlHealth? Health);
+
+    private HealthCheck? _health;
+
+    /// <summary>
+    /// What the FSLTL folder holds (FSLTL CHECK). Reading every aircraft.cfg takes a second or two, so it is done
+    /// again only for another folder or another FSLTL version, and logged once each time.
+    /// </summary>
+    private Fsltl.FsltlHealth? Health(string fsltl)
+    {
+        var version = Fsltl.FsltlImporter.FsltlVersion(fsltl);
+        if (_health is { } last && last.Folder == fsltl && last.Version == version)
+        {
+            return last.Health;
+        }
+
+        var health = Fsltl.FsltlCheck.Check(fsltl);
+        _health = new HealthCheck(fsltl, version, health);
+        PacketConsole.Info(Fsltl.FsltlCheck.Describe(fsltl, health));
+        return health;
     }
 
     /// <summary>The plugin check hashes every bundled file: done again only for another X-Plane, after an install, or every 5 minutes.</summary>
@@ -655,7 +715,9 @@ public sealed class PanelController : IAsyncDisposable
         public bool FsltlOutOfDate { get; init; }
         public bool XPlaneRunning { get; init; }
         public bool MsfsInstalled { get; init; } = true;
-        public bool BatcNoModels { get; init; }
+        public BatcTrafficModels.Outcome? BatcModels { get; init; }
+        public string? CslNames { get; init; }
+        public Fsltl.FsltlHealth? FsltlHealth { get; init; }
         public DateTime At { get; init; }
     }
 

@@ -210,6 +210,9 @@ public sealed class PanelWindow : Window
             case CduKey.GoTraffic:
                 ShowPage(PanelPage.Traffic);
                 return;
+            case CduKey.GoFsltl:
+                ShowPage(PanelPage.Fsltl);
+                return;
             case CduKey.Next:
             case CduKey.Back:
                 var at = CduPages.StartPages.IndexOf(Page);
@@ -252,7 +255,14 @@ public sealed class PanelWindow : Window
         });
         if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)
         {
-            Flash(_controller.SetFolder(key, path));
+            var result = _controller.SetFolder(key, path);
+            // A new FSLTL folder is checked in the background: FSLTL CHECK shows what was found in it.
+            if (key == CduKey.ChooseFsltlFolder && result == PanelController.FsltlSaved)
+            {
+                ShowPage(PanelPage.Fsltl);
+            }
+
+            Flash(result);
         }
     }
 

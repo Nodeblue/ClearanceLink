@@ -21,6 +21,7 @@ public enum PanelPage
     StartXPlane,
     StartDone,
     Traffic,
+    Fsltl,
 }
 
 /// <summary>Colours as on a Boeing CDU: cyan labels, white data, green good, amber attention, magenta active.</summary>
@@ -78,6 +79,7 @@ public enum CduKey
     PushManual,
     GoTraffic,
     OpenXPlaneSettingsHelp,
+    GoFsltl,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -146,7 +148,13 @@ public sealed record PanelState(
     FlightPlanView? FlightPlan = null,
     bool LoadArmed = false,
     PushView? Push = null,
-    bool BatcNoModels = false);
+    BatcTrafficModels.Outcome? BatcModels = null,
+    FsltlHealth? FsltlHealth = null,
+    string? CslNames = null)
+{
+    /// <summary>BeyondATC won't find FSLTL (or AIG / FS Traffic), so it creates no traffic at all (ADR-0014).</summary>
+    public bool BatcNoModels => BatcModels is BatcTrafficModels.Outcome.NoFsltl or BatcTrafficModels.Outcome.NotInMsfs2024;
+}
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -184,6 +192,7 @@ public static class CduPages
         PanelPage.StartXPlane => StartXPlane(flash),
         PanelPage.StartDone => StartDone(flash),
         PanelPage.Traffic => Traffic(s, flash),
+        PanelPage.Fsltl => FsltlPage(s, flash),
         _ => Status(s, flash),
     };
 
@@ -535,6 +544,8 @@ public static class CduPages
     private static CduRow FsltlRow(PanelState s) => s switch
     {
         { FsltlConverting: true } => Row("FSLTL", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
+        // Liveries but not one base model: nothing can be converted; FSLTL CHECK says why.
+        { FsltlFolder: not null, FsltlHealth.NoModels: true } => Row("FSLTL", "", new("NO BASE MODELS", CduColor.Amber), new("CHECK>"), CduKey.GoFsltl, CduKey.GoFsltl),
         { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
             Row("FSLTL", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
         // Converted, but the FSLTL folder isn't known (MSFS gone, or never chosen): CHOOSE, so BeyondATC can be shown it (ADR-0014).
@@ -546,9 +557,13 @@ public static class CduPages
         _ => Row("FSLTL", "", new("NOT FOUND"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
     };
 
-    private static CduRow BluebellRow(PanelState s) =>
-        Row("BLUEBELL", "", s.CslPackages > 0 ? new($"{s.CslPackages} PACKAGES", CduColor.Green) : new("NOT FOUND"),
+    /// <summary>X-Plane CSL model packages (Bluebell, X-CSL, others): what's installed, by name when it fits.</summary>
+    private static CduRow CslRow(PanelState s) =>
+        Row("CSL MODELS", "", s.CslPackages > 0 ? new(CslText(s), CduColor.Green) : new("NOT FOUND"),
             new("HOW TO>"), CduKey.None, CduKey.OpenModelsHelp);
+
+    private static string CslText(PanelState s) =>
+        s.CslNames is { Length: > 0 and <= Width - 8 } names ? names : $"{s.CslPackages} PACKAGES";
 
     /// <summary>The models pages' bottom line: the last conversion's result, or what to do before converting.</summary>
     private static CduCell ModelsLine(PanelState s, string? flash)
@@ -578,18 +593,92 @@ public static class CduPages
                 ? plugin with { LabelRight = "AIRCRAFT", Right = plugin.KeyRight == CduKey.None ? Traffic(s) : plugin.Right }
                 : Row("X-PLANE PLUGIN", "", new("NOT IN THIS COPY"), new(""))) with
                 { Help = "ClearanceLink's X-Plane plugin draws BeyondATC's traffic. Install or update it with X-Plane closed." },
-            BluebellRow(s) with { Help = "Bluebell: a free set of aircraft models for X-Plane. HOW TO shows where to get it." },
+            CslRow(s) with { Help = "X-Plane aircraft models such as Bluebell or X-CSL (free). Used where there's no converted FSLTL livery. HOW TO shows where to get them." },
             FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models. BeyondATC needs them for any traffic; they're converted for X-Plane from your own copy. Close X-Plane to convert." },
             Row("X-PLANE SETTINGS", "", new("3 TO TURN OFF"), new("HOW TO>"), CduKey.None, CduKey.OpenXPlaneSettingsHelp)
                 with { Help = "In X-Plane, set Radios to 0, Draw parked aircraft off and AI aircraft to none, so only BeyondATC talks and flies traffic." },
-            s.BatcNoModels
-                ? Row("BEYONDATC TRAFFIC", "", new("NO FSLTL: NO TRAFFIC", CduColor.Amber), new(""))
-                    with { Help = "BeyondATC creates traffic only when it finds FSLTL. With MSFS 2024, install FSLTL in its Community folder; without it, CHOOSE your FSLTL folder above." }
-                : CduRow.Empty,
+            Row("BEYONDATC TRAFFIC", "", BatcSees(s), new("CHECK>"), CduKey.GoFsltl, CduKey.GoFsltl)
+                with { Help = "BeyondATC creates traffic only when it finds FSLTL. CHECK shows what's in your FSLTL folder and whether BeyondATC sees it." },
             Row("", "", new("<SETUP"), new("STATUS>"), CduKey.GoSetup, CduKey.GoStatus),
         };
         return new($"{AppName} TRAFFIC", rows, ModelsLine(s, flash));
     }
+
+    /// <summary>The TRAFFIC page's BeyondATC line: whether BeyondATC will find FSLTL (or AIG / FS Traffic) at all.</summary>
+    private static CduCell BatcSees(PanelState s) => s.BatcModels switch
+    {
+        BatcTrafficModels.Outcome.Found or BatcTrafficModels.Outcome.Pointed or BatcTrafficModels.Outcome.PointedByAnother => new("SEES FSLTL", CduColor.Green),
+        BatcTrafficModels.Outcome.NotInMsfs2024 => new("NOT IN MSFS 2024", CduColor.Amber),
+        BatcTrafficModels.Outcome.NoFsltl => new("NO FSLTL", CduColor.Amber),
+        BatcTrafficModels.Outcome.Failed => new("CAN'T TELL", CduColor.Amber),
+        _ => new("-"),
+    };
+
+    /// <summary>
+    /// FSLTL CHECK: what the chosen FSLTL folder holds, whether BeyondATC will see it and the X-Plane copy, so a
+    /// problem reads as a setup step, not as a ClearanceLink or BeyondATC failure (issue #29).
+    /// </summary>
+    private static CduPage FsltlPage(PanelState s, string? flash)
+    {
+        var h = s.FsltlHealth;
+        var known = s.FsltlFolder is not null && h is not null;
+        var version = h?.Version is { } v ? Fit(v.ToUpperInvariant(), 8) : "-";
+        var batc = s.BatcModels switch
+        {
+            BatcTrafficModels.Outcome.Found => (new CduCell("SEES IT", CduColor.Green), new CduCell("IN MSFS 2024", CduColor.Green)),
+            BatcTrafficModels.Outcome.Pointed or BatcTrafficModels.Outcome.PointedByAnother => (new CduCell("SEES IT", CduColor.Green), new CduCell("WHILE OPEN", CduColor.Green)),
+            BatcTrafficModels.Outcome.NotInMsfs2024 => (new CduCell("WON'T SEE IT", CduColor.Amber), new CduCell("NOT IN 2024", CduColor.Amber)),
+            BatcTrafficModels.Outcome.NoFsltl => (new CduCell("WON'T SEE IT", CduColor.Amber), new CduCell("")),
+            BatcTrafficModels.Outcome.Failed => (new CduCell("CAN'T TELL", CduColor.Amber), new CduCell("")),
+            _ => (new CduCell("-"), new CduCell("")),
+        };
+        var rows = new[]
+        {
+            (s.FsltlFolder is null
+                ? Row("FOLDER", "VERSION", new("NOT FOUND", CduColor.Amber), new("-"))
+                : Row("FOLDER", "VERSION", new(ShortPath(Parent(s.FsltlFolder), Width - 1 - version.Length)), new(version)))
+                with { Help = "Where the fsltl-traffic-base folder ClearanceLink uses is: usually MSFS's Community folder. CHOOSE FOLDER picks another." },
+            (known
+                ? Row("LIVERIES", "BASE MODELS",
+                    h!.Liveries > 0 ? new($"{h.Liveries}", CduColor.Green) : new("NONE", CduColor.Amber),
+                    h.Models > 0 ? new($"{h.Models}", h.WithoutModel > 0 ? CduColor.Amber : CduColor.Green) : new("NONE", CduColor.Amber))
+                : Row("LIVERIES", "BASE MODELS", new("-"), new("-")))
+                with { Help = "FSLTL's liveries and the base aircraft models they use. Every livery needs its base model, in the same folder, to be converted." },
+            Row("BEYONDATC", "", batc.Item1, batc.Item2)
+                with { Help = "BeyondATC only looks for FSLTL in MSFS 2024's Community folder. Without MSFS 2024, ClearanceLink shows it your FSLTL folder while it's open." },
+            CopyRow(s) with { Help = "The copy of FSLTL converted for X-Plane. Close X-Plane to convert or update it." },
+            Row("", "", new(""), new("CHOOSE FOLDER>"), CduKey.None, CduKey.ChooseFsltlFolder),
+            Row("", "", new("<TRAFFIC"), new(""), CduKey.GoTraffic),
+        };
+        return new("FSLTL CHECK", rows, flash is not null ? new(flash) : FsltlVerdict(s));
+    }
+
+    /// <summary>FSLTL CHECK's X-Plane copy: converted, out of date, converting or not yet converted.</summary>
+    private static CduRow CopyRow(PanelState s) => s switch
+    {
+        { FsltlConverting: true } => Row("X-PLANE COPY", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
+        { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
+            Row("X-PLANE COPY", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
+        { FsltlLiveries: > 0 } => Row("X-PLANE COPY", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green),
+            s.FsltlFolder is null ? new("") : new("UPDATE>"), CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
+        { FsltlFolder: not null, FsltlHealth: { Models: > 0 } } => Row("X-PLANE COPY", "", new("NOT CONVERTED"), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
+        _ => Row("X-PLANE COPY", "", new("-"), new("")),
+    };
+
+    /// <summary>FSLTL CHECK's bottom line: the one thing to do, or that FSLTL is ready.</summary>
+    private static CduCell FsltlVerdict(PanelState s) => (s, s.FsltlHealth) switch
+    {
+        ({ FsltlFolder: null }, _) => new("CHOOSE YOUR FSLTL FOLDER", CduColor.Amber),
+        (_, null) => new("CHECKING..."),
+        (_, { Liveries: 0 }) => new("NO LIVERIES IN THIS FOLDER", CduColor.Amber),
+        (_, { NoModels: true }) => new("LIVERIES BUT NO MODELS", CduColor.Amber),
+        ({ BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 }, _) => new("PUT FSLTL IN MSFS 2024", CduColor.Amber),
+        (_, { WithoutModel: > 0 } h) => new(Fit($"{h.WithoutModel} LIVERIES: NO MODEL", Width), CduColor.Amber),
+        ({ FsltlConverting: true }, _) => new("KEEP THIS WINDOW OPEN"),
+        ({ FsltlLiveries: 0 }, _) => new(s.XPlaneRunning ? "CLOSE X-PLANE TO CONVERT" : "READY TO CONVERT", CduColor.Green),
+        ({ FsltlOutOfDate: true }, _) => new(s.XPlaneRunning ? "CLOSE X-PLANE TO UPDATE" : "UPDATE NEEDED", CduColor.Amber),
+        _ => new("FSLTL READY", CduColor.Green),
+    };
 
     /// <summary>SETUP's traffic row: what needs doing, else how much traffic is drawn.</summary>
     private static CduCell SetupTraffic(PanelState s) => s switch
@@ -599,6 +688,7 @@ public static class CduPages
         { FsltlOutOfDate: true, FsltlConverting: false } => new("UPDATE MODELS", CduColor.Amber),
         { FsltlConverting: true } => new("CONVERTING", CduColor.Amber),
         { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
+        { FsltlFolder: not null, FsltlHealth.NoModels: true } => new("CHECK FSLTL", CduColor.Amber),
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.Installed } => new("READY", CduColor.Green),
@@ -610,7 +700,7 @@ public static class CduPages
         var rows = new[]
         {
             CduRow.Empty, CduRow.Empty, CduRow.Empty,
-            BluebellRow(s),
+            CslRow(s),
             FsltlRow(s),
             StartNav(),
         };
@@ -619,7 +709,7 @@ public static class CduPages
             Say("Aircraft models", CduColor.Green),
             s.FsltlFolder is null && !s.MsfsInstalled
                 ? Say("BeyondATC needs FSLTL for traffic. No MSFS here: CHOOSE your FSLTL folder.")
-                : Say("BeyondATC needs FSLTL for traffic. It's converted from your MSFS copy; Bluebell is optional."),
+                : Say("BeyondATC needs FSLTL for traffic. It's converted from your MSFS copy; CSL models are optional."),
         ];
         return new(StartTitle(PanelPage.StartModels), rows, ModelsLine(s, flash), message);
     }
@@ -714,6 +804,14 @@ public static class CduPages
     private static string Fit(string text, int max) => text.Length <= max ? text : text[..Math.Max(0, max - 1)] + "~";
 
     /// <summary>C:\Games\Sims\BeyondATC to C:\...\BEYONDATC when it doesn't fit.</summary>
+    /// <summary>The folder a Windows path is in (split by hand, as in <see cref="ShortPath"/>).</summary>
+    private static string Parent(string path)
+    {
+        path = path.TrimEnd('\\', '/');
+        var cut = path.LastIndexOfAny(['\\', '/']);
+        return cut > 0 ? path[..cut] : path;
+    }
+
     public static string ShortPath(string path, int max)
     {
         path = path.TrimEnd('\\', '/');

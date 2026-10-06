@@ -45,9 +45,11 @@ Traffic
 -------
 BeyondATC needs FSLTL for any traffic: without it, it says "No traffic liveries found". Without MSFS 2024,
 choose your FSLTL folder on the TRAFFIC page. BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin
-with CSL aircraft models. Two libraries are tested: Bluebell (free from the X-Plane.org forums: unzip into
-X-Plane 12\Custom Data\CSL) and FSLTL (https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the TRAFFIC page with X-Plane
-closed; converted on your PC, never share the result). Close X-Plane before installing or updating the
+with CSL aircraft models: FSLTL (https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the
+TRAFFIC page with X-Plane closed; converted on your PC, never share the result), plus any CSL models such as
+Bluebell (free from the X-Plane.org forums: unzip into X-Plane 12\Custom Data\CSL) or X-CSL (free, from
+x-csl.ru). CSL models only change how traffic looks; BeyondATC still needs FSLTL. CHECK on the TRAFFIC page
+shows what's in your FSLTL folder and whether BeyondATC sees it. Close X-Plane before installing or updating the
 plugin from the SETUP page.
 
 
