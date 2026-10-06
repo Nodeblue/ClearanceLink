@@ -570,7 +570,8 @@ namespace ClearanceLink.Host
 
         /// <summary>
         /// batc-guard: waits for the ClearanceLink that started it, then removes BeyondATC's SimConnect.cfg files unless
-        /// always on was chosen or another ClearanceLink is serving (<see cref="BatcLink.GuardShouldRelease"/>).
+        /// always on was chosen or another ClearanceLink is serving (<see cref="BatcLink.GuardShouldRelease"/>), and the
+        /// UserCfg.opt written for BeyondATC's traffic models unless another ClearanceLink is serving.
         /// </summary>
         private static int BatcGuard(Options options)
         {
@@ -589,8 +590,15 @@ namespace ClearanceLink.Host
                 // Already gone.
             }
 
+            var portInUse = PortInUse(BatcRedirect.DefaultPort);
+            if (!portInUse)
+            {
+                // ClearanceLink's UserCfg.opt for BeyondATC's traffic models goes in either connection mode.
+                BatcTrafficModels.Default.Remove();
+            }
+
             var connection = AppSettings.Load(AppFolders.Default.Settings).Connection;
-            if (!BatcLink.GuardShouldRelease(connection, PortInUse(BatcRedirect.DefaultPort)) || BatcFolder(new Options()) is not { } folder)
+            if (!BatcLink.GuardShouldRelease(connection, portInUse) || BatcFolder(new Options()) is not { } folder)
             {
                 return 0;
             }
@@ -644,6 +652,17 @@ namespace ClearanceLink.Host
 
                 // Step aside for the real MSFS: its process name is the stand-in's.
                 msfs.Changed += running => PacketConsole.Info(running ? stub.Stop() : stub.Restart());
+            }
+
+            // BeyondATC lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none (ADR-0014).
+            var batcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default : null;
+            if (batcModels?.Provide(FsltlFolder(options)) is { } models)
+            {
+                PacketConsole.Info(models.Line);
+                if (models.Outcome == BatcTrafficModels.Outcome.Pointed)
+                {
+                    StartBatcGuard();
+                }
             }
 
             var msfsTask = msfs.RunAsync(ct);
@@ -702,6 +721,10 @@ namespace ClearanceLink.Host
                 await bridgeTask;
                 await stubTask;
                 await pushTask;
+                if (batcModels?.Remove() is { } removed)
+                {
+                    PacketConsole.Info(removed);
+                }
             }
         }
 
