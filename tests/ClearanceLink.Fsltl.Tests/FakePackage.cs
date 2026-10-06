@@ -21,6 +21,12 @@ public sealed class FakePackage : IDisposable
             texture = ""
             icao_airline = ""
             """);
+        File.WriteAllText(Path.Combine(baseDir, "systems.cfg"), """
+            [LIGHTS]
+            lightdef.0 = Type:1#Index:0#LocalPosition:0.00,0.00,8.6#LocalRotation:0,0,0#EffectFile:LIGHT_FSLTL_A320_BeaconTop#Node:#PotentiometerIndex:1 ; top
+            lightdef.1 = Type:3#Index:0#LocalPosition:-13.6,-55.1,3.0#LocalRotation:0,0,0#EffectFile:LIGHT_FSLTL_A320_NavigationRed#Node:#PotentiometerIndex:1
+            lightdef.2 = Type:5#Index:0#LocalPosition:#LocalRotation:#EffectFile:LIGHT_FSLTL_A320_TakeOff#Node:gear#PotentiometerIndex:1
+            """);
         var model = Directory.CreateDirectory(Path.Combine(baseDir, "model.CFM")).FullName;
         File.WriteAllText(Path.Combine(model, "model.CFG"), "[models]\nnormal=A320.xml\n");
         File.WriteAllText(Path.Combine(model, "A320.xml"), """
