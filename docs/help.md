@@ -234,7 +234,7 @@ MSFS for that X-Plane has no equivalent of (those are ignored).
 | A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |
 | No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED, and Bluebell or FSLTL must show a count. Traffic must be on in BeyondATC. |
 | TRAFFIC on STATUS says SEE SETUP | The plugin isn't installed or needs updating. Close X-Plane and press INSTALL or UPDATE on SETUP. |
-| No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on SETUP: a new ClearanceLink needs its matching plugin. |
+| No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on TRAFFIC (from SETUP): a new ClearanceLink needs its matching plugin. |
 | STATUS shows FSLTL MODELS UPDATE>, or SETUP shows UPDATE MODELS | FSLTL changed since its models were converted. Close X-Plane, open TRAFFIC and press UPDATE. |
 | FMS on FPLN says NOT TAKEN | X-Plane's FMS refused the plan (the reason is on the bottom line). Load the saved `.fms` file from the aircraft's own FMS menu instead. |
 | Another X-Plane add-on (SPAD.neXt, for example) can't use UDP port 49707 | Windows has reserved a block of ports for Hyper-V. Rebooting usually moves it. To keep 49707 free, run in an admin command prompt: `net stop winnat`, then `netsh int ipv4 add excludedportrange protocol=udp startport=49707 numberofports=1`, then `net start winnat`. ClearanceLink's plugin picks a free port by itself. |
