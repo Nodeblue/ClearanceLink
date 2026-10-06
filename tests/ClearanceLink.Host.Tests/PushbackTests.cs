@@ -477,4 +477,18 @@ public sealed class PushbackTests
         Assert.False(driver.Replan(new PushPlan(15, 0, 309, null)));
         Assert.Equal(90, driver.Plan.TurnDegrees);
     }
+
+    [Theory]
+    [InlineData(PanelPage.Status)]
+    [InlineData(PanelPage.FlightPlan)]
+    [InlineData(PanelPage.Push)]
+    [InlineData(PanelPage.Setup)]
+    [InlineData(PanelPage.Support)]
+    [InlineData(PanelPage.Traffic)]
+    public void Every_labelled_row_explains_itself(PanelPage page)
+    {
+        var built = CduPages.Build(page, Flying with { Push = new PushView(XPlane: true) });
+        Assert.All(built.Rows.Where(r => r.LabelLeft.Length + r.LabelRight.Length > 0 || r.KeyLeft is not (CduKey.None or CduKey.GoStatus or CduKey.GoSetup)),
+            r => Assert.False(string.IsNullOrWhiteSpace(r.Help), $"{page} row {r.LabelLeft}/{r.Left.Text} has no help"));
+    }
 }

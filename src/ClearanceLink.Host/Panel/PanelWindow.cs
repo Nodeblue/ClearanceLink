@@ -45,6 +45,8 @@ public sealed class PanelWindow : Window
     private readonly TextBlock[] _labelRight = new TextBlock[6];
     private readonly TextBlock[] _dataLeft = new TextBlock[6];
     private readonly TextBlock[] _dataRight = new TextBlock[6];
+    private readonly Control[] _info = new Control[6];
+    private readonly Control[][] _rowParts = new Control[6][];
     private readonly Button[] _lskLeft = new Button[6];
     private readonly Button[] _lskRight = new Button[6];
     private readonly Dictionary<PanelPage, Button> _pageKeys = [];
@@ -122,6 +124,14 @@ public sealed class PanelWindow : Window
             Paint(_dataRight[i], row.Right);
             _lskLeft[i].IsEnabled = row.KeyLeft != CduKey.None;
             _lskRight[i].IsEnabled = row.KeyRight != CduKey.None;
+
+            // Help: the explanation on hover anywhere on the row or its keys, and an "i" after the label to say so
+            // (rows without a label belong to the labelled row above, so they get no mark of their own).
+            _info[i].IsVisible = row.Help is not null && row.LabelLeft.Length + row.LabelRight.Length > 0;
+            foreach (var part in _rowParts[i])
+            {
+                ToolTip.SetTip(part, row.Help);
+            }
         }
 
         ShowMessage(page);
@@ -356,8 +366,11 @@ public sealed class PanelWindow : Window
             _labelRight[i] = Text(LabelSize, Colour(CduColor.Cyan));
             _dataLeft[i] = Text(DataSize);
             _dataRight[i] = Text(DataSize);
-            Place(grid, Line(_labelLeft[i], _labelRight[i], null), 1 + (i * 2));
-            Place(grid, Line(_dataLeft[i], _dataRight[i], i), 2 + (i * 2));
+            _info[i] = InfoMark();
+            var labelLine = Line(new StackPanel { Orientation = Orientation.Horizontal, Children = { _labelLeft[i], _info[i] } }, _labelRight[i], null);
+            var dataLine = Line(_dataLeft[i], _dataRight[i], i);
+            Place(grid, labelLine, 1 + (i * 2));
+            Place(grid, dataLine, 2 + (i * 2));
 
             var row = i;
             _lskLeft[i] = LineKey($"Line select {i + 1} left", () => PressAsync(row, right: false));
@@ -367,6 +380,12 @@ public sealed class PanelWindow : Window
             Grid.SetColumn(_lskRight[i], 2);
             grid.Children.Add(_lskLeft[i]);
             grid.Children.Add(_lskRight[i]);
+            _rowParts[i] = [labelLine, dataLine, _lskLeft[i], _lskRight[i]];
+            foreach (var part in _rowParts[i])
+            {
+                ToolTip.SetShowDelay(part, 350);
+                ToolTip.SetPlacement(part, PlacementMode.Bottom);
+            }
         }
 
         // Messages (getting-started pages) start under the title and wrap to the 24-column width.
@@ -409,7 +428,30 @@ public sealed class PanelWindow : Window
         return new StackPanel { Children = { grid, keys } };
     }
 
-    private Grid Line(TextBlock left, TextBlock right, int? row)
+    /// <summary>A small dim "i" in a circle after a row's label: the row explains itself on hover.</summary>
+    private static Border InfoMark() => new()
+    {
+        Width = 12,
+        Height = 12,
+        CornerRadius = new CornerRadius(6),
+        BorderBrush = Brush("#3B8794"),
+        BorderThickness = new Thickness(1),
+        Margin = new Thickness(5, 1, 0, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        IsVisible = false,
+        Child = new TextBlock
+        {
+            Text = "i",
+            FontFamily = CduFont,
+            FontSize = 9,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush("#5FB3C0"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        },
+    };
+
+    private Grid Line(Control left, TextBlock right, int? row)
     {
         // Width fixed to 24 characters of the data font; the right half is flush with the screen's right edge.
         var line = new Grid

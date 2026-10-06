@@ -14,10 +14,10 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
   (`[Instruction] ..., pushback and engine start approved. Face east.`). ClearanceLink follows the log (new lines only)
   and shows the approval and direction on a new PUSH page. BeyondATC's GSX L:var writes stay ignored.
 - **The approval calls the tug, as with GSX, and the pilot can switch that off.** In MSFS BeyondATC requests GSX's
-  pushback itself at the approval; the pilot only releases the parking brake. START on the PUSH page is ON CLEARANCE
-  by default (Ben chose this on 2026-10-05 after first trying a key-only version) or BY KEY, saved as
-  `pushAutomatic` in settings.json. BY KEY waits for START PUSH, and TAIL LEFT, TAIL RIGHT and STRAIGHT override the
-  clearance; STATUS says PUSHBACK APPROVED: PUSH meanwhile. Either way the tug only pushes once the brake is off.
+  pushback itself at the approval; the pilot only releases the parking brake. TUG on the PUSH page is AUTO by default (Ben
+  chose this on 2026-10-05 after first trying a key-only version) or MANUAL, saved as `pushAutomatic` in
+  settings.json. MANUAL waits for CALL TUG; STATUS says PUSHBACK APPROVED: PUSH meanwhile. TAIL LEFT, TAIL RIGHT and
+  NO TURN override the clearance until the tug starts moving (a called push is planned again). Either way the tug only pushes once the brake is off.
 - **Better Pushback's manual push, closed loop, over the Web API.** `BetterPushback/manual_push_start_no_yoke` starts
   (and pauses) the push, `manual_push_left/right` steer in 10% steps, `stop` ends it, and once the pilot sets the
   parking brake `disconnect` and `acknowledge_clear` send the tug away. ClearanceLink watches position, heading and
@@ -25,7 +25,9 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
   it the PUSH page says BETTER PUSHBACK MISSING and nothing is sent.
 - **The push ends on a taxiway.** The taxiway behind the aircraft (apt.dat 1202 edges, the stand's own lead-in left
   out) sets how far to push before turning and the final heading, the way along it closest to the cleared direction.
-  Without one: 15 m straight, then a turn toward the direction (at most 135 degrees).
+  Without one: 15 m straight, then a turn toward the direction (at most 135 degrees). A push with no turn goes about
+  one aircraft length, taken as 2.5 wheelbases from `tire_z_no_deflection` (15 to 60 m), as X-Plane has no reliable
+  length dataref.
 
 ## Alternatives
 - **Pretend to be GSX** (registry key, menu file, L:var status 1-2-3-0 back to BeyondATC). Writes into the registry and
@@ -36,8 +38,8 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
 
 ## Consequences
 - Tested by hand on Ben's PC (Citation X at YBBN, commands sent over the Web API): straight push, a 90 degree turn
-  with the tail right, pause and stop. The PUSH page with START PUSH pushed the Citation X back 15 m to face
-  southwest and disconnected the tug (2026-10-05); ON CLEARANCE is not yet run there.
+  with the tail right, pause and stop. The PUSH page with its key pushed the Citation X back 15 m to face
+  southwest and disconnected the tug (2026-10-05); the automatic call worked there the same day.
 - Better Pushback can't move some aircraft at all (the Aerobask Phenom 300, even with its own planned push); the page
   says NOT MOVING: SEE HELP after 40 s with the brake off.
 - Depends on the wording of BeyondATC's log lines; a change there stops the clearance showing, and the TAIL keys
