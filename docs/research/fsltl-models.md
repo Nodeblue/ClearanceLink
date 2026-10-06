@@ -62,6 +62,10 @@ Measured on Ben's PC:
 - **Outliers to exclude or reduce:** `FSLTL_SU95` LOD0 is 730k triangles (use its lower LOD or decimate). The 10 Asobo GA aircraft (C172, DA40, TBM etc.) are Microsoft's own models, 50k to 160k triangles, and are not FSLTL's to give; leave those on Bluebell.
 - **Loading:** XPMP2 loads objects asynchronously, so first appearance of a new livery should not stutter, but importing up front avoids any runtime conversion cost.
 
+## Lights
+
+Read on Ben's PC on 2026-10-06 (FSLTL 1.5.0, read-only). MSFS draws FSLTL's external lights from each base model's `systems.cfg` `[LIGHTS]` section, not from the glTF: all 65 base model folders have one. Lines are `lightdef.N = Type:T#Index:i#LocalPosition:x,y,z#LocalRotation:p,b,h#EffectFile:LIGHT_...#Node:name#PotentiometerIndex:n#EmMesh:...`, with LocalPosition in feet, x forward, y right (the red nav light has y < 0), z up, from the reference datum, which is at the glTF origin (`reference_datum_position = 0, 0, 0` in the models checked; the A320's nav lights at y = ±55.1 ft sit just inside its ±17.13 m mesh span, its tail lights at the mesh tail). Some lights leave LocalPosition empty and name a glTF node (mostly nose gear `takeoff`/`taxi` lights; the SU95 places every light that way). Types used: 1 beacon (110 lines), 2 strobe (188), 3 nav (220), 5 landing (185), 6 taxi (166), 9 logo (70), 7 wing (4), 8 (3); the nav colour is in the EffectFile name (NavigationRed/Green/White, any case). The glTFs carry no nav, strobe or beacon lights (`ASOBO_macro_light` is only on logo and wing spotlights), and the model XMLs reference no light effects. FSLTL_Asobo_C25C has two empty lightdef lines.
+
 ## What building it would take
 
 A C# importer in `ClearanceLink.Host` (fits the existing stack, unit-testable on Linux with synthetic glTF fixtures, no FSLTL files in the repo):

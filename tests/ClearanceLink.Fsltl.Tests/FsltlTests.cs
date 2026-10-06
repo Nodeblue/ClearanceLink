@@ -235,10 +235,13 @@ public sealed class FsltlTests
         Assert.Equal(2, result.Textures);
         var xsb = File.ReadAllText(Path.Combine(output, "xsb_aircraft.txt"));
         Assert.StartsWith("EXPORT_NAME ClearanceLink_FSLTL", xsb);
-        Assert.Contains("OBJ8_AIRCRAFT FSLTL_A20N_BAW_Speedbird\nOBJ8 SOLID YES ClearanceLink_FSLTL/objects/FSLTL_A20N_A320_0.obj FSLTL_A20N_BAW_Speedbird_TEXTURE_BAW_LIVERY_T.dds\nLIVERY A20N BAW FSLTL_A20N_BAW_Speedbird\n", xsb);
+        Assert.Contains("OBJ8_AIRCRAFT FSLTL_A20N_BAW_Speedbird\nOBJ8 SOLID YES ClearanceLink_FSLTL/objects/FSLTL_A20N_A320_0.obj FSLTL_A20N_BAW_Speedbird_TEXTURE_BAW_LIVERY_T.dds\nOBJ8 SOLID YES ClearanceLink_FSLTL/objects/FSLTL_A20N_A320_lights.obj\nLIVERY A20N BAW FSLTL_A20N_BAW_Speedbird\n", xsb);
         Assert.Contains("LIVERY A20N - FSLTL_A20N\n", xsb);
         var obj = File.ReadAllText(Path.Combine(output, "objects", "FSLTL_A20N_A320_0.obj"));
         Assert.Contains("TEXTURE FSLTL_A20N_TEXTURE_LIVERY_T.dds\n", obj);
+        var lights = File.ReadAllText(Path.Combine(output, "objects", "FSLTL_A20N_A320_lights.obj"));
+        Assert.Contains("LIGHT_NAMED airplane_beacon 0 2.62128 0\n", lights);
+        Assert.Contains("LIGHT_NAMED airplane_landing -1 2 -3\n", lights);  // on the "gear" node
         Assert.Equal(4, DdsTexture.Load(Path.Combine(output, "objects", "FSLTL_A20N_TEXTURE_LIVERY_T.dds")).Width);
         var catalogue = FsltlImporter.LoadCatalogue(output);
         Assert.Contains(new CatalogueEntry("FSLTL_A20N_BAW-British Airways", "FSLTL_A20N_BAW_Speedbird", "A20N", "BAW", "FSLTL_A20N_A320"), catalogue);
