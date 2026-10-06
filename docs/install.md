@@ -7,6 +7,7 @@ or Laminar Research.
 - Windows 10 or 11 (64-bit).
 - X-Plane 12.1.4 or later.
 - BeyondATC, installed as usual. It stays set up for MSFS too.
+- For traffic: [FSLTL](https://fslivetrafficliveries.com/) (free). BeyondATC creates no traffic without it.
 
 You don't need MSFS or .NET installed.
 
@@ -47,4 +48,5 @@ installs anything itself. To stop the check, run `ClearanceLink.exe settings upd
 1. On **SETUP**, if CONNECTION is **ALWAYS ON**, choose **AUTOMATIC** first, so BeyondATC goes back to MSFS.
 2. Close ClearanceLink and delete its folder.
 3. Optional: delete `X-Plane 12\Resources\plugins\ClearanceLink` (the traffic plugin), the converted FSLTL models in
-   `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`, and `%LOCALAPPDATA%\ClearanceLink` (settings and logs).
+   `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`, and `%LOCALAPPDATA%\ClearanceLink` (settings and logs). Close ClearanceLink first: while it is open,
+   that folder holds a link to your FSLTL folder.

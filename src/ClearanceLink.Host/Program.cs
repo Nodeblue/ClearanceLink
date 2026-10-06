@@ -570,7 +570,8 @@ namespace ClearanceLink.Host
 
         /// <summary>
         /// batc-guard: waits for the ClearanceLink that started it, then removes BeyondATC's SimConnect.cfg files unless
-        /// always on was chosen or another ClearanceLink is serving (<see cref="BatcLink.GuardShouldRelease"/>).
+        /// always on was chosen or another ClearanceLink is serving (<see cref="BatcLink.GuardShouldRelease"/>), and the
+        /// UserCfg.opt written for BeyondATC's traffic models unless another ClearanceLink is serving.
         /// </summary>
         private static int BatcGuard(Options options)
         {
@@ -589,8 +590,15 @@ namespace ClearanceLink.Host
                 // Already gone.
             }
 
+            var portInUse = PortInUse(BatcRedirect.DefaultPort);
+            if (!portInUse)
+            {
+                // ClearanceLink's UserCfg.opt for BeyondATC's traffic models goes in either connection mode.
+                BatcTrafficModels.Default.Remove();
+            }
+
             var connection = AppSettings.Load(AppFolders.Default.Settings).Connection;
-            if (!BatcLink.GuardShouldRelease(connection, PortInUse(BatcRedirect.DefaultPort)) || BatcFolder(new Options()) is not { } folder)
+            if (!BatcLink.GuardShouldRelease(connection, portInUse) || BatcFolder(new Options()) is not { } folder)
             {
                 return 0;
             }
@@ -691,17 +699,133 @@ namespace ClearanceLink.Host
                 OpenInBrowser(status.Url);
             }
 
+            // BeyondATC lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none
+            // (ADR-0014). Only while no real MSFS runs, so an MSFS 2024 being installed never adopts ClearanceLink's file.
+            var batcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default : null;
+            var modelsLock = new Lock();
+            var pointed = false;
+            var closing = false;
+            void FollowModels(bool msfsRunning)
+            {
+                if (batcModels is null)
+                {
+                    return;
+                }
+
+                lock (modelsLock)
+                {
+                    if (closing)
+                    {
+                        return;
+                    }
+
+                    if (msfsRunning)
+                    {
+                        if (pointed && batcModels.Remove() is { } removed)
+                        {
+                            PacketConsole.Info($"{removed} (MSFS is running)");
+                        }
+
+                        pointed = false;
+                        return;
+                    }
+
+                    string? fsltl;
+                    try
+                    {
+                        fsltl = FsltlFolder(options);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // MSFS rewriting its UserCfg.opt as it is read: the next change or check tries again.
+                        PacketConsole.Info($"batc-models: FSLTL folder check failed ({ex.Message})");
+                        return;
+                    }
+
+                    var models = batcModels.Provide(fsltl);
+                    PacketConsole.Info(models.Line);
+                    pointed = models.Outcome == BatcTrafficModels.Outcome.Pointed;
+                    if (pointed)
+                    {
+                        StartBatcGuard();
+                    }
+                }
+            }
+
+            // An FSLTL folder chosen on TRAFFIC while serve runs is shown to BeyondATC too (no restart, BATC wouldn't reconnect).
+            async Task WatchFsltlFolderAsync()
+            {
+                string? last = null;
+                var first = true;
+                try
+                {
+                    last = FsltlFolder(options);
+                    first = false;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Recorded on the first check that works.
+                }
+
+                try
+                {
+                    while (batcModels is not null)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                        try
+                        {
+                            var now = FsltlFolder(options);
+                            if (!first && !string.Equals(now, last, StringComparison.OrdinalIgnoreCase))
+                            {
+                                FollowModels(msfs.IsRunning);
+                            }
+
+                            last = now;
+                            first = false;
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            // MSFS rewriting its UserCfg.opt as it is read: try again in 5 s.
+                            PacketConsole.Info($"batc-models: FSLTL folder check failed ({ex.Message})");
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Closing.
+                }
+            }
+
+            var watchTask = Task.CompletedTask;
             try
             {
+                msfs.Changed += FollowModels;
+                FollowModels(msfs.IsRunning);
+                watchTask = WatchFsltlFolderAsync();
                 await server.RunAsync(ct);
             }
             finally
             {
+                msfs.Changed -= FollowModels;
+                lock (modelsLock)
+                {
+                    closing = true;
+
+                    // Only the file this ClearanceLink wrote: another one still serving keeps its own.
+                    if (pointed && batcModels?.Remove() is { } removed)
+                    {
+                        PacketConsole.Info(removed);
+                    }
+
+                    pointed = false;
+                }
+
                 await xplaneTask;
                 await msfsTask;
                 await bridgeTask;
                 await stubTask;
                 await pushTask;
+                await watchTask;
             }
         }
 

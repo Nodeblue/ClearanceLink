@@ -43,9 +43,10 @@ Settings > Graphics turn Draw parked aircraft off, and remove the AI aircraft fr
 
 Traffic
 -------
-BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin with CSL aircraft models. Two libraries are
-tested: Bluebell (free from the X-Plane.org forums: unzip into X-Plane 12\Custom Data\CSL) and FSLTL
-(https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the TRAFFIC page with X-Plane
+BeyondATC needs FSLTL for any traffic: without it, it says "No traffic liveries found". Without MSFS 2024,
+choose your FSLTL folder on the TRAFFIC page. BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin
+with CSL aircraft models. Two libraries are tested: Bluebell (free from the X-Plane.org forums: unzip into
+X-Plane 12\Custom Data\CSL) and FSLTL (https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the TRAFFIC page with X-Plane
 closed; converted on your PC, never share the result). Close X-Plane before installing or updating the
 plugin from the SETUP page.
 
