@@ -68,14 +68,14 @@ public static class ModelLights
         return lights;
     }
 
-    /// <summary>MSFS light types 1 beacon, 2 strobe, 3 nav, 5 landing, 6 taxi; nav colour from the effect name, else the side.</summary>
+    /// <summary>MSFS light types 1 beacon, 2 strobe, 3 nav, 5 landing, 6 taxi; nav colour from the effect name (NavigationRed...), else the side.</summary>
     public static LightKind? Kind(int type, string effect, Vector3 position) => type switch
     {
         1 => LightKind.Beacon,
         2 => LightKind.Strobe,
-        3 when effect.Contains("red", StringComparison.OrdinalIgnoreCase) => LightKind.NavLeft,
-        3 when effect.Contains("green", StringComparison.OrdinalIgnoreCase) => LightKind.NavRight,
-        3 when effect.Contains("white", StringComparison.OrdinalIgnoreCase) => LightKind.NavTail,
+        3 when effect.Contains("NavigationRed", StringComparison.OrdinalIgnoreCase) => LightKind.NavLeft,
+        3 when effect.Contains("NavigationGreen", StringComparison.OrdinalIgnoreCase) => LightKind.NavRight,
+        3 when effect.Contains("NavigationWhite", StringComparison.OrdinalIgnoreCase) => LightKind.NavTail,
         3 => position.X < -0.5f ? LightKind.NavLeft : position.X > 0.5f ? LightKind.NavRight : LightKind.NavTail,
         5 => LightKind.Landing,
         6 => LightKind.Taxi,
