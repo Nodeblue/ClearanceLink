@@ -577,7 +577,7 @@ public static class CduPages
                 : Row("X-PLANE PLUGIN", "", new("NOT IN THIS COPY"), new(""))) with
                 { Help = "ClearanceLink's X-Plane plugin draws BeyondATC's traffic. Install or update it with X-Plane closed." },
             BluebellRow(s) with { Help = "Bluebell: a free set of aircraft models for X-Plane. HOW TO shows where to get it." },
-            FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models, converted for X-Plane from your own copy. Close X-Plane to convert." },
+            FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models. BeyondATC needs them for any traffic; they're converted for X-Plane from your own copy. Close X-Plane to convert." },
             Row("X-PLANE SETTINGS", "", new("3 TO TURN OFF"), new("HOW TO>"), CduKey.None, CduKey.OpenXPlaneSettingsHelp)
                 with { Help = "In X-Plane, set Radios to 0, Draw parked aircraft off and AI aircraft to none, so only BeyondATC talks and flies traffic." },
             CduRow.Empty,
@@ -612,8 +612,8 @@ public static class CduPages
         [
             Say("Aircraft models", CduColor.Green),
             s.FsltlFolder is null && !s.MsfsInstalled
-                ? Say("Either tested library works. FSLTL comes from MSFS, which isn't on this PC; CHOOSE a copied FSLTL folder.")
-                : Say("Either tested library works. FSLTL is converted from your MSFS copy."),
+                ? Say("BeyondATC needs FSLTL for traffic. No MSFS here: CHOOSE your FSLTL folder.")
+                : Say("BeyondATC needs FSLTL for traffic. It's converted from your MSFS copy; Bluebell is optional."),
         ];
         return new(StartTitle(PanelPage.StartModels), rows, ModelsLine(s, flash), message);
     }

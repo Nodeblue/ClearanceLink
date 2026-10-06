@@ -7,6 +7,7 @@ or Laminar Research.
 - Windows 10 or 11 (64-bit).
 - X-Plane 12.1.4 or later.
 - BeyondATC, installed as usual. It stays set up for MSFS too.
+- For traffic: [FSLTL](https://fslivetrafficliveries.com/) (free). BeyondATC creates no traffic without it.
 
 You don't need MSFS or .NET installed.
 

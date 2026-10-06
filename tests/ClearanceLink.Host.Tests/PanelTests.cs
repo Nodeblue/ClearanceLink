@@ -534,7 +534,8 @@ public sealed class PanelTests
         var row = page.Rows[4];
         Assert.Equal("NEEDS MSFS", row.Left.Text);
         Assert.Equal(("CHOOSE>", CduKey.ChooseFsltlFolder), (row.Right.Text, row.KeyRight));
-        Assert.Contains(page.Message!, m => m.Text.Contains("FSLTL comes from MSFS", StringComparison.Ordinal));
+        Assert.Contains(page.Message!, m => m.Text.Contains("No MSFS here", StringComparison.Ordinal));
+        Assert.All([page, CduPages.Build(PanelPage.StartModels, Ready)], p => Assert.Contains(p.Message!, m => m.Text.Contains("needs FSLTL", StringComparison.Ordinal)));
 
         // A copy chosen by hand is just FOUND (not in MSFS).
         Assert.Equal("FOUND", CduPages.Build(PanelPage.StartModels, Ready with { MsfsInstalled = false, FsltlFolder = @"D:\fsltl-traffic-base" }).Rows[4].Left.Text);

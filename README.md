@@ -12,8 +12,9 @@ approaches, handoffs and traffic in X-Plane 12.
 ## Get started
 1. **[Download and install](docs/install.md)**: unzip, double-click `ClearanceLink.exe`. Its WELCOME pages find
    BeyondATC and X-Plane, install the traffic plugin and show the X-Plane settings to turn down.
-2. **Add [aircraft models](docs/help.md#aircraft-models-for-traffic)** if you want to see BeyondATC's traffic:
-   Bluebell (free download) or [https://fslivetrafficliveries.com/LTL](https://fslivetrafficliveries.com/) (converted from your own MShttps://fslivetrafficliveries.com/ copy).
+2. **For traffic, add [FSLTL](https://fslivetrafficliveries.com/)** (free): BeyondATC needs it for any traffic, and
+   ClearanceLink converts its aircraft for X-Plane on the TRAFFIC page. Bluebell (free download) adds more models.
+   See [aircraft models](docs/help.md#aircraft-models-for-traffic).
 3. **Every flight**: plan it in SimBrief, start X-Plane 12 at the plan's departure airport, keep ClearanceLink open,
    then start BeyondATC.
 4. **Optional, for pushback**: install the free [Better Pushback](https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/) plugin (1.14 or later). The PUSH page then
