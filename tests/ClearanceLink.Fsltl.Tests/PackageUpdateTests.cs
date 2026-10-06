@@ -108,7 +108,7 @@ public sealed class PackageUpdateTests
         Assert.True(File.Exists(Path.Combine(objects, "Renamed_Livery.dds")));
 
         FsltlImporter.Import(Options(package, output));
-        Assert.Equal(["FSLTL_A20N_A320_0.obj", "FSLTL_A20N_BAW_Speedbird_TEXTURE_BAW_LIVERY_T.dds", "FSLTL_A20N_TEXTURE_LIVERY_T.dds"],
+        Assert.Equal(["FSLTL_A20N_A320_0.obj", "FSLTL_A20N_A320_lights.obj", "FSLTL_A20N_BAW_Speedbird_TEXTURE_BAW_LIVERY_T.dds", "FSLTL_A20N_TEXTURE_LIVERY_T.dds"],
             Directory.GetFiles(objects).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         Assert.Empty(Directory.GetFiles(output, "*.tmp"));
     }

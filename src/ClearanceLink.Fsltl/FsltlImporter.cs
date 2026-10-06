@@ -78,7 +78,7 @@ public static class FsltlImporter
     /// Bump whenever the converter's output changes (models, textures, xsb_aircraft.txt or the catalogue): packages an
     /// older version converted then show as out of date, so users convert again.
     /// </summary>
-    public const int ImporterVersion = 1;
+    public const int ImporterVersion = 2;  // 2: external lights (0.7.3)
 
     /// <summary>Models more lopsided than this (<see cref="Obj8Converter.Asymmetry"/>) are left out.</summary>
     public const float MaxAsymmetry = 0.08f;
@@ -132,6 +132,7 @@ public static class FsltlImporter
             var modelName = ModelName(airplanes, model.Key);
             for (var n = 2; !modelNames.Add(modelName); n++) modelName = $"{ModelName(airplanes, model.Key)}_{n}";
             Obj8Result converted;
+            string? lightsObj;
             try
             {
                 var lods = PickLods(first.ModelFiles, options.MaxTriangles);
@@ -151,6 +152,7 @@ public static class FsltlImporter
                 }
 
                 converted = Obj8Converter.Convert(lods, AnimationRoles.Load(model.Key), AnimationRoles.EngineParts(model.Key), AnimationRoles.UsedNames(model.Key));
+                lightsObj = Lights(model.Key, lods[0], modelName, problems);
             }
             catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or ArgumentException)
             {
@@ -181,6 +183,19 @@ public static class FsltlImporter
                 File.WriteAllText(objPath + ".tmp", text);
                 staged.Add(objPath);
                 written.Add(Path.GetFileName(objPath));
+            }
+
+            // The external lights, as their own object: no texture, so every livery shares it unchanged.
+            if (lightsObj is null)
+            {
+                problems.Add($"{modelName}: no external lights found in its systems.cfg; drawn without lights");
+            }
+            else
+            {
+                var lightsPath = Path.Combine(objects, LightsObjName(modelName));
+                File.WriteAllText(lightsPath + ".tmp", lightsObj);
+                staged.Add(lightsPath);
+                written.Add(Path.GetFileName(lightsPath));
             }
 
             foreach (var livery in model)
@@ -221,6 +236,8 @@ public static class FsltlImporter
                     skipped++;
                     continue;
                 }
+
+                if (lightsObj is not null) lines.Append(CultureInfo($"OBJ8 SOLID YES {ExportName}/{ObjectsFolder}/{LightsObjName(modelName)}\n"));
 
                 var type = livery.IcaoType.Length > 0 ? livery.IcaoType : "ZZZZ";
                 var text = new StringBuilder().Append("OBJ8_AIRCRAFT ").Append(livery.Key).Append('\n')
@@ -442,6 +459,22 @@ public static class FsltlImporter
     }
 
     private static string ObjName(string modelName, int part) => $"{modelName}_{part}.obj";
+
+    /// <summary>The model's lights .obj, or null; a cfg that cannot be read costs the lights, not the model.</summary>
+    private static string? Lights(string modelXml, GltfModel lod0, string modelName, List<string> problems)
+    {
+        try
+        {
+            return ModelLights.ObjText(ModelLights.Load(modelXml, lod0));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            problems.Add($"{modelName}: lights not read ({ex.Message})");
+            return null;
+        }
+    }
+
+    private static string LightsObjName(string modelName) => $"{modelName}_lights.obj";
 
     private static string Safe(string text)
     {
