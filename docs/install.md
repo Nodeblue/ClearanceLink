@@ -40,7 +40,7 @@ installs anything itself. To stop the check, run `ClearanceLink.exe settings upd
 2. Download the new zip and **Unblock** it as above.
 3. Unzip it into your ClearanceLink folder and choose **Replace the files**. Your settings and logs are kept: they live
    in `%LOCALAPPDATA%\ClearanceLink`, not in this folder.
-4. Start ClearanceLink. If **SETUP** shows the X-PLANE PLUGIN as **NEWER VERSION**, close X-Plane and press **UPDATE**
+4. Start ClearanceLink. If **SETUP** says **UPDATE PLUGIN**, close X-Plane, press **SET UP** and then **UPDATE**
    (X-Plane keeps the plugin locked while it runs).
 
 **Coming from XPConnect** (ClearanceLink's old name)? Unzip ClearanceLink into a new folder and delete the old
