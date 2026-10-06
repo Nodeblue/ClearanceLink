@@ -33,3 +33,15 @@ Source: the fork's source code and a test over the Web API on Ben's PC.
   straight, 0.6 m/s at 50% steering. `manual_push_right` swings the tail right (heading falls), about 4 deg/s at 50%.
   After centring it kept turning about 6 degrees. Pausing slows to a stop in about 5 s.
 - Aerobask Phenom 300: connected but never moved, also with Better Pushback's own planned push. Not ClearanceLink.
+
+## Phenom 300 vs Citation X (2026-10-06, logged twice a second)
+- Better Pushback adds no plugin force (`faxil_plug_acf`, `fside_plug_acf`, `M_plug_acf` stayed 0) and overrides
+  only steering; it moves the aircraft through X-Plane's own gear.
+- Citation X: moving within 1 s of Better Pushback's "pushing" stage, 23 m at 1.1 m/s.
+- Phenom 300: Better Pushback reached "pushing" but its tug's drive never turned and nothing moved. No brake, chock,
+  skid or override dataref was set.
+- The Phenom's wheels aren't held: with the brake off it rolled forward on its own engines at about 18% throttle
+  (about 0.7 kN over idle). Its gear force reads about -2.5 kN in every state, an offset in its gear model.
+- X-Plane's own pushback only serves airliners and refused the Phenom.
+- So the stall is between Better Pushback and this aircraft (likely its systems fighting Better Pushback's nose-gear
+  control). Not ClearanceLink; the PUSH page shows NOT MOVING: SEE HELP after 40 s with the brake off.
