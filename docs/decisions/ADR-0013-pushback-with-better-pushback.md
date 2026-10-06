@@ -41,6 +41,6 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
   with the tail right, pause and stop. The PUSH page with its key pushed the Citation X back 15 m to face
   southwest and disconnected the tug (2026-10-05); the automatic call worked there the same day.
 - Better Pushback can't move some aircraft at all (the Aerobask Phenom 300, even with its own planned push); the page
-  says NOT MOVING: SEE HELP after 40 s with the brake off.
+  says NOT MOVING: PRESS STOP after 40 s with the brake off.
 - Depends on the wording of BeyondATC's log lines; a change there stops the clearance showing, and the TAIL keys
   still work.

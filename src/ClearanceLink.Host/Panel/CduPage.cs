@@ -350,7 +350,7 @@ public static class CduPages
     {
         { Stage: PushStage.Failed, Problem: { } why } => new(Fit(why, Width), CduColor.Amber),
         { Stage: PushStage.CallingTug } => new("TUG ON THE WAY"),
-        { Stage: PushStage.WaitingForBrake, Stalled: true } => new("NOT MOVING: SEE HELP", CduColor.Amber),
+        { Stage: PushStage.WaitingForBrake, Stalled: true } => new("NOT MOVING: PRESS STOP", CduColor.Amber),
         { Stage: PushStage.WaitingForBrake, BrakeSet: true } => new("RELEASE PARKING BRAKE", CduColor.Amber),
         { Stage: PushStage.WaitingForBrake } => new("PUSH STARTING"),
         { Stage: PushStage.PushingBack } => new($"PUSHING BACK {v.Pushed:0}M", CduColor.Green),

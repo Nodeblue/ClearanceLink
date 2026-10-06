@@ -102,9 +102,13 @@ name to load.
 
 ## Pushback
 In MSFS, BeyondATC can call GSX for your pushback. X-Plane has no GSX, so the **PUSH** page does it with the free
-[Better Pushback](https://github.com/olivierbutler/BetterPusbackMod) plugin (version 1.14 or later) instead. It
+[Better Pushback](https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/) plugin instead. It
 follows BeyondATC's clearance, including "face east". Like GSX in MSFS, the tug comes as soon as BeyondATC approves
 your pushback, and it only moves once you release the parking brake.
+
+Install the maintained Better Pushback mod, version 1.14 or later, from [X-Plane.org](https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/) (free account
+needed; source on [GitHub](https://github.com/olivierbutler/BetterPusbackMod)). Older Better Pushback versions lack the
+commands ClearanceLink uses. Unzip it into `X-Plane 12\Resources\plugins` with X-Plane closed.
 
 <img src="images/panel-push-flying.png" width="330" alt="PUSH page with a clearance to face east">
 
@@ -128,9 +132,9 @@ length (15 m for a small aircraft, about 40 m for a 737), worked out from the ai
 **BETTER PUSHBACK MISSING** means X-Plane doesn't have the plugin. Install it in `X-Plane 12\Resources\plugins` and
 restart X-Plane. ClearanceLink sends nothing to X-Plane until it's there.
 
-**NOT MOVING: SEE HELP** means the tug is on and the brake is off, but the aircraft doesn't move. Better Pushback
-can't push some aircraft (in our tests, the Aerobask Phenom 300, even from Better Pushback's own menu). Press
-**STOP** and use the aircraft's own pushback, if it has one.
+**NOT MOVING: PRESS STOP** means the tug is on and the brake has been off for 40 seconds, but the aircraft hasn't
+moved. Better Pushback can't push some aircraft (in our tests, the Aerobask Phenom 300, even from Better Pushback's
+own menu). Press **STOP**, then taxi out under your own power or use the aircraft's own pushback, if it has one.
 
 ## X-Plane settings
 Change these in X-Plane, so only BeyondATC talks and only BeyondATC's traffic flies:
@@ -164,7 +168,7 @@ Everything for traffic is on the **TRAFFIC** page: press **SET UP** beside TRAFF
 3. TRAFFIC shows how many packages ClearanceLink found. Restart X-Plane if it was running.
 
 ### FSLTL (converted from your MSFS copy)
-If you have FSLTL (FS Live Traffic Liveries) installed for MSFS, ClearanceLink can convert its aircraft for X-Plane.
+If you have [https://fslivetrafficliveries.com/LTL](https://fslivetrafficliveries.com/) (https://fslivetrafficliveries.com/ Live Traffic Liveries, free) installed for MShttps://fslivetrafficliveries.com/, ClearanceLink can convert its aircraft for X-Plane.
 The conversion runs on your PC and reads your FSLTL folder only. FSLTL's licence doesn't allow sharing the models, so
 the converted models stay on your PC: never upload or share them.
 1. On TRAFFIC, the FSLTL line says **FOUND IN MSFS** when ClearanceLink finds the `fsltl-traffic-base` package

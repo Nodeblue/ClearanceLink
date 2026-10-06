@@ -35,13 +35,18 @@ Source: the fork's source code and a test over the Web API on Ben's PC.
 - Aerobask Phenom 300: connected but never moved, also with Better Pushback's own planned push. Not ClearanceLink.
 
 ## Phenom 300 vs Citation X (2026-10-06, logged twice a second)
-- Better Pushback adds no plugin force (`faxil_plug_acf`, `fside_plug_acf`, `M_plug_acf` stayed 0) and overrides
-  only steering; it moves the aircraft through X-Plane's own gear.
+- The Web API read `faxil_plug_acf`, `fside_plug_acf` and `M_plug_acf` as 0 in both aircraft, and only the steering
+  override was on. Better Pushback's source (BetterPusbackMod, `src/bp.c`, `push_at_speed`) does push through
+  `faxil_plug_acf` and `N_plug_acf`: each frame, before the flight model, it adds its force to the value already
+  there, up to 5 kN per tonne of aircraft mass (about 35 kN for the Phenom). The 0 readings are probably a sampling
+  effect between frames, since the Citation moved with the same readings.
 - Citation X: moving within 1 s of Better Pushback's "pushing" stage, 23 m at 1.1 m/s.
 - Phenom 300: Better Pushback reached "pushing" but its tug's drive never turned and nothing moved. No brake, chock,
   skid or override dataref was set.
 - The Phenom's wheels aren't held: with the brake off it rolled forward on its own engines at about 18% throttle
   (about 0.7 kN over idle). Its gear force reads about -2.5 kN in every state, an offset in its gear model.
 - X-Plane's own pushback only serves airliners and refused the Phenom.
-- So the stall is between Better Pushback and this aircraft (likely its systems fighting Better Pushback's nose-gear
-  control). Not ClearanceLink; the PUSH page shows NOT MOVING: SEE HELP after 40 s with the brake off.
+- So the stall is between Better Pushback and this aircraft. Likely cause (inferred, not proven): the Phenom's own
+  plugin writes `faxil_plug_acf` (sets it, not adds to it) later in the same frame, so Better Pushback's force is lost.
+  Better Pushback's "Acf plugin to exclude" preference disables the chosen plugin from push start to push stop, which
+  would test this. Better Pushback 1.15 behaves the same (Ben, 2026-10-06). Not ClearanceLink; the PUSH page shows NOT MOVING: PRESS STOP after 40 s with the brake off.
