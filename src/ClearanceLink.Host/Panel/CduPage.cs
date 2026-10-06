@@ -89,7 +89,7 @@ public sealed record CduRow(string LabelLeft, string LabelRight, CduCell Left, C
     public string? Help { get; init; }
 
     /// <summary>
-    /// Where the "i" goes: after the left label, or before the right label when only the right half has one (SUPPORT's
+    /// Where the "i" goes: after the left label, or after the right label when only the right half has one (SUPPORT's
     /// HELP), so it sits beside the words it explains. Rows without a label belong to the labelled row above: none.
     /// </summary>
     public HelpMark Mark => Help is null ? HelpMark.None

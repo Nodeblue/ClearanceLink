@@ -366,10 +366,10 @@ public sealed class PanelWindow : Window
             _dataLeft[i] = Text(DataSize);
             _dataRight[i] = Text(DataSize);
             _infoLeft[i] = InfoMark(new Thickness(5, 1, 0, 0));
-            _infoRight[i] = InfoMark(new Thickness(0, 1, 5, 0));
+            _infoRight[i] = InfoMark(new Thickness(5, 1, 0, 0));
             var labelLine = Line(
                 new StackPanel { Orientation = Orientation.Horizontal, Children = { _labelLeft[i], _infoLeft[i] } },
-                new StackPanel { Orientation = Orientation.Horizontal, Children = { _infoRight[i], _labelRight[i] } },
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { _labelRight[i], _infoRight[i] } },
                 null);
             var dataLine = Line(_dataLeft[i], _dataRight[i], i);
             Place(grid, labelLine, 1 + (i * 2));
