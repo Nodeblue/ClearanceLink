@@ -59,6 +59,7 @@ Source: `recordings/local/20260930-174605-record.jsonl` on Ben's PC (not committ
 ### AI traffic
 - 64 objects created with FSLTL and Asobo passive models; each gets `AssignedObjectId`, then `AIReleaseControl` and `FREEZE_LATITUDE_LONGITUDE_SET` / `FREEZE_ALTITUDE_SET` / `FREEZE_ATTITUDE_SET`.
 - BATC then writes each object continuously: define 4 and 5 (position, attitude, IAS), define 6 (N1/N2/throttle), define 0 (`Initial Position`), define 12, 14, 2, 1 (surfaces, gear, lights, engines), plus light, flap, gear and spoiler events (`SPOILERS_ON` 8,925 times).
+- Lights (same recording, define 12 and the `*_LIGHTS_SET` / `STROBES_SET` events, checked 2026-10-06): `LIGHT NAV`, `LIGHT BEACON`, `LIGHT LANDING`, `LIGHT TAXI`, `LIGHT STROBE` are INT32 Bool in define 12, written for only 8 of the 57 objects (nav, beacon and strobe on; never landing or taxi). Every other object gets the light events instead: all five off when created (parked aircraft stay dark), then for example nav, beacon and strobes on at push, landing on for take-off, landing and strobes off and taxi on after landing. No object got both a SimVar write and an event. A ClearanceLink session (`20261003-210928-serve.jsonl`) shows the same.
 - It reads back per object: define 18 (GROUND ALTITUDE, PLANE ALTITUDE, GROUND VELOCITY), define 19 (PLANE ALT ABOVE GROUND MINUS CG), define 20 (PLANE ALTITUDE). Ground altitude under each AI aircraft is therefore something the sim side must supply.
 
 ## Stand-in test (runbook step 3, MSFS closed)

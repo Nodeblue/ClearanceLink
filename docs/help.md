@@ -244,7 +244,8 @@ MSFS for that X-Plane has no equivalent of (those are ignored).
 | BeyondATC says "No traffic liveries found" | BeyondATC needs FSLTL installed for MSFS. Without MSFS 2024: make sure TRAFFIC shows your FSLTL folder (press CHOOSE if not), then start ClearanceLink before BeyondATC. With MSFS 2024: install FSLTL for MSFS 2024. |
 | TRAFFIC on STATUS says SEE SETUP | The plugin isn't installed or needs updating. Close X-Plane and press INSTALL or UPDATE on SETUP. |
 | No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on TRAFFIC (from SETUP): a new ClearanceLink needs its matching plugin. |
-| STATUS shows FSLTL MODELS UPDATE>, or SETUP shows UPDATE MODELS | FSLTL changed since its models were converted. Close X-Plane, open TRAFFIC and press UPDATE. |
+| STATUS shows FSLTL MODELS UPDATE>, or SETUP shows UPDATE MODELS | FSLTL or ClearanceLink's converter changed since the models were converted (0.7.3 adds their lights). Close X-Plane, open TRAFFIC and press UPDATE. Textures already converted are kept, so it is quicker than the first time. |
+| Traffic has no lights at night | Converted FSLTL models before 0.7.3 have none: press UPDATE on TRAFFIC. Aircraft parked at a gate are dark because BeyondATC turns their lights off, as in MSFS. |
 | FMS on FPLN says NOT TAKEN | X-Plane's FMS refused the plan (the reason is on the bottom line). Load the saved `.fms` file from the aircraft's own FMS menu instead. |
 | Another X-Plane add-on (SPAD.neXt, for example) can't use UDP port 49707 | Windows has reserved a block of ports for Hyper-V. Rebooting usually moves it. To keep 49707 free, run in an admin command prompt: `net stop winnat`, then `netsh int ipv4 add excludedportrange protocol=udp startport=49707 numberofports=1`, then `net start winnat`. ClearanceLink's plugin picks a free port by itself. |
 | X-Plane talks over BeyondATC | In X-Plane, Settings > Sound, set the Radios slider to 0. |
