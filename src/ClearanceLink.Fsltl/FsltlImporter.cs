@@ -336,6 +336,23 @@ public static class FsltlImporter
     /// </summary>
     public static string FsltlVersion(string packageRoot)
     {
+        if (PackageVersion(packageRoot) is { } version) return version;
+
+        var airplanes = FileLookup.Resolve(packageRoot, "SimObjects/Airplanes");
+        if (airplanes is null) return "none";
+        var files = Directory.EnumerateFiles(airplanes, "aircraft.cfg", new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            MaxRecursionDepth = 1,
+            MatchCasing = MatchCasing.CaseInsensitive,
+            IgnoreInaccessible = true,
+        }).Select(File.GetLastWriteTimeUtc).ToList();
+        return FormattableString.Invariant($"files {files.Count} newest {(files.Count == 0 ? 0 : files.Max().Ticks)}");
+    }
+
+    /// <summary>package_version from FSLTL's manifest.json, or null (none, or unreadable).</summary>
+    public static string? PackageVersion(string packageRoot)
+    {
         try
         {
             if (FileLookup.Child(packageRoot, "manifest.json") is { } manifest && File.Exists(manifest))
@@ -352,19 +369,10 @@ public static class FsltlImporter
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            // Fall back to the fingerprint.
+            // No version to show; FsltlVersion falls back to a fingerprint.
         }
 
-        var airplanes = FileLookup.Resolve(packageRoot, "SimObjects/Airplanes");
-        if (airplanes is null) return "none";
-        var files = Directory.EnumerateFiles(airplanes, "aircraft.cfg", new EnumerationOptions
-        {
-            RecurseSubdirectories = true,
-            MaxRecursionDepth = 1,
-            MatchCasing = MatchCasing.CaseInsensitive,
-            IgnoreInaccessible = true,
-        }).Select(File.GetLastWriteTimeUtc).ToList();
-        return FormattableString.Invariant($"files {files.Count} newest {(files.Count == 0 ? 0 : files.Max().Ticks)}");
+        return null;
     }
 
     /// <summary>The manifest of a converted package, or null (none, damaged, or converted before manifests were written).</summary>

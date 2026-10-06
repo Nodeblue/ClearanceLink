@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using ClearanceLink.Host;
 using ClearanceLink.Host.Panel;
 using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Support;
@@ -211,7 +212,7 @@ public sealed class PanelTests
         Assert.Contains(CduPages.Build(PanelPage.StartTraffic, Ready).Message!, m => m.Text.Contains("no X-Plane plugin", StringComparison.Ordinal));
 
         // Both tested model libraries: Bluebell (count, help) and FSLTL (choose, convert, converted).
-        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready).Rows, r => r.LabelLeft == "BLUEBELL" && r.Left.Text == "NOT FOUND" && r.KeyRight == CduKey.OpenModelsHelp);
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready).Rows, r => r.LabelLeft == "CSL MODELS" && r.Left.Text == "NOT FOUND" && r.KeyRight == CduKey.OpenModelsHelp);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready with { CslPackages = 13 }).Rows, r => r.Left.Text == "13 PACKAGES");
         Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready).Rows, r => r.LabelLeft == "FSLTL" && r.KeyRight == CduKey.ChooseFsltlFolder);
         var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
@@ -345,15 +346,81 @@ public sealed class PanelTests
     public void Beyondatc_finding_no_fsltl_is_an_amber_warning_on_traffic_setup_and_status()
     {
         // BeyondATC creates no traffic at all without FSLTL (ADR-0014): say so where traffic is set up and shown.
-        var none = Ready with { TrafficAddOn = PluginInstall.State.Installed, BatcNoModels = true };
+        var none = Ready with { TrafficAddOn = PluginInstall.State.Installed, BatcModels = BatcTrafficModels.Outcome.NoFsltl };
         var warning = Assert.Single(CduPages.Build(PanelPage.Traffic, none).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
-        Assert.Equal(("NO FSLTL: NO TRAFFIC", CduColor.Amber), (warning.Left.Text, warning.Left.Color));
+        Assert.Equal(("NO FSLTL", CduColor.Amber, "CHECK>", CduKey.GoFsltl), (warning.Left.Text, warning.Left.Color, warning.Right.Text, warning.KeyRight));
         Assert.False(string.IsNullOrEmpty(warning.Help));
-        Assert.DoesNotContain(CduPages.Build(PanelPage.Traffic, none with { BatcNoModels = false }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+
+        // Issue #29: FSLTL converted but not in MSFS 2024's Community folder says where it's missing, not "NO FSLTL".
+        var notIn2024 = Assert.Single(CduPages.Build(PanelPage.Traffic, none with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        Assert.Equal(("NOT IN MSFS 2024", CduColor.Amber), (notIn2024.Left.Text, notIn2024.Left.Color));
+        var sees = Assert.Single(CduPages.Build(PanelPage.Traffic, none with { BatcModels = BatcTrafficModels.Outcome.Pointed }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        Assert.Equal(("SEES FSLTL", CduColor.Green), (sees.Left.Text, sees.Left.Color));
 
         var status = CduPages.Build(PanelPage.Status, none).Rows[4];
         Assert.Equal(("NO FSLTL", CduColor.Amber, CduKey.GoTraffic), (status.Right.Text, status.Right.Color, status.KeyRight));
         Assert.Contains(CduPages.Build(PanelPage.Setup, none).Rows, r => r.Right.Text == "NO FSLTL" || r.Left.Text == "NO FSLTL");
+    }
+
+    [Fact]
+    public void Fsltl_check_says_what_the_folder_holds_and_what_to_do()
+    {
+        var folder = @"C:\MSFS\Community\fsltl-traffic-base";
+        var good = Ready with { FsltlFolder = folder, FsltlLiveries = 3350, BatcModels = BatcTrafficModels.Outcome.Found, FsltlHealth = new(3350, 98, 0, "1.5.0") };
+        var page = CduPages.Build(PanelPage.Fsltl, good);
+        Assert.Equal("FSLTL CHECK", page.Title);
+        Assert.Equal(("3350", "98"), (page.Rows[1].Left.Text, page.Rows[1].Right.Text));
+        Assert.Equal((@"C:\MSFS\COMMUNITY", "1.5.0"), (page.Rows[0].Left.Text, page.Rows[0].Right.Text));
+        Assert.Equal(("SEES IT", "IN MSFS 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
+        Assert.Equal(("3350 LIVERIES", CduKey.ConvertFsltl), (page.Rows[3].Left.Text, page.Rows[3].KeyRight));
+        Assert.Equal(("FSLTL READY", CduColor.Green), (page.Scratchpad.Text, page.Scratchpad.Color));
+        Assert.Contains(page.Rows, r => r.KeyRight == CduKey.ChooseFsltlFolder);
+        Assert.Contains(page.Rows, r => r.KeyLeft == CduKey.GoTraffic);
+        Assert.All(page.Rows, r => Assert.True(r.LabelLeft.Length + r.LabelRight.Length <= CduPages.Width && r.Left.Text.Length + r.Right.Text.Length <= CduPages.Width, r.ToString()));
+
+        // Liveries but no base models: nothing can be converted, and the FSLTL row on TRAFFIC sends the user here.
+        var noModels = good with { FsltlLiveries = 0, FsltlHealth = new(3350, 0, 3350, null) };
+        page = CduPages.Build(PanelPage.Fsltl, noModels);
+        Assert.Equal(("NONE", CduColor.Amber), (page.Rows[1].Right.Text, page.Rows[1].Right.Color));
+        Assert.Equal(("LIVERIES BUT NO MODELS", CduColor.Amber), (page.Scratchpad.Text, page.Scratchpad.Color));
+        Assert.Equal("-", page.Rows[3].Left.Text);
+        Assert.Contains(CduPages.Build(PanelPage.Traffic, noModels).Rows, r => r.LabelLeft == "FSLTL" && r.Left.Text == "NO BASE MODELS" && r.KeyRight == CduKey.GoFsltl);
+        Assert.Contains(CduPages.Build(PanelPage.Setup, noModels).Rows, r => r.Left.Text == "CHECK FSLTL");
+
+        // Some models missing: those liveries fall back to CSL models.
+        page = CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = new(3350, 92, 120, "1.5.0") });
+        Assert.Equal(CduColor.Amber, page.Rows[1].Right.Color);
+        Assert.Equal("120 LIVERIES: NO MODEL", page.Scratchpad.Text);
+
+        // Converted fine, but MSFS 2024 is here without FSLTL in its Community folder (issue #29).
+        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 });
+        Assert.Equal(("WON'T SEE IT", "NOT IN 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
+        Assert.Equal("PUT FSLTL IN MSFS 2024", page.Scratchpad.Text);
+
+        // No MSFS 2024: ClearanceLink points BeyondATC at FSLTL while it's open.
+        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.Pointed });
+        Assert.Equal(("SEES IT", "WHILE OPEN"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
+
+        // Found but not converted yet; no folder at all.
+        page = CduPages.Build(PanelPage.Fsltl, good with { FsltlLiveries = 0 });
+        Assert.Equal(("NOT CONVERTED", "CONVERT>"), (page.Rows[3].Left.Text, page.Rows[3].Right.Text));
+        Assert.Equal("READY TO CONVERT", page.Scratchpad.Text);
+        page = CduPages.Build(PanelPage.Fsltl, Ready);
+        Assert.Equal(("NOT FOUND", "CHOOSE YOUR FSLTL FOLDER"), (page.Rows[0].Left.Text, page.Scratchpad.Text));
+    }
+
+    [Fact]
+    public void Csl_models_row_names_the_packages_installed()
+    {
+        Assert.Null(PanelController.CslNames([]));
+        Assert.Equal("BLUEBELL", PanelController.CslNames([@"Custom Data\CSL\BB\BB_Airbus", @"Custom Data\CSL\BB\BB_Boeing1"]));
+        Assert.Equal("BLUEBELL + X-CSL", PanelController.CslNames([@"Custom Data\CSL\X-CSL\A320", @"Custom Data\CSL\BB_Airbus"]));
+        Assert.Equal("X-CSL + OTHER", PanelController.CslNames(["Custom Data/CSL/X-CSL/B738", "Resources/plugins/ClearanceLink/Resources/CSL/Extra"]));
+
+        var row = Assert.Single(CduPages.Build(PanelPage.Traffic, Ready with { CslPackages = 14, CslNames = "BLUEBELL + X-CSL" }).Rows, r => r.LabelLeft == "CSL MODELS");
+        Assert.Equal(("BLUEBELL + X-CSL", CduKey.OpenModelsHelp), (row.Left.Text, row.KeyRight));
+        // Too long to fit beside HOW TO>: the count instead.
+        Assert.Contains(CduPages.Build(PanelPage.Traffic, Ready with { CslPackages = 15, CslNames = "BLUEBELL + X-CSL + OTHER" }).Rows, r => r.Left.Text == "15 PACKAGES");
     }
 
     [Fact]
@@ -398,7 +465,11 @@ public sealed class PanelTests
         var folder = Environment.GetEnvironmentVariable("CLEARANCELINK_SCREENSHOTS");
 
         // A typical first run: plugin not yet installed, Bluebell installed, FSLTL found but not converted.
-        var firstRun = Ready with { TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
+        var firstRun = Ready with
+        {
+            TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base",
+            FsltlHealth = new(3350, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found,
+        };
         var window = new PanelWindow(() => firstRun);
         window.Show();
         foreach (var page in Enum.GetValues<PanelPage>())
@@ -428,7 +499,8 @@ public sealed class PanelTests
         };
         var flying = Ready with
         {
-            TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154,
+            TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154,
+            FsltlHealth = new(3154, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found,
             FlightPlan = new FlightPlanView(plan, sent.AddMinutes(-2), SavedAs: plan.FileName, SentAt: sent),
         };
         var cleared = new PushView(new PushClearance(sent.AddMinutes(4), 90, "EAST", "pushback approved. Face east."), Preview: new PushPlan(21, 90, 39, "B"), XPlane: true, BetterPushback: true, Automatic: true, Stage: PushStage.WaitingForBrake, BrakeSet: true);
@@ -436,7 +508,7 @@ public sealed class PanelTests
         window = new PanelWindow(() => flying);
         // The PUSH page with BeyondATC's clearance; the other pages without, so STATUS shows READY FOR CLEARANCE.
         window.Show();
-        foreach (var page in new[] { PanelPage.Status, PanelPage.FlightPlan, PanelPage.Push, PanelPage.Setup, PanelPage.Traffic, PanelPage.StartModels })
+        foreach (var page in new[] { PanelPage.Status, PanelPage.FlightPlan, PanelPage.Push, PanelPage.Setup, PanelPage.Traffic, PanelPage.Fsltl, PanelPage.StartModels })
         {
             flying = flying with { Push = page == PanelPage.Push ? cleared : null };
             window.ShowPage(page);

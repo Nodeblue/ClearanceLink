@@ -157,21 +157,32 @@ flying plugins use. X-Plane doesn't come with any.
 PC, because it picks each aircraft from FSLTL's list. Without it, BeyondATC says "No traffic liveries found" and
 there is no traffic at all, not even on frequency. With MSFS 2024, FSLTL must be in MSFS 2024's Community folder.
 Without MSFS 2024, choose the FSLTL folder on TRAFFIC; ClearanceLink shows it to BeyondATC while ClearanceLink is
-open. ClearanceLink converts FSLTL's aircraft for X-Plane. Bluebell is optional and adds more models; you can have
-both.
+open. ClearanceLink converts FSLTL's aircraft for X-Plane.
+
+**CSL models (Bluebell, X-CSL) are optional.** They only change how the traffic looks, and fill in aircraft FSLTL
+doesn't have. BeyondATC can't see them, so they don't replace FSLTL. You can have FSLTL, Bluebell and X-CSL together.
 
 Everything for traffic is on the **TRAFFIC** page: press **SET UP** beside TRAFFIC on SETUP.
 
-<img src="images/panel-traffic-flying.png" width="330" alt="TRAFFIC page with the plugin installed, 13 Bluebell packages and 3,154 converted FSLTL liveries">
+<img src="images/panel-traffic-flying.png" width="330" alt="TRAFFIC page with the plugin installed, Bluebell CSL models, 3,154 converted FSLTL liveries and BeyondATC seeing FSLTL">
 
-### Bluebell (free download)
+### CSL models: Bluebell and X-CSL (free downloads)
+The **CSL MODELS** line on TRAFFIC names what ClearanceLink found (BLUEBELL, X-CSL, OTHER), or the number of packages
+when the names don't fit. Restart X-Plane after adding models.
+
+**Bluebell**
 1. Download the **Bluebell OBJ8 CSL packages** from the X-Plane.org forums:
    [forums.x-plane.org/index.php?/files/file/37041-bluebell-obj8-csl-packages/](https://forums.x-plane.org/index.php?/files/file/37041-bluebell-obj8-csl-packages/)
    (a free X-Plane.org account is needed to download).
 2. Unzip the packages into `X-Plane 12\Custom Data\CSL`, so you end up with folders like
    `X-Plane 12\Custom Data\CSL\BB_Airbus`. (Make the `CSL` folder if it isn't there. One extra folder level, such as
    `CSL\Bluebell\BB_Airbus`, also works.)
-3. TRAFFIC shows how many packages ClearanceLink found. Restart X-Plane if it was running.
+
+**X-CSL** (the models IVAO uses for X-Plane)
+1. Download the **X-CSL Updater** from [x-csl.ru](https://x-csl.ru/downloads?lang_id=43) and run it.
+2. Set its install folder to `X-Plane 12\Custom Data\CSL\X-CSL`, select all packages and update. It needs at least
+   2.5 GB.
+3. Run the updater again now and then to get new models and liveries.
 
 ### FSLTL (converted from your MSFS copy)
 [FSLTL](https://fslivetrafficliveries.com/) (FS Live Traffic Liveries, free) is needed for BeyondATC's traffic, and
@@ -187,10 +198,23 @@ the converted models stay on your PC: never upload or share them.
 3. The models go to `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`. After an FSLTL update, press **UPDATE** on TRAFFIC
    to convert again.
 
-### Other models
-The plugin also uses CSL models already installed for LiveTraffic, xPilot, X-IvAp or swift. Each BeyondATC aircraft
-is drawn with the closest model and livery there is; an airline without a matching livery gets another livery of the
-same aircraft type.
+### FSLTL CHECK
+Press **CHECK** on TRAFFIC's BEYONDATC TRAFFIC line to see what's in your FSLTL folder and what to do about it. The
+bottom line says **FSLTL READY** when all is well, or the one thing to fix.
+
+<img src="images/panel-fsltl-flying.png" width="330" alt="FSLTL CHECK page: 3,154 liveries on 98 base models, BeyondATC sees FSLTL in MSFS 2024, X-Plane copy converted">
+
+| Line | What it means |
+|---|---|
+| FOLDER, VERSION | Where your `fsltl-traffic-base` folder is, and FSLTL's version. CHOOSE FOLDER picks another. |
+| LIVERIES, BASE MODELS | How many liveries the folder has, and the base aircraft models they use. Every livery needs its base model in the same folder. |
+| BEYONDATC | **SEES IT IN MSFS 2024**: BeyondATC finds FSLTL itself. **SEES IT WHILE OPEN**: no MSFS 2024, so ClearanceLink shows BeyondATC your folder while it's open. **WON'T SEE IT**: BeyondATC makes no traffic (see Problems). |
+| X-PLANE COPY | How many liveries are converted for X-Plane, with CONVERT or UPDATE. |
+
+### How a model is picked
+A converted FSLTL livery is an exact match, so it's always used when there is one. Other aircraft get the closest CSL
+model and livery there is, from `Custom Data\CSL` and the CSL folders of LiveTraffic, xPilot, X-IvAp or swift; an
+airline without a matching livery gets another livery of the same aircraft type.
 
 The plugin lives in `X-Plane 12\Resources\plugins\ClearanceLink`. X-Plane locks it while running, so close X-Plane
 before installing or updating it from SETUP.
@@ -239,8 +263,11 @@ MSFS for that X-Plane has no equivalent of (those are ignored).
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. Check X-Plane is 12.1.4 or later. |
 | STATUS says X-PLANE NOT CONNECTED | BeyondATC is connected but X-Plane isn't. Start X-Plane and load a flight. |
 | A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |
-| No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED and FSLTL must show a count. Traffic must be on in BeyondATC. |
-| TRAFFIC says NO FSLTL: NO TRAFFIC (STATUS or SETUP: NO FSLTL) | BeyondATC won't find FSLTL, so it creates no traffic. See the next row. |
+| No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED and BEYONDATC TRAFFIC must say SEES FSLTL. Traffic must be on in BeyondATC. |
+| TRAFFIC's BEYONDATC TRAFFIC says NO FSLTL (STATUS or SETUP: NO FSLTL) | BeyondATC won't find FSLTL, so it creates no traffic. See the next row. |
+| BEYONDATC TRAFFIC says NOT IN MSFS 2024, with liveries converted | MSFS 2024 is on this PC but FSLTL isn't in its Community folder. BeyondATC only looks there, and ClearanceLink doesn't change MSFS 2024's files. Install FSLTL for MSFS 2024 (in its Community folder). The converted copy for X-Plane isn't enough: BeyondATC can't see it. |
+| FSLTL says NO BASE MODELS, or FSLTL CHECK says LIVERIES BUT NO MODELS | The folder has FSLTL's liveries but not the base aircraft models they use, so nothing can be converted. Update or reinstall FSLTL Traffic Base with the FSLTL injector, then choose the folder again. |
+| FSLTL CHECK says *n* LIVERIES: NO MODEL | Some liveries' base models are missing (a partly copied or updated FSLTL). The rest convert as usual; those aircraft are drawn with CSL models. Updating FSLTL usually fixes it. |
 | BeyondATC says "No traffic liveries found" | BeyondATC needs FSLTL installed for MSFS. Without MSFS 2024: make sure TRAFFIC shows your FSLTL folder (press CHOOSE if not), then start ClearanceLink before BeyondATC. With MSFS 2024: install FSLTL for MSFS 2024. |
 | TRAFFIC on STATUS says SEE SETUP | The plugin isn't installed or needs updating. Close X-Plane and press INSTALL or UPDATE on SETUP. |
 | No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on TRAFFIC (from SETUP): a new ClearanceLink needs its matching plugin. |
