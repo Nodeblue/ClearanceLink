@@ -654,17 +654,6 @@ namespace ClearanceLink.Host
                 msfs.Changed += running => PacketConsole.Info(running ? stub.Stop() : stub.Restart());
             }
 
-            // BeyondATC lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none (ADR-0014).
-            var batcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default : null;
-            if (batcModels?.Provide(FsltlFolder(options)) is { } models)
-            {
-                PacketConsole.Info(models.Line);
-                if (models.Outcome == BatcTrafficModels.Outcome.Pointed)
-                {
-                    StartBatcGuard();
-                }
-            }
-
             var msfsTask = msfs.RunAsync(ct);
             var xplaneTask = xplane.RunAsync(ct);
             await using var plugin = StartPluginLink();
@@ -710,21 +699,66 @@ namespace ClearanceLink.Host
                 OpenInBrowser(status.Url);
             }
 
+            // BeyondATC lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none
+            // (ADR-0014). Only while no real MSFS runs, so an MSFS 2024 being installed never adopts ClearanceLink's file.
+            var batcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default : null;
+            var modelsLock = new Lock();
+            var pointed = false;
+            void FollowModels(bool msfsRunning)
+            {
+                if (batcModels is null)
+                {
+                    return;
+                }
+
+                lock (modelsLock)
+                {
+                    if (msfsRunning)
+                    {
+                        if (pointed && batcModels.Remove() is { } removed)
+                        {
+                            PacketConsole.Info($"{removed} (MSFS is running)");
+                        }
+
+                        pointed = false;
+                        return;
+                    }
+
+                    var models = batcModels.Provide(FsltlFolder(options));
+                    PacketConsole.Info(models.Line);
+                    pointed = models.Outcome == BatcTrafficModels.Outcome.Pointed;
+                    if (pointed)
+                    {
+                        StartBatcGuard();
+                    }
+                }
+            }
+
             try
             {
+                FollowModels(msfs.IsRunning);
+                msfs.Changed += FollowModels;
                 await server.RunAsync(ct);
             }
             finally
             {
+                msfs.Changed -= FollowModels;
+                lock (modelsLock)
+                {
+                    // Only the file this ClearanceLink wrote: another one still serving keeps its own.
+                    if (pointed && batcModels?.Remove() is { } removed)
+                    {
+                        PacketConsole.Info(removed);
+                    }
+
+                    pointed = false;
+                }
+
                 await xplaneTask;
                 await msfsTask;
                 await bridgeTask;
                 await stubTask;
                 await pushTask;
-                if (batcModels?.Remove() is { } removed)
-                {
-                    PacketConsole.Info(removed);
-                }
             }
         }
 

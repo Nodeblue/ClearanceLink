@@ -156,4 +156,75 @@ public sealed class BatcTrafficModelsTests : IDisposable
         Assert.Equal(BatcTrafficModels.Outcome.NoFsltl, result.Outcome);
         Assert.False(File.Exists(Steam));
     }
+
+    [Fact]
+    public void A_stand_in_from_another_running_clearancelink_is_left_to_it()
+    {
+        var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
+        var other = new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 1111, isAlive: _ => true);
+        var me = new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 2222, isAlive: _ => true);
+        Assert.Equal(BatcTrafficModels.Outcome.Pointed, other.Provide(fsltl).Outcome);
+
+        Assert.Equal(BatcTrafficModels.Outcome.PointedByAnother, me.Provide(fsltl).Outcome);
+        Assert.Null(me.Remove());
+        Assert.Single(WhatBatcFinds());
+
+        Assert.NotNull(other.Remove());
+        Assert.Empty(WhatBatcFinds());
+    }
+
+    [Fact]
+    public void A_stand_in_whose_clearancelink_has_gone_is_removed()
+    {
+        var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
+        new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 1111).Provide(fsltl);
+        var guard = new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 2222, isAlive: _ => false);
+
+        Assert.NotNull(guard.Remove());
+        Assert.False(File.Exists(Steam));
+    }
+
+    [Fact]
+    public void A_stale_stand_in_goes_once_msfs_2024_has_its_own_file()
+    {
+        Models.Provide(Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base")));
+        var packages = Path.Combine(_root, "MSFS2024", "Packages");
+        Fsltl(Path.Combine(packages, "Community", "fsltl-traffic-base"));
+        WriteUserCfg(Store, packages);
+
+        Assert.Equal(BatcTrafficModels.Outcome.Found, Models.Provide(null).Outcome);
+        Assert.False(File.Exists(Steam));
+        Assert.True(File.Exists(Store));
+    }
+
+    [Fact]
+    public void An_msfs_folder_that_was_already_there_is_kept()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Steam)!);
+        Models.Provide(Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base")));
+        Models.Provide(Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base")));
+
+        Assert.NotNull(Models.Remove());
+
+        Assert.True(Directory.Exists(Path.GetDirectoryName(Steam)));
+    }
+
+    [Fact]
+    public void A_folder_name_cmd_would_expand_is_refused_not_linked()
+    {
+        var result = Models.Provide(Fsltl(Path.Combine(_root, "50%off", "fsltl-traffic-base")));
+
+        Assert.Equal(BatcTrafficModels.Outcome.Failed, result.Outcome);
+        Assert.False(File.Exists(Steam));
+    }
+
+    [Fact]
+    public void A_real_folder_where_the_link_goes_is_never_emptied()
+    {
+        var real = Fsltl(Path.Combine(_root, "ClearanceLink", "BeyondATC packages", "Community", "fsltl-traffic-base"));
+
+        Assert.Equal(BatcTrafficModels.Outcome.Failed, Models.Provide(Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"))).Outcome);
+
+        Assert.True(File.Exists(Path.Combine(real, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg")));
+    }
 }
