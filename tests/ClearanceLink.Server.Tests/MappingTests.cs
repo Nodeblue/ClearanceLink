@@ -148,6 +148,23 @@ public sealed class MappingTests
     }
 
     [Theory]
+    [InlineData(0, 0)] // off
+    [InlineData(1, 1)] // standby
+    [InlineData(2, 3)] // on
+    [InlineData(3, 4)] // alt
+    [InlineData(4, 2)] // test
+    [InlineData(5, 4)] // ground
+    [InlineData(6, 4)] // TA only (FF 777, CL650, Zibo; issue #28)
+    [InlineData(7, 4)] // TA/RA
+    public void Transponder_state_maps_every_xplane_mode(int xplaneMode, int msfsState)
+    {
+        var xp = Fixtures.ParkedAtYbbn();
+        xp["sim/cockpit2/radios/actuators/transponder_mode"] = xplaneMode;
+
+        Assert.Equal(msfsState, new SimVarResolver(Fixtures.Mappings(), xp).Resolve("TRANSPONDER STATE:1", "").Value.Number);
+    }
+
+    [Theory]
     [InlineData(1200, 0x1200)]
     [InlineData(7700, 0x7700)]
     [InlineData(4521, 0x4521)]

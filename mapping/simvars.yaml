@@ -127,10 +127,10 @@
   indexed: true
   derive: map
   inputs: [sim/cockpit2/radios/actuators/transponder_mode]
-  map: {0: 0, 1: 1, 2: 3, 3: 4, 4: 2, 5: 4}
+  map: {0: 0, 1: 1, 2: 3, 3: 4, 4: 2, 5: 4, 6: 4, 7: 4}
   status: emulated
   verify: true
-  notes: MSFS 0 off, 1 standby, 2 test, 3 on, 4 alt. X-Plane 0 off, 1 standby, 2 on, 3 alt, 4 test, 5 ground.
+  notes: MSFS 0 off, 1 standby, 2 test, 3 on, 4 alt, 5 ground. X-Plane 0 off, 1 standby, 2 on, 3 alt, 4 test, 5 ground, 6 TA only, 7 TA/RA. TA and TA/RA still report altitude, so they read as alt (issue #28, FF 777, CL650, Zibo).
 - name: TRANSPONDER IDENT
   indexed: true
   dataref: sim/cockpit2/radios/indicators/transponder_id
