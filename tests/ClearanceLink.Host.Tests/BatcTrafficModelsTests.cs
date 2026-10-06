@@ -74,6 +74,7 @@ public sealed class BatcTrafficModelsTests : IDisposable
 
         Assert.Empty(WhatBatcFinds());
         Assert.False(Directory.Exists(Path.GetDirectoryName(Steam)));
+        Assert.False(Directory.Exists(Path.Combine(_root, "ClearanceLink", "BeyondATC packages")));
         Assert.True(File.Exists(Path.Combine(fsltl, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg")));
     }
 

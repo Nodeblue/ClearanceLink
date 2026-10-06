@@ -1,6 +1,6 @@
 # ADR-0014: Let BeyondATC find FSLTL when MSFS 2024 isn't installed
 
-Date: 2026-10-06. Status: proposed (Ben to confirm on the draft PR).
+Date: 2026-10-06. Status: accepted (tested on Ben's PC 2026-10-06).
 
 ## Context
 BeyondATC creates traffic only when it finds FSLTL, AIG or FS Traffic in MSFS 2024's Community folder, through MSFS
@@ -23,7 +23,8 @@ While `serve` runs (the window or `start`), `BatcTrafficModels`:
   whose ClearanceLink has gone is removed. A stale file also goes once MSFS 2024 has its own UserCfg.opt.
 - refuses an FSLTL folder on a network share or with `%` or `"` in its path (a junction can't point at a share, and
   `cmd` would expand `%`), with a log line saying so.
-- the `batc-guard` process removes it after a crash, in either connection mode. The junction stays; it is only a link.
+- the `batc-guard` process removes it after a crash, in either connection mode. The junction goes with the file, so
+  deleting ClearanceLink's folder can never reach FSLTL through it (Windows PowerShell 5.1 follows junctions).
 - ClearanceLink's own FSLTL lookup and its NEEDS MSFS check ignore the marked file.
 
 ## Alternatives

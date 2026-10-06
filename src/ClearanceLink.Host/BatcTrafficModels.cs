@@ -161,7 +161,7 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
         {
             if (!File.Exists(steamUserCfg))
             {
-                return null;
+                return RemoveLink() ? $"batc-models: removed the link in {linkFolder}" : null;
             }
 
             var text = File.ReadAllText(steamUserCfg);
@@ -178,12 +178,38 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
                 Directory.Delete(folder);
             }
 
+            RemoveLink();
             return $"batc-models: removed {steamUserCfg}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return $"batc-models: could not remove {steamUserCfg} ({ex.Message})";
         }
+    }
+
+    /// <summary>
+    /// Removes the junction to FSLTL (only the link: the package stays) and the folders around it once empty, so
+    /// deleting ClearanceLink's folder can never reach FSLTL through it (Windows PowerShell 5.1's Remove-Item -Recurse
+    /// follows junctions). Provide makes it again in milliseconds.
+    /// </summary>
+    private bool RemoveLink()
+    {
+        var link = new DirectoryInfo(Path.Combine(linkFolder, "Community", FsltlCatalog.PackageName));
+        if (link.LinkTarget is null)
+        {
+            return false;
+        }
+
+        link.Delete();
+        foreach (var folder in new[] { Path.Combine(linkFolder, "Community"), linkFolder })
+        {
+            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                Directory.Delete(folder);
+            }
+        }
+
+        return true;
     }
 
     /// <summary>The process id written in ClearanceLink's UserCfg.opt, or null (not ours, or none).</summary>
