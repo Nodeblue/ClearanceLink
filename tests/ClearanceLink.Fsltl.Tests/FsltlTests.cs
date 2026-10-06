@@ -44,6 +44,11 @@ public sealed class FsltlTests
 
         Assert.Equal(new FsltlHealth(2, 1, 0, "1.5.0"), FsltlCheck.Check(package.Root));
 
+        // Microsoft's own models are never converted, so they aren't counted.
+        var asobo = Directory.CreateDirectory(Path.Combine(package.Root, "SimObjects", "Airplanes", "FSLTL_Asobo_C172")).FullName;
+        File.WriteAllText(Path.Combine(asobo, "aircraft.cfg"), "[FLTSIM.0]\ntitle = \"FSLTL_Asobo_C172\"\n");
+        Assert.Equal(new FsltlHealth(2, 1, 0, "1.5.0"), FsltlCheck.Check(package.Root));
+
         // The base model gone (a half-copied FSLTL): both liveries are still found, but nothing can be converted.
         Directory.Delete(Path.Combine(package.Root, "SimObjects", "Airplanes", "FSLTL_A20N", "model.CFM"), recursive: true);
         var broken = FsltlCheck.Check(package.Root);

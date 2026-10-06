@@ -219,6 +219,7 @@ public static class CduPages
             {
                 { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
                 { BatcNoModels: true, TrafficAircraft: null or 0 } => CduKey.GoTraffic,
+                { FsltlFolder: not null, FsltlHealth.NoModels: true, TrafficAircraft: null or 0 } => CduKey.GoFsltl,
                 { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
                 { TrafficAircraft: null } => CduKey.GoTraffic,
                 _ => CduKey.None,
@@ -650,7 +651,12 @@ public static class CduPages
             Row("", "", new(""), new("CHOOSE FOLDER>"), CduKey.None, CduKey.ChooseFsltlFolder),
             Row("", "", new("<TRAFFIC"), new(""), CduKey.GoTraffic),
         };
-        return new("FSLTL CHECK", rows, flash is not null ? new(flash) : FsltlVerdict(s));
+        // A conversion runs in the background: its failure, or the restart it needs, must show here too.
+        var line = flash is not null ? new CduCell(flash)
+            : s is { FsltlConverting: false, FsltlMessage: { } done } && (done.StartsWith("CONVERT", StringComparison.Ordinal) || done.StartsWith("RESTART", StringComparison.Ordinal))
+                ? new CduCell(done, CduColor.Amber)
+                : FsltlVerdict(s);
+        return new("FSLTL CHECK", rows, line);
     }
 
     /// <summary>FSLTL CHECK's X-Plane copy: converted, out of date, converting or not yet converted.</summary>
@@ -669,13 +675,15 @@ public static class CduPages
     private static CduCell FsltlVerdict(PanelState s) => (s, s.FsltlHealth) switch
     {
         ({ FsltlFolder: null }, _) => new("CHOOSE YOUR FSLTL FOLDER", CduColor.Amber),
-        (_, null) => new("CHECKING..."),
+        // The check runs with the folder lookup, so no result means the folder couldn't be read (a drive gone, no access).
+        (_, null) => new("CAN'T READ THIS FOLDER", CduColor.Amber),
         (_, { Liveries: 0 }) => new("NO LIVERIES IN THIS FOLDER", CduColor.Amber),
         (_, { NoModels: true }) => new("LIVERIES BUT NO MODELS", CduColor.Amber),
         ({ BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 }, _) => new("PUT FSLTL IN MSFS 2024", CduColor.Amber),
+        ({ BatcModels: BatcTrafficModels.Outcome.Failed }, _) => new("BEYONDATC CHECK FAILED", CduColor.Amber),
         (_, { WithoutModel: > 0 } h) => new(Fit($"{h.WithoutModel} LIVERIES: NO MODEL", Width), CduColor.Amber),
         ({ FsltlConverting: true }, _) => new("KEEP THIS WINDOW OPEN"),
-        ({ FsltlLiveries: 0 }, _) => new(s.XPlaneRunning ? "CLOSE X-PLANE TO CONVERT" : "READY TO CONVERT", CduColor.Green),
+        ({ FsltlLiveries: 0 }, _) => s.XPlaneRunning ? new("CLOSE X-PLANE TO CONVERT") : new("READY TO CONVERT", CduColor.Green),
         ({ FsltlOutOfDate: true }, _) => new(s.XPlaneRunning ? "CLOSE X-PLANE TO UPDATE" : "UPDATE NEEDED", CduColor.Amber),
         _ => new("FSLTL READY", CduColor.Green),
     };
@@ -685,10 +693,10 @@ public static class CduPages
     {
         { TrafficAddOn: PluginInstall.State.NotInstalled } => new("INSTALL PLUGIN", CduColor.Amber),
         { TrafficAddOn: PluginInstall.State.Outdated } => new("UPDATE PLUGIN", CduColor.Amber),
+        { FsltlFolder: not null, FsltlHealth.NoModels: true, FsltlConverting: false } => new("CHECK FSLTL", CduColor.Amber),
         { FsltlOutOfDate: true, FsltlConverting: false } => new("UPDATE MODELS", CduColor.Amber),
         { FsltlConverting: true } => new("CONVERTING", CduColor.Amber),
         { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
-        { FsltlFolder: not null, FsltlHealth.NoModels: true } => new("CHECK FSLTL", CduColor.Amber),
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.Installed } => new("READY", CduColor.Green),
@@ -766,6 +774,8 @@ public static class CduPages
         { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
         // FSLTL changed since the models were converted: the key opens the aircraft models page, which has UPDATE.
         // While aircraft are drawn the count stays (the old models still work); the key still opens that page.
+        // Liveries but no base models: an UPDATE would convert nothing, so this comes before it; the key opens FSLTL CHECK.
+        { FsltlFolder: not null, FsltlHealth.NoModels: true, TrafficAircraft: null or 0 } => new("CHECK FSLTL", CduColor.Amber),
         { FsltlOutOfDate: true, FsltlConverting: false, TrafficAircraft: null or 0 } => new(UpdateModels, CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SET UP>", CduColor.Amber),

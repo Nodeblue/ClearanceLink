@@ -1,7 +1,10 @@
 namespace ClearanceLink.Fsltl;
 
 /// <summary>What a chosen FSLTL folder holds, for the window's FSLTL page. Read-only.</summary>
-/// <param name="Liveries">Liveries (<c>[FLTSIM.n]</c> entries with a title), with or without a model.</param>
+/// <param name="Liveries">
+/// Liveries (<c>[FLTSIM.n]</c> entries with a title), with or without a model; not Microsoft's own models. A livery
+/// whose key repeats another's is dropped, as the importer does (FSLTL's keys come from unique folder names).
+/// </param>
 /// <param name="Models">Base models the liveries use (distinct model XMLs found).</param>
 /// <param name="WithoutModel">Liveries whose base model is not in the folder: they can't be converted.</param>
 /// <param name="Version">FSLTL's package_version, or null when its manifest.json has none.</param>
@@ -21,8 +24,11 @@ public static class FsltlCheck
     {
         try
         {
+            // Microsoft's own models (FSLTL_Asobo_*) are never converted, so they aren't counted either.
             var problems = new List<string>();
-            var liveries = FsltlCatalog.Load(packageRoot, problems);
+            var liveries = FsltlCatalog.Load(packageRoot, problems, FsltlImporter.IsMicrosoftFolder)
+                .Where(l => !FsltlImporter.IsMicrosoftModel(l))
+                .ToList();
             var withoutModel = problems.Count(p => p.EndsWith(FsltlCatalog.NoModelProblem, StringComparison.Ordinal));
             var models = liveries.Select(l => l.ModelId).Distinct(StringComparer.OrdinalIgnoreCase).Count();
             return new FsltlHealth(liveries.Count + withoutModel, models, withoutModel, FsltlImporter.PackageVersion(packageRoot));
