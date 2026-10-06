@@ -152,7 +152,7 @@ public static class FsltlImporter
                 }
 
                 converted = Obj8Converter.Convert(lods, AnimationRoles.Load(model.Key), AnimationRoles.EngineParts(model.Key), AnimationRoles.UsedNames(model.Key));
-                lightsObj = ModelLights.ObjText(ModelLights.Load(model.Key, lods[0]));
+                lightsObj = Lights(model.Key, lods[0], modelName, problems);
             }
             catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or ArgumentException)
             {
@@ -459,6 +459,20 @@ public static class FsltlImporter
     }
 
     private static string ObjName(string modelName, int part) => $"{modelName}_{part}.obj";
+
+    /// <summary>The model's lights .obj, or null; a cfg that cannot be read costs the lights, not the model.</summary>
+    private static string? Lights(string modelXml, GltfModel lod0, string modelName, List<string> problems)
+    {
+        try
+        {
+            return ModelLights.ObjText(ModelLights.Load(modelXml, lod0));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            problems.Add($"{modelName}: lights not read ({ex.Message})");
+            return null;
+        }
+    }
 
     private static string LightsObjName(string modelName) => $"{modelName}_lights.obj";
 

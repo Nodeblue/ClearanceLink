@@ -57,6 +57,7 @@ public sealed class ModelLightsTests
     [InlineData("LIGHT_FSLTL_Navigationred", 5f, LightKind.NavLeft)]
     [InlineData("LIGHT_FSLTL_B737_NavigationWhite", 16f, LightKind.NavTail)]
     [InlineData("LIGHT_ASOBO_Nav", -16f, LightKind.NavLeft)]
+    [InlineData("LIGHT_Infrared_Nav", 16f, LightKind.NavRight)]
     [InlineData("LIGHT_ASOBO_Nav", 16f, LightKind.NavRight)]
     [InlineData("LIGHT_ASOBO_Nav", 0f, LightKind.NavTail)]
     public void Nav_colour_comes_from_the_effect_else_the_side(string effect, float x, LightKind kind) =>
