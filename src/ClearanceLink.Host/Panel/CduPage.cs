@@ -145,7 +145,8 @@ public sealed record PanelState(
     bool MsfsInstalled = true,
     FlightPlanView? FlightPlan = null,
     bool LoadArmed = false,
-    PushView? Push = null);
+    PushView? Push = null,
+    bool BatcNoModels = false);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -208,6 +209,7 @@ public static class CduPages
             Row("RUNNING FOR", Traffic(s).Text == UpdateModels ? "FSLTL MODELS" : "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
             {
                 { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
+                { BatcNoModels: true, TrafficAircraft: null or 0 } => CduKey.GoTraffic,
                 { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
                 { TrafficAircraft: null } => CduKey.GoTraffic,
                 _ => CduKey.None,
@@ -535,8 +537,9 @@ public static class CduPages
         { FsltlConverting: true } => Row("FSLTL", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
         { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
             Row("FSLTL", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
-        { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
-            CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
+        // Converted, but the FSLTL folder isn't known (MSFS gone, or never chosen): CHOOSE, so BeyondATC can be shown it (ADR-0014).
+        { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "CHOOSE>" : "UPDATE>"),
+            CduKey.None, s.FsltlFolder is null ? CduKey.ChooseFsltlFolder : CduKey.ConvertFsltl),
         { FsltlFolder: not null } => Row("FSLTL", "", new(s.MsfsInstalled ? "FOUND IN MSFS" : "FOUND", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
         // No MSFS on this PC: FSLTL can still be copied from another PC, so the folder can still be chosen.
         { MsfsInstalled: false } => Row("FSLTL", "", new("NEEDS MSFS"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
@@ -576,10 +579,13 @@ public static class CduPages
                 : Row("X-PLANE PLUGIN", "", new("NOT IN THIS COPY"), new(""))) with
                 { Help = "ClearanceLink's X-Plane plugin draws BeyondATC's traffic. Install or update it with X-Plane closed." },
             BluebellRow(s) with { Help = "Bluebell: a free set of aircraft models for X-Plane. HOW TO shows where to get it." },
-            FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models, converted for X-Plane from your own copy. Close X-Plane to convert." },
+            FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models. BeyondATC needs them for any traffic; they're converted for X-Plane from your own copy. Close X-Plane to convert." },
             Row("X-PLANE SETTINGS", "", new("3 TO TURN OFF"), new("HOW TO>"), CduKey.None, CduKey.OpenXPlaneSettingsHelp)
                 with { Help = "In X-Plane, set Radios to 0, Draw parked aircraft off and AI aircraft to none, so only BeyondATC talks and flies traffic." },
-            CduRow.Empty,
+            s.BatcNoModels
+                ? Row("BEYONDATC TRAFFIC", "", new("NO FSLTL: NO TRAFFIC", CduColor.Amber), new(""))
+                    with { Help = "BeyondATC creates traffic only when it finds FSLTL. With MSFS 2024, install FSLTL in its Community folder; without it, CHOOSE your FSLTL folder above." }
+                : CduRow.Empty,
             Row("", "", new("<SETUP"), new("STATUS>"), CduKey.GoSetup, CduKey.GoStatus),
         };
         return new($"{AppName} TRAFFIC", rows, ModelsLine(s, flash));
@@ -592,6 +598,7 @@ public static class CduPages
         { TrafficAddOn: PluginInstall.State.Outdated } => new("UPDATE PLUGIN", CduColor.Amber),
         { FsltlOutOfDate: true, FsltlConverting: false } => new("UPDATE MODELS", CduColor.Amber),
         { FsltlConverting: true } => new("CONVERTING", CduColor.Amber),
+        { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.Installed } => new("READY", CduColor.Green),
@@ -611,8 +618,8 @@ public static class CduPages
         [
             Say("Aircraft models", CduColor.Green),
             s.FsltlFolder is null && !s.MsfsInstalled
-                ? Say("Either tested library works. FSLTL comes from MSFS, which isn't on this PC; CHOOSE a copied FSLTL folder.")
-                : Say("Either tested library works. FSLTL is converted from your MSFS copy."),
+                ? Say("BeyondATC needs FSLTL for traffic. No MSFS here: CHOOSE your FSLTL folder.")
+                : Say("BeyondATC needs FSLTL for traffic. It's converted from your MSFS copy; Bluebell is optional."),
         ];
         return new(StartTitle(PanelPage.StartModels), rows, ModelsLine(s, flash), message);
     }
@@ -665,6 +672,8 @@ public static class CduPages
     {
         // The plugin runs but has no CSL package to draw with: the key opens the aircraft models page.
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
+        // BeyondATC won't find FSLTL, so it creates no traffic at all (ADR-0014): the key opens TRAFFIC.
+        { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
         // FSLTL changed since the models were converted: the key opens the aircraft models page, which has UPDATE.
         // While aircraft are drawn the count stays (the old models still work); the key still opens that page.
         { FsltlOutOfDate: true, FsltlConverting: false, TrafficAircraft: null or 0 } => new(UpdateModels, CduColor.Amber),

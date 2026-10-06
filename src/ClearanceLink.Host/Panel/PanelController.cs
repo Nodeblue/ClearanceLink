@@ -153,7 +153,8 @@ public sealed class PanelController : IAsyncDisposable
             found.MsfsInstalled,
             _board?.FlightPlans?.View,
             LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
-            Push: _board?.Pushbacks?.View);
+            Push: _board?.Pushbacks?.View,
+            BatcNoModels: found.BatcNoModels);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -520,6 +521,8 @@ public sealed class PanelController : IAsyncDisposable
             FsltlOutOfDate = fsltl is not null && output is not null && Fsltl.FsltlImporter.OutOfDate(fsltl, output) is not null,
             XPlaneRunning = XPlaneRunning(),
             MsfsInstalled = Fsltl.FsltlLocator.MsfsInstalled(),
+            BatcNoModels = OperatingSystem.IsWindows()
+                && BatcTrafficModels.Default.Check(fsltl) is BatcTrafficModels.Outcome.NoFsltl or BatcTrafficModels.Outcome.NotInMsfs2024,
             At = DateTime.Now,
         };
     }
@@ -652,6 +655,7 @@ public sealed class PanelController : IAsyncDisposable
         public bool FsltlOutOfDate { get; init; }
         public bool XPlaneRunning { get; init; }
         public bool MsfsInstalled { get; init; } = true;
+        public bool BatcNoModels { get; init; }
         public DateTime At { get; init; }
     }
 

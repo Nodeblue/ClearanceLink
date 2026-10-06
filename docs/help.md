@@ -151,8 +151,14 @@ setting needs changing for that.
 ## Aircraft models for traffic
 BeyondATC's traffic (aircraft at gates, taxiing, departing and arriving) appears in X-Plane through ClearanceLink's
 X-Plane plugin. The plugin draws each aircraft with a **CSL model**, the kind of aircraft model X-Plane's online
-flying plugins use. X-Plane doesn't come with any. Two libraries are tested; either one is enough, and you can have
-both. Without models, BeyondATC's traffic still talks on frequency, but you won't see it.
+flying plugins use. X-Plane doesn't come with any.
+
+**FSLTL is required for traffic.** BeyondATC only creates traffic when it finds FSLTL (or AIG or FS Traffic) on your
+PC, because it picks each aircraft from FSLTL's list. Without it, BeyondATC says "No traffic liveries found" and
+there is no traffic at all, not even on frequency. With MSFS 2024, FSLTL must be in MSFS 2024's Community folder.
+Without MSFS 2024, choose the FSLTL folder on TRAFFIC; ClearanceLink shows it to BeyondATC while ClearanceLink is
+open. ClearanceLink converts FSLTL's aircraft for X-Plane. Bluebell is optional and adds more models; you can have
+both.
 
 Everything for traffic is on the **TRAFFIC** page: press **SET UP** beside TRAFFIC on SETUP.
 
@@ -168,12 +174,13 @@ Everything for traffic is on the **TRAFFIC** page: press **SET UP** beside TRAFF
 3. TRAFFIC shows how many packages ClearanceLink found. Restart X-Plane if it was running.
 
 ### FSLTL (converted from your MSFS copy)
-If you have [https://fslivetrafficliveries.com/LTL](https://fslivetrafficliveries.com/) (https://fslivetrafficliveries.com/ Live Traffic Liveries, free) installed for MShttps://fslivetrafficliveries.com/, ClearanceLink can convert its aircraft for X-Plane.
+[FSLTL](https://fslivetrafficliveries.com/) (FS Live Traffic Liveries, free) is needed for BeyondATC's traffic, and
+ClearanceLink converts its aircraft for X-Plane.
 The conversion runs on your PC and reads your FSLTL folder only. FSLTL's licence doesn't allow sharing the models, so
 the converted models stay on your PC: never upload or share them.
 1. On TRAFFIC, the FSLTL line says **FOUND IN MSFS** when ClearanceLink finds the `fsltl-traffic-base` package
-   in your MSFS Community folder (MSFS 2024 or 2020, Microsoft Store or Steam). If it says **NOT FOUND**, press
-   **CHOOSE** and pick the `fsltl-traffic-base` folder yourself.
+   in your MSFS Community folder (MSFS 2024 or 2020, Microsoft Store or Steam). If it says **NOT FOUND** or
+   **NEEDS MSFS**, or shows liveries with **CHOOSE**, press **CHOOSE** and pick the `fsltl-traffic-base` folder yourself.
 2. Close X-Plane and press **CONVERT**. It runs in the background and takes several minutes; LIVE LOG on SUPPORT shows
    progress. When it's done, the line shows how many liveries were converted (about 3,000) and the models take about
    13 GB.
@@ -232,7 +239,9 @@ MSFS for that X-Plane has no equivalent of (those are ignored).
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. Check X-Plane is 12.1.4 or later. |
 | STATUS says X-PLANE NOT CONNECTED | BeyondATC is connected but X-Plane isn't. Start X-Plane and load a flight. |
 | A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |
-| No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED, and Bluebell or FSLTL must show a count. Traffic must be on in BeyondATC. |
+| No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED and FSLTL must show a count. Traffic must be on in BeyondATC. |
+| TRAFFIC says NO FSLTL: NO TRAFFIC (STATUS or SETUP: NO FSLTL) | BeyondATC won't find FSLTL, so it creates no traffic. See the next row. |
+| BeyondATC says "No traffic liveries found" | BeyondATC needs FSLTL installed for MSFS. Without MSFS 2024: make sure TRAFFIC shows your FSLTL folder (press CHOOSE if not), then start ClearanceLink before BeyondATC. With MSFS 2024: install FSLTL for MSFS 2024. |
 | TRAFFIC on STATUS says SEE SETUP | The plugin isn't installed or needs updating. Close X-Plane and press INSTALL or UPDATE on SETUP. |
 | No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on TRAFFIC (from SETUP): a new ClearanceLink needs its matching plugin. |
 | STATUS shows FSLTL MODELS UPDATE>, or SETUP shows UPDATE MODELS | FSLTL changed since its models were converted. Close X-Plane, open TRAFFIC and press UPDATE. |

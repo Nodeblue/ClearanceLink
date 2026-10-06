@@ -217,6 +217,8 @@ public sealed class PanelTests
         var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl).Rows, r => r.Left.Text == "FOUND IN MSFS" && r.KeyRight == CduKey.ConvertFsltl);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "UPDATE>");
+        // Converted earlier but the folder isn't known now (no MSFS): CHOOSE, so BeyondATC can be shown it (ADR-0014).
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "CHOOSE>" && r.KeyRight == CduKey.ChooseFsltlFolder);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlConverting = true }).Rows, r => r.Left.Text == "CONVERTING..." && r.KeyRight == CduKey.None);
         Assert.Equal(CduKey.FinishGettingStarted, CduPages.Build(PanelPage.StartDone, Ready).Rows[5].KeyRight);
     }
@@ -337,6 +339,21 @@ public sealed class PanelTests
         Assert.Equal("<CREATE SUPPORT FILE", window.Shown!.Rows[2].Left.Text);
         Assert.Equal(CduKey.OpenHelp, window.Shown!.Rows[4].KeyRight);
         window.Close();
+    }
+
+    [Fact]
+    public void Beyondatc_finding_no_fsltl_is_an_amber_warning_on_traffic_setup_and_status()
+    {
+        // BeyondATC creates no traffic at all without FSLTL (ADR-0014): say so where traffic is set up and shown.
+        var none = Ready with { TrafficAddOn = PluginInstall.State.Installed, BatcNoModels = true };
+        var warning = Assert.Single(CduPages.Build(PanelPage.Traffic, none).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        Assert.Equal(("NO FSLTL: NO TRAFFIC", CduColor.Amber), (warning.Left.Text, warning.Left.Color));
+        Assert.False(string.IsNullOrEmpty(warning.Help));
+        Assert.DoesNotContain(CduPages.Build(PanelPage.Traffic, none with { BatcNoModels = false }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+
+        var status = CduPages.Build(PanelPage.Status, none).Rows[4];
+        Assert.Equal(("NO FSLTL", CduColor.Amber, CduKey.GoTraffic), (status.Right.Text, status.Right.Color, status.KeyRight));
+        Assert.Contains(CduPages.Build(PanelPage.Setup, none).Rows, r => r.Right.Text == "NO FSLTL" || r.Left.Text == "NO FSLTL");
     }
 
     [Fact]
@@ -532,7 +549,8 @@ public sealed class PanelTests
         var row = page.Rows[4];
         Assert.Equal("NEEDS MSFS", row.Left.Text);
         Assert.Equal(("CHOOSE>", CduKey.ChooseFsltlFolder), (row.Right.Text, row.KeyRight));
-        Assert.Contains(page.Message!, m => m.Text.Contains("FSLTL comes from MSFS", StringComparison.Ordinal));
+        Assert.Contains(page.Message!, m => m.Text.Contains("No MSFS here", StringComparison.Ordinal));
+        Assert.All([page, CduPages.Build(PanelPage.StartModels, Ready)], p => Assert.Contains(p.Message!, m => m.Text.Contains("needs FSLTL", StringComparison.Ordinal)));
 
         // A copy chosen by hand is just FOUND (not in MSFS).
         Assert.Equal("FOUND", CduPages.Build(PanelPage.StartModels, Ready with { MsfsInstalled = false, FsltlFolder = @"D:\fsltl-traffic-base" }).Rows[4].Left.Text);
