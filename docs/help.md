@@ -7,7 +7,7 @@ X-Plane 12. BeyondATC talks to ClearanceLink as if it were MSFS, and ClearanceLi
 > endorsed by or supported by BeyondATC, Microsoft or Laminar Research. Please don't ask BeyondATC's team for help
 > with it.
 
-**Contents:** [The window](#the-window) · [First start](#first-start) · [Every flight](#every-flight) · [Flight plans](#flight-plans) ·
+**Contents:** [The window](#the-window) · [First start](#first-start) · [Every flight](#every-flight) · [Flight plans](#flight-plans) · [Pushback](#pushback) ·
 [X-Plane settings](#x-plane-settings) · [Aircraft models for traffic](#aircraft-models-for-traffic) ·
 [BeyondATC settings](#beyondatc-settings) · [Flying MSFS as well](#flying-msfs-as-well) · [What works](#what-works) ·
 [Problems](#problems) · [Getting help](#getting-help) · [Commands](#commands)
@@ -17,7 +17,7 @@ Downloading, the Windows warning and updating are on [Download and install](inst
 ## The window
 ClearanceLink looks like an aircraft's FMS. Each page has six rows; press the button beside a row, or click the row,
 to do what it says. The keys under the screen change page. On the keyboard, 1 to 6 press the left buttons,
-Shift+1 to 6 the right ones, and F1 to F5 change page (F5 is FPLN).
+Shift+1 to 6 the right ones, and F1 to F6 change page (F5 is FPLN, F6 is PUSH).
 
 | STATUS | FPLN | SETUP | SUPPORT |
 |---|---|---|---|
@@ -27,14 +27,18 @@ Shift+1 to 6 the right ones, and F1 to F5 change page (F5 is FPLN).
   well.
 - **FPLN** fetches your latest SimBrief plan and loads it into X-Plane's FMS when you ask. See
   [Flight plans](#flight-plans).
-- **SETUP** shows the BeyondATC and X-Plane folders, the connection mode and the X-Plane plugin, starts BeyondATC and
+- **PUSH** pushes you back with the Better Pushback plugin when BeyondATC clears you. See [Pushback](#pushback).
+- **SETUP** shows the BeyondATC and X-Plane folders and the connection mode, opens **TRAFFIC** (the X-Plane plugin,
+  aircraft models and X-Plane settings) and the WELCOME pages, starts BeyondATC and
   opens a web page in your browser with the same status.
-- **SUPPORT** makes a support file, shows the live log, and reopens the WELCOME pages.
+- **SUPPORT** makes a support file, shows the live log, and opens this help page.
+
+Rest the mouse on a row to see what it means. Rows with a small **i** after their name have an explanation.
 - **ABOUT** shows the version, and **NEW VERSION** when a newer release is out.
 
 ## First start
 Double-click `ClearanceLink.exe`. The first time, six **WELCOME** pages take you through the set-up. Press **NEXT**
-to go on, **BACK** to go back, or **SKIP** on the first page to skip them (SUPPORT > **SHOW AGAIN** brings them back).
+to go on, **BACK** to go back, or **SKIP** on the first page to skip them (SETUP > **WELCOME** brings them back).
 
 | 1 Welcome | 2 Folders | 3 Traffic |
 |---|---|---|
@@ -96,6 +100,42 @@ airports (for example `YBBNYSSY.fms`). Aircraft that don't use X-Plane's FMS (ma
 file from their own FMS menu. If the plugin isn't installed, LOAD only saves the file and the bottom line says which
 name to load.
 
+## Pushback
+In MSFS, BeyondATC can call GSX for your pushback. X-Plane has no GSX, so the **PUSH** page does it with the free
+[Better Pushback](https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/) plugin instead. It
+follows BeyondATC's clearance, including "face east". Like GSX in MSFS, the tug comes as soon as BeyondATC approves
+your pushback, and it only moves once you release the parking brake.
+
+Install the maintained Better Pushback mod, version 1.14 or later, from [X-Plane.org](https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/) (free account
+needed; source on [GitHub](https://github.com/olivierbutler/BetterPusbackMod)). Older Better Pushback versions lack the
+commands ClearanceLink uses. Unzip it into `X-Plane 12\Resources\plugins` with X-Plane closed.
+
+<img src="images/panel-push-flying.png" width="330" alt="PUSH page with a clearance to face east">
+
+1. Ask BeyondATC for pushback as usual. When it approves, the PUSH page shows the clearance (**FACE EAST**) and the
+   push it worked out: how far back, which way the tail goes, and the heading and taxiway you'll end up on.
+   Better Pushback's tug comes to the aircraft.
+2. When the bottom line says **RELEASE PARKING BRAKE**, release it. The tug pushes you back, turns and stops.
+3. When it says **SET PARKING BRAKE**, set it. ClearanceLink tells the tug to disconnect for you.
+
+- **TURN** pushes another way than ATC said. **TAIL LEFT** swings the tail left, so the nose ends up pointing
+  right; **TAIL RIGHT** is the opposite; **NO TURN** pushes straight back. **AS ATC SAID** goes back to ATC's way.
+  You can change it until the tug starts moving.
+- **TUG AUTO** (the default) calls the tug when BeyondATC approves. **TUG MANUAL** waits for you to press
+  **CALL TUG**; STATUS says **PUSHBACK APPROVED: PUSH** meanwhile.
+- **STOP** ends the push where you are. The tug still disconnects once you set the parking brake.
+
+ClearanceLink uses the taxiways in X-Plane's airport data to end a turning push on the taxiway behind you, lined up
+with it. Where it finds none, it pushes back 15 m and turns. A push with no turn goes back about one aircraft
+length (15 m for a small aircraft, about 40 m for a 737), worked out from the aircraft's wheelbase.
+
+**BETTER PUSHBACK MISSING** means X-Plane doesn't have the plugin. Install it in `X-Plane 12\Resources\plugins` and
+restart X-Plane. ClearanceLink sends nothing to X-Plane until it's there.
+
+**NOT MOVING: PRESS STOP** means the tug is on and the brake has been off for 40 seconds, but the aircraft hasn't
+moved. Better Pushback can't push some aircraft (in our tests, the Aerobask Phenom 300, even from Better Pushback's
+own menu). Press **STOP**, then taxi out under your own power or use the aircraft's own pushback, if it has one.
+
 ## X-Plane settings
 Change these in X-Plane, so only BeyondATC talks and only BeyondATC's traffic flies:
 
@@ -114,7 +154,9 @@ X-Plane plugin. The plugin draws each aircraft with a **CSL model**, the kind of
 flying plugins use. X-Plane doesn't come with any. Two libraries are tested; either one is enough, and you can have
 both. Without models, BeyondATC's traffic still talks on frequency, but you won't see it.
 
-<img src="images/panel-startmodels-flying.png" width="330" alt="WELCOME page 4 with 13 Bluebell packages and 3,154 converted FSLTL liveries">
+Everything for traffic is on the **TRAFFIC** page: press **SET UP** beside TRAFFIC on SETUP.
+
+<img src="images/panel-traffic-flying.png" width="330" alt="TRAFFIC page with the plugin installed, 13 Bluebell packages and 3,154 converted FSLTL liveries">
 
 ### Bluebell (free download)
 1. Download the **Bluebell OBJ8 CSL packages** from the X-Plane.org forums:
@@ -123,19 +165,19 @@ both. Without models, BeyondATC's traffic still talks on frequency, but you won'
 2. Unzip the packages into `X-Plane 12\Custom Data\CSL`, so you end up with folders like
    `X-Plane 12\Custom Data\CSL\BB_Airbus`. (Make the `CSL` folder if it isn't there. One extra folder level, such as
    `CSL\Bluebell\BB_Airbus`, also works.)
-3. WELCOME page 4 shows how many packages ClearanceLink found. Restart X-Plane if it was running.
+3. TRAFFIC shows how many packages ClearanceLink found. Restart X-Plane if it was running.
 
 ### FSLTL (converted from your MSFS copy)
-If you have FSLTL (FS Live Traffic Liveries) installed for MSFS, ClearanceLink can convert its aircraft for X-Plane.
+If you have [https://fslivetrafficliveries.com/LTL](https://fslivetrafficliveries.com/) (https://fslivetrafficliveries.com/ Live Traffic Liveries, free) installed for MShttps://fslivetrafficliveries.com/, ClearanceLink can convert its aircraft for X-Plane.
 The conversion runs on your PC and reads your FSLTL folder only. FSLTL's licence doesn't allow sharing the models, so
 the converted models stay on your PC: never upload or share them.
-1. On WELCOME page 4, the FSLTL line says **FOUND IN MSFS** when ClearanceLink finds the `fsltl-traffic-base` package
+1. On TRAFFIC, the FSLTL line says **FOUND IN MSFS** when ClearanceLink finds the `fsltl-traffic-base` package
    in your MSFS Community folder (MSFS 2024 or 2020, Microsoft Store or Steam). If it says **NOT FOUND**, press
    **CHOOSE** and pick the `fsltl-traffic-base` folder yourself.
 2. Close X-Plane and press **CONVERT**. It runs in the background and takes several minutes; LIVE LOG on SUPPORT shows
    progress. When it's done, the line shows how many liveries were converted (about 3,000) and the models take about
    13 GB.
-3. The models go to `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`. After an FSLTL update, press **UPDATE** on page 4
+3. The models go to `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`. After an FSLTL update, press **UPDATE** on TRAFFIC
    to convert again.
 
 ### Other models
@@ -177,8 +219,10 @@ own connection instead, while MSFS is closed. Running ClearanceLink as administr
 - BeyondATC's traffic, drawn in X-Plane with CSL models.
 - Airports whose X-Plane scenery has no taxiways get a simple generated taxi network.
 - STATUS shows the airport BeyondATC is using and which scenery it came from.
+- Pushback with Better Pushback, following BeyondATC's clearance (see [Pushback](#pushback)).
 
-Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equivalent of (those are ignored).
+BeyondATC's other GSX services (boarding, refuelling) do nothing in X-Plane. Not yet: a few things BeyondATC asks
+MSFS for that X-Plane has no equivalent of (those are ignored).
 
 ## Problems
 | What you see | What to do |
@@ -188,10 +232,10 @@ Not yet: GSX, and a few things BeyondATC asks MSFS for that X-Plane has no equiv
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. Check X-Plane is 12.1.4 or later. |
 | STATUS says X-PLANE NOT CONNECTED | BeyondATC is connected but X-Plane isn't. Start X-Plane and load a flight. |
 | A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |
-| No traffic visible | On SETUP, the X-PLANE PLUGIN must say INSTALLED. On WELCOME page 4, Bluebell or FSLTL must show a count. Traffic must be on in BeyondATC. |
+| No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED, and Bluebell or FSLTL must show a count. Traffic must be on in BeyondATC. |
 | TRAFFIC on STATUS says SEE SETUP | The plugin isn't installed or needs updating. Close X-Plane and press INSTALL or UPDATE on SETUP. |
-| No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on SETUP: a new ClearanceLink needs its matching plugin. |
-| STATUS or SETUP shows FSLTL MODELS UPDATE> | FSLTL changed since its models were converted. Close X-Plane, press UPDATE> and then UPDATE on the models page. |
+| No traffic after updating ClearanceLink | Close X-Plane and press UPDATE beside X-PLANE PLUGIN on TRAFFIC (from SETUP): a new ClearanceLink needs its matching plugin. |
+| STATUS shows FSLTL MODELS UPDATE>, or SETUP shows UPDATE MODELS | FSLTL changed since its models were converted. Close X-Plane, open TRAFFIC and press UPDATE. |
 | FMS on FPLN says NOT TAKEN | X-Plane's FMS refused the plan (the reason is on the bottom line). Load the saved `.fms` file from the aircraft's own FMS menu instead. |
 | Another X-Plane add-on (SPAD.neXt, for example) can't use UDP port 49707 | Windows has reserved a block of ports for Hyper-V. Rebooting usually moves it. To keep 49707 free, run in an admin command prompt: `net stop winnat`, then `netsh int ipv4 add excludedportrange protocol=udp startport=49707 numberofports=1`, then `net start winnat`. ClearanceLink's plugin picks a free port by itself. |
 | X-Plane talks over BeyondATC | In X-Plane, Settings > Sound, set the Radios slider to 0. |

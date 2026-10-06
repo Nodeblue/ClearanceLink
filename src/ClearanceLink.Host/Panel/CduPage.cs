@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using ClearanceLink.Fsltl;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
 
@@ -9,6 +10,7 @@ public enum PanelPage
 {
     Status,
     FlightPlan,
+    Push,
     Setup,
     Support,
     About,
@@ -18,6 +20,7 @@ public enum PanelPage
     StartModels,
     StartXPlane,
     StartDone,
+    Traffic,
 }
 
 /// <summary>Colours as on a Boeing CDU: cyan labels, white data, green good, amber attention, magenta active.</summary>
@@ -64,6 +67,17 @@ public enum CduKey
     GoFlightPlan,
     RequestPlan,
     LoadPlan,
+    GoPush,
+    PushTailLeft,
+    PushTailRight,
+    PushStraight,
+    PushStart,
+    PushStop,
+    PushAsCleared,
+    PushAuto,
+    PushManual,
+    GoTraffic,
+    OpenXPlaneSettingsHelp,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -71,6 +85,9 @@ public sealed record CduCell(string Text, CduColor Color = CduColor.White);
 /// <summary>One of the six rows: a small cyan label line over a data line, each with a left and a right half.</summary>
 public sealed record CduRow(string LabelLeft, string LabelRight, CduCell Left, CduCell Right, CduKey KeyLeft = CduKey.None, CduKey KeyRight = CduKey.None)
 {
+    /// <summary>What the row means, in a sentence or two: shown when the mouse rests on it (an "i" marks the row).</summary>
+    public string? Help { get; init; }
+
     public static CduRow Empty { get; } = new("", "", new(""), new(""));
 }
 
@@ -111,7 +128,8 @@ public sealed record PanelState(
     bool XPlaneRunning = false,
     bool MsfsInstalled = true,
     FlightPlanView? FlightPlan = null,
-    bool LoadArmed = false);
+    bool LoadArmed = false,
+    PushView? Push = null);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -124,9 +142,10 @@ public static class CduPages
     public const string Website = "https://github.com/Nodeblue/ClearanceLink";
     public const string HelpPage = Website + "/blob/main/docs/help.md";
     public const string ModelsHelp = HelpPage + "#aircraft-models-for-traffic";
+    public const string XPlaneSettingsHelp = HelpPage + "#x-plane-settings";
 
     /// <summary>The page keys under the screen; the getting-started pages are reached from SUPPORT or on first run.</summary>
-    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.FlightPlan, PanelPage.Setup, PanelPage.Support, PanelPage.About];
+    public static readonly ImmutableArray<PanelPage> MainPages = [PanelPage.Status, PanelPage.FlightPlan, PanelPage.Push, PanelPage.Setup, PanelPage.Support, PanelPage.About];
 
     /// <summary>The name on a page key under the screen.</summary>
     public static string KeyName(PanelPage page) => page == PanelPage.FlightPlan ? "FPLN" : page.ToString().ToUpperInvariant();
@@ -137,6 +156,7 @@ public static class CduPages
     public static CduPage Build(PanelPage page, PanelState s, string? flash = null) => page switch
     {
         PanelPage.FlightPlan => FlightPlan(s, flash),
+        PanelPage.Push => Push(s, flash),
         PanelPage.Setup => Setup(s, flash),
         PanelPage.Support => Support(s, flash),
         PanelPage.About => About(s, flash),
@@ -146,6 +166,7 @@ public static class CduPages
         PanelPage.StartModels => StartModels(s, flash),
         PanelPage.StartXPlane => StartXPlane(flash),
         PanelPage.StartDone => StartDone(flash),
+        PanelPage.Traffic => Traffic(s, flash),
         _ => Status(s, flash),
     };
 
@@ -159,18 +180,22 @@ public static class CduPages
         };
         var rows = new[]
         {
-            Row("X-PLANE", "BEYONDATC", s.XPlaneConnected ? new("CONNECTED", CduColor.Green) : new("WAITING"), batc),
-            Row("X-PLANE VERSION", "OTHER ADD-ONS", new(s.XPlaneVersion ?? "-"), new(s.OtherAddOns == 0 ? "NONE" : $"{s.OtherAddOns} IGNORED")),
-            Row("ATC AIRPORT", "SCENERY", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? "")),
+            Row("X-PLANE", "BEYONDATC", s.XPlaneConnected ? new("CONNECTED", CduColor.Green) : new("WAITING"), batc)
+                with { Help = "Whether X-Plane 12 and BeyondATC are talking to ClearanceLink. Both say CONNECTED when all is well." },
+            Row("X-PLANE VERSION", "OTHER ADD-ONS", new(s.XPlaneVersion ?? "-"), new(s.OtherAddOns == 0 ? "NONE" : $"{s.OtherAddOns} IGNORED"))
+                with { Help = "X-Plane's version. OTHER ADD-ONS counts MSFS add-ons that tried to connect to ClearanceLink; they are ignored." },
+            Row("ATC AIRPORT", "SCENERY", new(s.LastAirport ?? "-"), new(s.LastAirportSource ?? ""))
+                with { Help = "The airport BeyondATC last asked about, and the X-Plane scenery its gates and taxiways came from." },
             Row("CONNECTION", "SESSION LOG", new(s.Connection == ConnectionMode.Automatic ? "AUTOMATIC" : "ALWAYS ON", CduColor.Magenta),
-                s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport),
+                s.SessionLog ? new("ON", CduColor.Green) : new("OFF", CduColor.Amber), CduKey.GoSetup, CduKey.GoSupport)
+                with { Help = "How BeyondATC finds ClearanceLink (change it on SETUP), and whether this session is logged (SUPPORT)." },
             Row("RUNNING FOR", Traffic(s).Text == UpdateModels ? "FSLTL MODELS" : "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
             {
                 { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
                 { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
-                { TrafficAircraft: null } => CduKey.GoSetup,
+                { TrafficAircraft: null } => CduKey.GoTraffic,
                 _ => CduKey.None,
-            }),
+            }) with { Help = "How long ClearanceLink has been open, and how many of BeyondATC's aircraft are drawn in X-Plane." },
             Row("", "", new("<SETUP"), new("FPLN>"), CduKey.GoSetup, CduKey.GoFlightPlan),
         };
         return new($"{AppName} STATUS", rows, flash is null ? Advice(s) : new(flash));
@@ -184,6 +209,14 @@ public static class CduPages
     public static CduCell Advice(PanelState s)
     {
         var advice = NextStep(s);
+
+        // BATC cleared the pushback: the PUSH page carries it out when the pilot presses START PUSH. It comes only
+        // once everything is connected, so it takes the place of READY FOR CLEARANCE.
+        if (s.Push is { Clearance: not null, Running: false, BetterPushback: not false } && advice.Color == CduColor.Green)
+        {
+            return new("PUSHBACK APPROVED: PUSH", CduColor.Green);
+        }
+
         if (advice.Color != CduColor.White || !s.Serving)
         {
             return advice;
@@ -246,14 +279,19 @@ public static class CduPages
         var rows = new[]
         {
             Row("SIMBRIEF PLAN", "CRUISE", p is null ? None() : new($"{p.Origin}-{p.Destination}", CduColor.Green),
-                p?.CruiseFeet is { } feet ? new($"FL{feet / 100:000}") : None()),
+                p?.CruiseFeet is { } feet ? new($"FL{feet / 100:000}") : None())
+                with { Help = "Your latest SimBrief plan: from, to and cruise level. It's the same plan BeyondATC flies." },
             Row("RWY/SID", "STAR/RWY", p is null ? None() : new($"{p.OriginRunway ?? "-"}/{p.Sid ?? "-"}"),
-                p is null ? None() : new($"{p.Star ?? "-"}/{p.DestinationRunway ?? "-"}")),
-            Row("ROUTE", "", p?.Route is { } route ? new(Fit(route.StartsWith("DCT ", StringComparison.Ordinal) ? route[4..] : route, Width)) : None(), new("")),
-            Row("MADE", "FMS", p?.Generated is { } made ? new(Zulu(made)) : None(), fms),
+                p is null ? None() : new($"{p.Star ?? "-"}/{p.DestinationRunway ?? "-"}"))
+                with { Help = "Departure runway and SID, arrival STAR and runway, as SimBrief planned them." },
+            Row("ROUTE", "", p?.Route is { } route ? new(Fit(route.StartsWith("DCT ", StringComparison.Ordinal) ? route[4..] : route, Width)) : None(), new(""))
+                with { Help = "The route between the SID and the STAR." },
+            Row("MADE", "FMS", p?.Generated is { } made ? new(Zulu(made)) : None(), fms)
+                with { Help = "When SimBrief made the plan, and whether it's in X-Plane's FMS yet." },
             Row("", "", new(view.Requesting ? " REQUESTING" : "<REQUEST"),
                 p is null ? new("") : s.LoadArmed ? new("CONFIRM>", CduColor.Amber) : new("LOAD>"),
-                view.Requesting ? CduKey.None : CduKey.RequestPlan, p is null ? CduKey.None : CduKey.LoadPlan),
+                view.Requesting ? CduKey.None : CduKey.RequestPlan, p is null ? CduKey.None : CduKey.LoadPlan)
+                with { Help = "REQUEST fetches your latest SimBrief plan to check here. LOAD puts it in X-Plane's FMS; press it twice, as it replaces the FMS's plan." },
             Row("", "", new("<STATUS"), new("SETUP>"), CduKey.GoStatus, CduKey.GoSetup),
         };
         var hint = view switch
@@ -268,6 +306,68 @@ public static class CduPages
         return new($"{AppName} FPLN", rows, flash is null ? hint : new(flash));
     }
 
+    /// <summary>
+    /// The pushback page: BeyondATC's clearance ("FACE EAST"), the push it plans, keys to turn the tail another way,
+    /// and the tug: AUTO calls Better Pushback's tug when BeyondATC approves (as it calls GSX in MSFS), MANUAL waits
+    /// for CALL TUG (ADR-0013). Either way the push only moves once the pilot releases the parking brake.
+    /// </summary>
+    private static CduPage Push(PanelState s, string? flash)
+    {
+        var v = s.Push ?? new PushView();
+        CduCell Choice(string text, PushChoice choice) => new(text, v.Choice == choice ? CduColor.Magenta : CduColor.White);
+        var cleared = v.Clearance is { } c
+            ? new CduCell(c.FaceWord is { } w ? $"FACE {w}" : "APPROVED", v.Choice is null ? CduColor.Green : CduColor.White)
+            : new CduCell("-----");
+        var plan = v.Preview is { } p
+            ? new CduCell(p.Turns ? $"{p.StraightMeters:0}M, TAIL {(p.TailLeft ? "LEFT" : "RIGHT")}" : $"{p.StraightMeters:0}M, NO TURN")
+            : new CduCell("-----");
+        var asCleared = v is { Choice: not null, Clearance: not null };
+        var callTug = v.CanStart && !v.Running;
+        var rows = new[]
+        {
+            Row("ATC CLEARANCE", "AT", cleared, new(v.Clearance is { } at ? Zulu(at.At) : ""))
+                with { Help = "BeyondATC's pushback approval: the way to face after the push, and when it was given." },
+            Row("PUSH BACK", "THEN FACE", plan, new(v.Preview is { } f ? $"{f.FinalHeading:000}" + (f.Taxiway is { } t ? $" ON {t}" : "") : ""))
+                with { Help = "How far the tug pushes, which way the tail swings, and the heading you end up on, lined up with the taxiway behind you when there is one." },
+            Row("TURN", "", Choice("<TAIL LEFT", PushChoice.TailLeft), Choice("TAIL RIGHT>", PushChoice.TailRight), CduKey.PushTailLeft, CduKey.PushTailRight)
+                with { Help = "Push another way than ATC said. TAIL LEFT swings the tail left, so the nose ends up pointing right; TAIL RIGHT the opposite. Works until the tug starts moving." },
+            Row("", "", Choice("<NO TURN", PushChoice.Straight), new(asCleared ? "AS ATC SAID>" : ""), CduKey.PushStraight, asCleared ? CduKey.PushAsCleared : CduKey.None)
+                with { Help = "NO TURN pushes straight back, about one aircraft length. AS ATC SAID goes back to BeyondATC's direction." },
+            Row("TUG", "",
+                new(v.Automatic ? "<AUTO" : " AUTO", v.Automatic ? CduColor.Magenta : CduColor.White),
+                new(v.Automatic ? "MANUAL" : "MANUAL>", v.Automatic ? CduColor.White : CduColor.Magenta),
+                CduKey.PushAuto, CduKey.PushManual)
+                with { Help = "AUTO calls Better Pushback's tug as soon as BeyondATC approves your pushback, like GSX in MSFS. MANUAL waits for you to press CALL TUG." },
+            Row("", "", new(callTug ? "<CALL TUG" : ""), new(v.Running ? "STOP>" : "", CduColor.Amber),
+                callTug ? CduKey.PushStart : CduKey.None, v.Running ? CduKey.PushStop : CduKey.None)
+                with { Help = "CALL TUG brings Better Pushback's tug. It pushes once you release the parking brake, and disconnects once you set it again. STOP ends the push where you are." },
+        };
+        return new($"{AppName} PUSH", rows, flash is null ? PushLine(v) : new(flash));
+    }
+
+    /// <summary>The PUSH page's bottom line: where the push is, or what to do next.</summary>
+    public static CduCell PushLine(PushView v) => v switch
+    {
+        { Stage: PushStage.Failed, Problem: { } why } => new(Fit(why, Width), CduColor.Amber),
+        { Stage: PushStage.CallingTug } => new("TUG ON THE WAY"),
+        { Stage: PushStage.WaitingForBrake, Stalled: true } => new("NOT MOVING: PRESS STOP", CduColor.Amber),
+        { Stage: PushStage.WaitingForBrake, BrakeSet: true } => new("RELEASE PARKING BRAKE", CduColor.Amber),
+        { Stage: PushStage.WaitingForBrake } => new("PUSH STARTING"),
+        { Stage: PushStage.PushingBack } => new($"PUSHING BACK {v.Pushed:0}M", CduColor.Green),
+        { Stage: PushStage.Turning, Preview: { } p } => new($"TURNING TAIL {(p.TailLeft ? "LEFT" : "RIGHT")}", CduColor.Green),
+        { Stage: PushStage.Straightening } => new("STRAIGHTENING", CduColor.Green),
+        { Stage: PushStage.Stopping } => new("STOPPING"),
+        { Stage: PushStage.Disconnecting, BrakeSet: true } => new("DISCONNECTING TUG"),
+        { Stage: PushStage.Disconnecting } => new("SET PARKING BRAKE", CduColor.Amber),
+        { Stage: PushStage.Done } => new("PUSHBACK COMPLETE", CduColor.Green),
+        { XPlane: false } => new("START X-PLANE 12"),
+        { BetterPushback: false } => new("BETTER PUSHBACK MISSING", CduColor.Amber),
+        { Selected: null } => new("WAIT FOR PUSH CLEARANCE"),
+        { Automatic: true, Clearance: not null, Choice: null, BetterPushback: null } => new("CHECKING BETTER PUSHBACK"),
+        { Automatic: true } => new("TUG COMES WHEN CLEARED"),
+        _ => new("PRESS CALL TUG"),
+    };
+
     private static string Zulu(DateTimeOffset at) => at.UtcDateTime.ToString("HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>SETUP's bottom line while connection automatic has BeyondATC pointed at ClearanceLink.</summary>
@@ -278,18 +378,22 @@ public static class CduPages
         var automatic = s.Connection == ConnectionMode.Automatic;
         var rows = new[]
         {
-            Folder("BEYONDATC FOLDER", s.BatcFolder, CduKey.ChooseBatcFolder),
-            Folder("X-PLANE FOLDER", s.XPlaneFolder, CduKey.ChooseXPlaneFolder),
+            Folder("BEYONDATC FOLDER", s.BatcFolder, CduKey.ChooseBatcFolder)
+                with { Help = "Where BeyondATC is installed. Press to choose another folder. Nothing in it is changed." },
+            Folder("X-PLANE FOLDER", s.XPlaneFolder, CduKey.ChooseXPlaneFolder)
+                with { Help = "Where X-Plane 12 is installed, for airports and the traffic plugin. Press to choose another folder." },
             Row("CONNECTION", "",
                 new(automatic ? "<AUTOMATIC" : " AUTOMATIC", automatic ? CduColor.Magenta : CduColor.White),
                 new(automatic ? "ALWAYS ON" : "ALWAYS ON>", automatic ? CduColor.White : CduColor.Magenta),
-                CduKey.ConnectionAutomatic, CduKey.ConnectionAlwaysOn),
+                CduKey.ConnectionAutomatic, CduKey.ConnectionAlwaysOn)
+                with { Help = "AUTOMATIC: BeyondATC uses X-Plane while this window is open, and MSFS once it's closed. ALWAYS ON: BeyondATC always looks for X-Plane, even with the window closed." },
             Row("START", "WEB STATUS", new(s.BatcFolder is null ? "" : "<BEYONDATC"), new("OPEN>"),
-                s.BatcFolder is null ? CduKey.None : CduKey.StartBatc, CduKey.OpenStatusPage),
-            s is { TrafficAddOn: PluginInstall.State.Installed, FsltlOutOfDate: true, FsltlConverting: false }
-                    ? Row("FSLTL MODELS", "", new("OUT OF DATE", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.GoModels)
-                    : TrafficAddOn(s),
-            Row("", "", new("<STATUS"), new("ABOUT>"), CduKey.GoStatus, CduKey.GoAbout),
+                s.BatcFolder is null ? CduKey.None : CduKey.StartBatc, CduKey.OpenStatusPage)
+                with { Help = "Start BeyondATC, or open the same status as a page in your browser." },
+            Row("TRAFFIC", "", SetupTraffic(s), new("SET UP>"), CduKey.GoTraffic, CduKey.GoTraffic)
+                with { Help = "BeyondATC's traffic in X-Plane: the plugin that draws it, the aircraft models and X-Plane's settings." },
+            Row("", "", new("<WELCOME"), new("ABOUT>"), CduKey.ShowGettingStarted, CduKey.GoAbout)
+                with { Help = "WELCOME shows the six set-up pages again. ABOUT shows the version." },
         };
         // Where BeyondATC goes right now. Automatic points it at X-Plane only while ClearanceLink is open and MSFS is
         // closed (ADR-0012); closing ClearanceLink sends it back to MSFS.
@@ -310,11 +414,16 @@ public static class CduPages
             Row("SESSION LOG", "",
                 new(s.SessionLog ? "<ON" : " ON", s.SessionLog ? CduColor.Green : CduColor.White),
                 new(s.SessionLog ? "OFF" : "OFF>", s.SessionLog ? CduColor.White : CduColor.Amber),
-                CduKey.SessionLogOn, CduKey.SessionLogOff),
-            Row("THIS SESSION", "KEPT FOR", new(s.SessionLog ? Size(s.SessionLogBytes) : "NOT LOGGED"), new($"{s.KeepDays} DAYS")),
-            Row("SEND TO NODEBLUE", "", new("<CREATE SUPPORT FILE"), new(""), CduKey.CreateSupportFile),
-            Row("DETAILS", "LOG FILES", new("<LIVE LOG"), new("OPEN FOLDER>"), CduKey.ShowLiveLog, CduKey.OpenLogFolder),
-            Row("WELCOME PAGES", "HELP", new("<SHOW AGAIN"), new("OPEN PAGE>"), CduKey.ShowGettingStarted, CduKey.OpenHelp),
+                CduKey.SessionLogOn, CduKey.SessionLogOff)
+                with { Help = "Keep a log of each session, so a support file can show what happened." },
+            Row("THIS SESSION", "KEPT FOR", new(s.SessionLog ? Size(s.SessionLogBytes) : "NOT LOGGED"), new($"{s.KeepDays} DAYS"))
+                with { Help = "Size of this session's log, and how long logs and recordings are kept." },
+            Row("SEND TO NODEBLUE", "", new("<CREATE SUPPORT FILE"), new(""), CduKey.CreateSupportFile)
+                with { Help = "Makes a zip of recent logs and settings to send when something goes wrong. Your Windows user name is blanked out." },
+            Row("DETAILS", "LOG FILES", new("<LIVE LOG"), new("OPEN FOLDER>"), CduKey.ShowLiveLog, CduKey.OpenLogFolder)
+                with { Help = "Watch the log as it's written, or open the folder that holds the logs." },
+            Row("", "HELP", new(""), new("OPEN PAGE>"), CduKey.None, CduKey.OpenHelp)
+                with { Help = "Opens the help page in your browser." },
             Row("", "", new("<STATUS"), new("SETUP>"), CduKey.GoStatus, CduKey.GoSetup),
         };
         return new($"{AppName} SUPPORT", rows, new(flash ?? ""));
@@ -405,35 +514,26 @@ public static class CduPages
         return new(StartTitle(PanelPage.StartTraffic), rows, new(flash ?? ""), message);
     }
 
-    private static CduPage StartModels(PanelState s, string? flash)
+    private static CduRow FsltlRow(PanelState s) => s switch
     {
-        var fsltl = s switch
-        {
-            { FsltlConverting: true } => Row("FSLTL", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
-            { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
-                Row("FSLTL", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
-            { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
-                CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
-            { FsltlFolder: not null } => Row("FSLTL", "", new(s.MsfsInstalled ? "FOUND IN MSFS" : "FOUND", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
-            // No MSFS on this PC: FSLTL can still be copied from another PC, so the folder can still be chosen.
-            { MsfsInstalled: false } => Row("FSLTL", "", new("NEEDS MSFS"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
-            _ => Row("FSLTL", "", new("NOT FOUND"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
-        };
-        var rows = new[]
-        {
-            CduRow.Empty, CduRow.Empty, CduRow.Empty,
-            Row("BLUEBELL", "", s.CslPackages > 0 ? new($"{s.CslPackages} PACKAGES", CduColor.Green) : new("NOT FOUND"),
-                new("HOW TO>"), CduKey.None, CduKey.OpenModelsHelp),
-            fsltl,
-            StartNav(),
-        };
-        CduCell[] message =
-        [
-            Say("Aircraft models", CduColor.Green),
-            s.FsltlFolder is null && !s.MsfsInstalled
-                ? Say("Either tested library works. FSLTL comes from MSFS, which isn't on this PC; CHOOSE a copied FSLTL folder.")
-                : Say("Either tested library works. FSLTL is converted from your MSFS copy."),
-        ];
+        { FsltlConverting: true } => Row("FSLTL", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
+        { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
+            Row("FSLTL", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
+        { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
+            CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
+        { FsltlFolder: not null } => Row("FSLTL", "", new(s.MsfsInstalled ? "FOUND IN MSFS" : "FOUND", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
+        // No MSFS on this PC: FSLTL can still be copied from another PC, so the folder can still be chosen.
+        { MsfsInstalled: false } => Row("FSLTL", "", new("NEEDS MSFS"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
+        _ => Row("FSLTL", "", new("NOT FOUND"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),
+    };
+
+    private static CduRow BluebellRow(PanelState s) =>
+        Row("BLUEBELL", "", s.CslPackages > 0 ? new($"{s.CslPackages} PACKAGES", CduColor.Green) : new("NOT FOUND"),
+            new("HOW TO>"), CduKey.None, CduKey.OpenModelsHelp);
+
+    /// <summary>The models pages' bottom line: the last conversion's result, or what to do before converting.</summary>
+    private static CduCell ModelsLine(PanelState s, string? flash)
+    {
         var toConvert = s.FsltlFolder is not null && (s.FsltlLiveries == 0 || s.FsltlOutOfDate);
         var help = s switch
         {
@@ -444,7 +544,61 @@ public static class CduPages
         };
         // The last conversion's result stays on the page (it ran in the background, so the key's flash is long gone).
         var line = flash ?? s.FsltlMessage ?? help;
-        return new(StartTitle(PanelPage.StartModels), rows, new(line, line.StartsWith("CONVERT FAILED", StringComparison.Ordinal) ? CduColor.Amber : CduColor.White), message);
+        return new(line, line.StartsWith("CONVERT FAILED", StringComparison.Ordinal) ? CduColor.Amber : CduColor.White);
+    }
+
+    /// <summary>
+    /// Everything for BeyondATC's traffic in one place, reached from SETUP: the X-Plane plugin, the two model
+    /// libraries and X-Plane's settings (Ben, 2026-10-06: the welcome pages were the only way back to them).
+    /// </summary>
+    private static CduPage Traffic(PanelState s, string? flash)
+    {
+        var rows = new[]
+        {
+            (TrafficAddOn(s) is { } plugin && plugin != CduRow.Empty
+                ? plugin with { LabelRight = "AIRCRAFT", Right = plugin.KeyRight == CduKey.None ? Traffic(s) : plugin.Right }
+                : Row("X-PLANE PLUGIN", "", new("NOT IN THIS COPY"), new(""))) with
+                { Help = "ClearanceLink's X-Plane plugin draws BeyondATC's traffic. Install or update it with X-Plane closed." },
+            BluebellRow(s) with { Help = "Bluebell: a free set of aircraft models for X-Plane. HOW TO shows where to get it." },
+            FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models, converted for X-Plane from your own copy. Close X-Plane to convert." },
+            Row("X-PLANE SETTINGS", "", new("3 TO TURN OFF"), new("HOW TO>"), CduKey.None, CduKey.OpenXPlaneSettingsHelp)
+                with { Help = "In X-Plane, set Radios to 0, Draw parked aircraft off and AI aircraft to none, so only BeyondATC talks and flies traffic." },
+            CduRow.Empty,
+            Row("", "", new("<SETUP"), new("STATUS>"), CduKey.GoSetup, CduKey.GoStatus),
+        };
+        return new($"{AppName} TRAFFIC", rows, ModelsLine(s, flash));
+    }
+
+    /// <summary>SETUP's traffic row: what needs doing, else how much traffic is drawn.</summary>
+    private static CduCell SetupTraffic(PanelState s) => s switch
+    {
+        { TrafficAddOn: PluginInstall.State.NotInstalled } => new("INSTALL PLUGIN", CduColor.Amber),
+        { TrafficAddOn: PluginInstall.State.Outdated } => new("UPDATE PLUGIN", CduColor.Amber),
+        { FsltlOutOfDate: true, FsltlConverting: false } => new("UPDATE MODELS", CduColor.Amber),
+        { FsltlConverting: true } => new("CONVERTING", CduColor.Amber),
+        { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
+        { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
+        { TrafficAddOn: PluginInstall.State.Installed } => new("READY", CduColor.Green),
+        _ => new("-"),
+    };
+
+    private static CduPage StartModels(PanelState s, string? flash)
+    {
+        var rows = new[]
+        {
+            CduRow.Empty, CduRow.Empty, CduRow.Empty,
+            BluebellRow(s),
+            FsltlRow(s),
+            StartNav(),
+        };
+        CduCell[] message =
+        [
+            Say("Aircraft models", CduColor.Green),
+            s.FsltlFolder is null && !s.MsfsInstalled
+                ? Say("Either tested library works. FSLTL comes from MSFS, which isn't on this PC; CHOOSE a copied FSLTL folder.")
+                : Say("Either tested library works. FSLTL is converted from your MSFS copy."),
+        ];
+        return new(StartTitle(PanelPage.StartModels), rows, ModelsLine(s, flash), message);
     }
 
     private static CduPage StartXPlane(string? flash)
@@ -476,7 +630,7 @@ public static class CduPages
             Say("You're all set", CduColor.Green),
             Say($"Every flight:\n1. Plan it in SimBrief\n2. Start X-Plane 12 at the SimBrief departure\n3. Keep {ProductName} open\n4. Start BeyondATC", CduColor.Cyan),
         ];
-        return new(StartTitle(PanelPage.StartDone), rows, new(flash ?? "REOPEN ON SUPPORT PAGE"), message);
+        return new(StartTitle(PanelPage.StartDone), rows, new(flash ?? "REOPEN ON SETUP PAGE"), message);
     }
 
     /// <summary>How far a conversion is, for the FSLTL row: "TEXTURES 1200/3112".</summary>
@@ -499,7 +653,7 @@ public static class CduPages
         // While aircraft are drawn the count stays (the old models still work); the key still opens that page.
         { FsltlOutOfDate: true, FsltlConverting: false, TrafficAircraft: null or 0 } => new(UpdateModels, CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
-        { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SEE SETUP", CduColor.Amber),
+        { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SET UP>", CduColor.Amber),
         { TrafficAddOn: PluginInstall.State.Installed } => new("WAITING"),
         _ => new("-"),
     };

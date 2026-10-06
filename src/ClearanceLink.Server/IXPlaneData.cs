@@ -19,3 +19,9 @@ public interface IXPlaneData
 
     Task CommandAsync(string command, CancellationToken ct = default);
 }
+
+/// <summary>X-Plane has no command by that name: the plugin that adds it isn't loaded.</summary>
+public sealed class XPlaneCommandMissingException(string command) : InvalidOperationException($"X-Plane has no command {command}")
+{
+    public string Command => command;
+}
