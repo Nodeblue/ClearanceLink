@@ -48,6 +48,9 @@ public sealed class Pushbacks(
     private const string Started = "bp/started";
     private const string Connected = "bp/connected";
 
+    /// <summary>Gear positions along the aircraft (metres from the CG), for its wheelbase; Better Pushback reads them too.</summary>
+    private static readonly string[] TireZ = [.. Enumerable.Range(0, 10).Select(i => $"sim/flightmodel/parts/tire_z_no_deflection[{i}]")];
+
     /// <summary>How long a clearance stays on the page; BATC repeats it if the pilot asks again.</summary>
     private static readonly TimeSpan ClearanceKept = TimeSpan.FromMinutes(20);
 
@@ -68,6 +71,7 @@ public sealed class Pushbacks(
     private DateTimeOffset _lastLogPoll = DateTimeOffset.MinValue;
     private TimeSpan? _positionSince;
     private bool _autoPending;
+    private bool _replan;
 
     public PushView View
     {
@@ -103,18 +107,27 @@ public sealed class Pushbacks(
         }
     }
 
-    /// <summary>TAIL LEFT, TAIL RIGHT or STRAIGHT; pressing the chosen one again goes back to BATC's clearance.</summary>
-    public string Choose(PushChoice choice)
+    /// <summary>
+    /// TAIL LEFT, TAIL RIGHT or NO TURN (null: AS ATC SAID). Works until the tug starts moving; a push already called
+    /// is planned again. Returns the scratchpad line, empty when there is nothing to say.
+    /// </summary>
+    public string Choose(PushChoice? choice)
     {
         lock (_gate)
         {
-            if (_view.Running)
+            if (_view.Running && _driver is { Stage: not (PushStage.CallingTug or PushStage.WaitingForBrake) })
             {
                 return "PUSH IN PROGRESS";
             }
 
-            _view = _view with { Choice = _view.Choice == choice ? null : choice };
-            return _view.Choice is null ? (_view.Clearance is null ? "NO CHOICE" : "AS CLEARED") : "";
+            if (choice is null && _view.Clearance is null)
+            {
+                return "NO ATC CLEARANCE";
+            }
+
+            _view = _view with { Choice = choice };
+            _replan = _view.Running;
+            return "";
         }
     }
 
@@ -165,7 +178,7 @@ public sealed class Pushbacks(
 
     public async Task RunAsync(CancellationToken ct)
     {
-        foreach (var dataref in new[] { Latitude, Longitude, Heading, GroundSpeed, ParkingBrake, Started, Connected })
+        foreach (var dataref in new[] { Latitude, Longitude, Heading, GroundSpeed, ParkingBrake, Started, Connected }.Concat(TireZ))
         {
             xplane.Watch(dataref);
         }
@@ -231,6 +244,8 @@ public sealed class Pushbacks(
         {
             log($"pushback: START {Describe(driver.Plan)}");
         }
+
+        Replan(x);
 
         if (_driver is { Finished: false } running)
         {
@@ -334,10 +349,30 @@ public sealed class Pushbacks(
                 return null;
             }
 
-            var plan = PushPlanner.Plan(x.Pose, choice, _view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose));
+            var plan = PushPlanner.Plan(x.Pose, choice, _view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose), Wheelbase());
             _driver = new PushDriver(plan);
             _view = _view with { Preview = plan, Stage = PushStage.CallingTug, Problem = null, Stalled = false, Pushed = 0 };
             return _driver;
+        }
+    }
+
+    /// <summary>The pilot changed the turn while the tug was on its way: plan again from where the aircraft is.</summary>
+    private void Replan(PushInputs x)
+    {
+        lock (_gate)
+        {
+            if (!_replan || _driver is null || _view.Selected is not { } choice)
+            {
+                return;
+            }
+
+            _replan = false;
+            var plan = PushPlanner.Plan(x.Pose, choice, _view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose), Wheelbase());
+            if (_driver.Replan(plan))
+            {
+                _view = _view with { Preview = plan };
+                log($"pushback: replanned {Describe(plan)}");
+            }
         }
     }
 
@@ -349,7 +384,7 @@ public sealed class Pushbacks(
             view = _view;
         }
 
-        return view.Selected is { } choice ? PushPlanner.Plan(pose, choice, view.Clearance?.FaceBearing, TaxiwaysAt(pose)) : null;
+        return view.Selected is { } choice ? PushPlanner.Plan(pose, choice, view.Clearance?.FaceBearing, TaxiwaysAt(pose), Wheelbase()) : null;
     }
 
     private void PollClearance()
@@ -376,6 +411,14 @@ public sealed class Pushbacks(
                 _view = _view with { Clearance = null };
             }
         }
+    }
+
+    /// <summary>Nose gear to main gear, metres; null until X-Plane has sent the gear positions.</summary>
+    private double? Wheelbase()
+    {
+        var z = TireZ.Select(d => xplane.TryGetNumber(d, out var v) ? v : 0).ToList();
+        var wheelbase = z.Max() - z.Min();
+        return wheelbase > 1 ? wheelbase : null;
     }
 
     private PushInputs? Read()

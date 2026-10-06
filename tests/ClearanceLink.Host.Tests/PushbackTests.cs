@@ -297,17 +297,23 @@ public sealed class PushbackTests
         var view = new PushView(clearance, Preview: new PushPlan(21, 90, 39, "B"), XPlane: true);
         var page = CduPages.Build(PanelPage.Push, Flying with { Push = view });
         Assert.Equal(("FACE EAST", "0538Z"), (page.Rows[0].Left.Text, page.Rows[0].Right.Text));
-        Assert.Equal(("BACK 21M TAIL L", "039 B"), (page.Rows[1].Left.Text, page.Rows[1].Right.Text));
-        Assert.Equal(("<START PUSH", CduKey.PushStart), (page.Rows[4].Left.Text, page.Rows[4].KeyLeft));
-        Assert.Equal("PRESS START PUSH", page.Scratchpad.Text);
+        Assert.Equal(("21M, TAIL LEFT", "039 ON B"), (page.Rows[1].Left.Text, page.Rows[1].Right.Text));
+        Assert.Equal(("<CALL TUG", CduKey.PushStart), (page.Rows[5].Left.Text, page.Rows[5].KeyLeft));
+        Assert.Equal(("", CduKey.None), (page.Rows[3].Right.Text, page.Rows[3].KeyRight)); // already as ATC said
+        Assert.Equal("PRESS CALL TUG", page.Scratchpad.Text);
+
+        var other = CduPages.Build(PanelPage.Push, Flying with { Push = view with { Choice = PushChoice.Straight, Preview = new PushPlan(24, 0, 309, null) } });
+        Assert.Equal(("<NO TURN", CduColor.Magenta), (other.Rows[3].Left.Text, other.Rows[3].Left.Color));
+        Assert.Equal(("AS ATC SAID>", CduKey.PushAsCleared), (other.Rows[3].Right.Text, other.Rows[3].KeyRight));
+        Assert.Equal(("24M, NO TURN", "309"), (other.Rows[1].Left.Text, other.Rows[1].Right.Text));
         Assert.Equal("PUSHBACK APPROVED: PUSH", CduPages.Advice(Flying with { Push = view }).Text);
 
         var running = CduPages.Build(PanelPage.Push, Flying with { Push = view with { Stage = PushStage.PushingBack, Pushed = 12.4 } });
-        Assert.Equal(("STOP>", CduKey.PushStop), (running.Rows[4].Right.Text, running.Rows[4].KeyRight));
+        Assert.Equal(("STOP>", CduKey.PushStop), (running.Rows[5].Right.Text, running.Rows[5].KeyRight));
         Assert.Equal("PUSHING BACK 12M", running.Scratchpad.Text);
 
         var waiting = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true) });
-        Assert.Equal(CduKey.None, waiting.Rows[4].KeyLeft);
+        Assert.Equal(CduKey.None, waiting.Rows[5].KeyLeft);
         Assert.Equal("WAIT FOR PUSH CLEARANCE", waiting.Scratchpad.Text);
     }
 
@@ -369,7 +375,7 @@ public sealed class PushbackTests
         }
         else
         {
-            Assert.Equal(("", CduKey.None), (page.Rows[4].Left.Text, page.Rows[4].KeyLeft));
+            Assert.Equal(("", CduKey.None), (page.Rows[5].Left.Text, page.Rows[5].KeyLeft));
             Assert.Equal(("BETTER PUSHBACK MISSING", CduColor.Amber), (page.Scratchpad.Text, page.Scratchpad.Color));
             Assert.Equal("BETTER PUSHBACK MISSING", pushbacks.Start());
             await Task.Delay(600);
@@ -423,7 +429,7 @@ public sealed class PushbackTests
             else
             {
                 Assert.Empty(xplane.Commands);
-                Assert.Equal("PRESS START PUSH", CduPages.PushLine(pushbacks.View).Text);
+                Assert.Equal("PRESS CALL TUG", CduPages.PushLine(pushbacks.View).Text);
             }
         }
         finally
@@ -435,11 +441,40 @@ public sealed class PushbackTests
     }
 
     [Fact]
-    public void Push_page_switches_between_on_clearance_and_by_key()
+    public void Push_page_switches_the_tug_between_auto_and_manual()
     {
-        var on = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true, Automatic: true) }).Rows[3];
-        Assert.Equal(("START", "ON CLEARANCE>", CduKey.PushAutomatic), (on.LabelRight, on.Right.Text, on.KeyRight));
-        var off = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true) }).Rows[3];
-        Assert.Equal("BY KEY>", off.Right.Text);
+        var auto = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true, Automatic: true) }).Rows[4];
+        Assert.Equal(("TUG", "<AUTO", CduColor.Magenta, CduKey.PushAuto, CduKey.PushManual), (auto.LabelLeft, auto.Left.Text, auto.Left.Color, auto.KeyLeft, auto.KeyRight));
+        var manual = CduPages.Build(PanelPage.Push, Flying with { Push = new PushView(XPlane: true) }).Rows[4];
+        Assert.Equal(("MANUAL>", CduColor.Magenta), (manual.Right.Text, manual.Right.Color));
+    }
+
+    [Theory]
+    [InlineData(null, 15)]
+    [InlineData(6.0, 15)] // small GA: never less than 15 m
+    [InlineData(9.6, 24)]
+    [InlineData(15.6, 39)] // 737-800
+    [InlineData(40.0, 60)] // capped
+    public void No_turn_push_goes_about_one_aircraft_length(double? wheelbase, double meters)
+    {
+        Assert.Equal(meters, PushPlanner.NoTurnMeters(wheelbase));
+        Assert.Equal(meters, PushPlanner.Plan(Stand, PushChoice.Straight, null, [], wheelbase).StraightMeters);
+    }
+
+    [Fact]
+    public void A_new_turn_is_taken_until_the_tug_moves()
+    {
+        var driver = new PushDriver(new PushPlan(15, 0, 309, null));
+        var sim = new Sim();
+        driver.Step(sim.Inputs, 0);
+        Assert.True(driver.Replan(new PushPlan(21, 90, 39, "B")));
+        sim.Started = sim.Connected = true;
+        sim.Brake = 0;
+        sim.Speed = 1;
+        driver.Step(sim.Inputs, 1);
+        driver.Step(sim.Inputs, 2);
+        Assert.Equal(PushStage.PushingBack, driver.Stage);
+        Assert.False(driver.Replan(new PushPlan(15, 0, 309, null)));
+        Assert.Equal(90, driver.Plan.TurnDegrees);
     }
 }
