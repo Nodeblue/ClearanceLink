@@ -117,6 +117,37 @@ public sealed class PanelTests
     }
 
     [Fact]
+    public void The_help_mark_sits_beside_the_label_it_explains()
+    {
+        // SUPPORT's HELP row has its label on the right only: the "i" goes before it, not at the far left.
+        var help = Assert.Single(CduPages.Build(PanelPage.Support, Ready).Rows, r => r.KeyRight == CduKey.OpenHelp);
+        Assert.Equal(HelpMark.Right, help.Mark);
+        Assert.Equal(HelpMark.Left, new CduRow("A", "B", new(""), new("")) { Help = "x" }.Mark);
+        Assert.Equal(HelpMark.None, new CduRow("", "", new("<STATUS"), new("")) { Help = "x" }.Mark);
+        Assert.Equal(HelpMark.None, new CduRow("A", "", new(""), new("")).Mark);
+
+        // Every page: a row with help and a label has a mark on the side that has the label.
+        foreach (var page in Enum.GetValues<PanelPage>())
+        {
+            foreach (var row in CduPages.Build(page, Ready).Rows.Where(r => r.Help is not null && r.LabelLeft.Length + r.LabelRight.Length > 0))
+            {
+                Assert.Equal(row.LabelLeft.Length > 0 ? HelpMark.Left : HelpMark.Right, row.Mark);
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void Help_shows_on_the_i_only_not_on_the_whole_row()
+    {
+        var window = new PanelWindow(() => Ready);
+        window.ShowPage(PanelPage.Support);
+        var tips = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(window).OfType<Avalonia.Controls.Control>()
+            .Where(c => Avalonia.Controls.ToolTip.GetTip(c) is string).ToList();
+
+        Assert.NotEmpty(tips);
+        Assert.All(tips, c => Assert.Equal(12, c.Width)); // only the 12 px marks carry a tip
+    }
+    [Fact]
     public void Setup_says_where_BeyondATC_goes()
     {
         string Help(PanelState state) => CduPages.Build(PanelPage.Setup, state).Scratchpad.Text;

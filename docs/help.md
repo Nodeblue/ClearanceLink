@@ -33,7 +33,7 @@ Shift+1 to 6 the right ones, and F1 to F6 change page (F5 is FPLN, F6 is PUSH).
   opens a web page in your browser with the same status.
 - **SUPPORT** makes a support file, shows the live log, and opens this help page.
 
-Rest the mouse on a row to see what it means. Rows with a small **i** after their name have an explanation.
+Rest the mouse on the small **i** beside a row's name to see what the row means.
 - **ABOUT** shows the version, and **NEW VERSION** when a newer release is out.
 
 ## First start
