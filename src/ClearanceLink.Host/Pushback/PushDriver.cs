@@ -70,6 +70,9 @@ public sealed class PushDriver(PushPlan plan)
     private const double StoppedSpeed = 0.05;
     private const double StalledSeconds = 40;
 
+    /// <summary>Better Pushback's pause took about 5 s to bring the Citation X to a stop (Ben's PC 2026-10-05).</summary>
+    private const double PauseSeconds = 8;
+
     private Pose? _origin;
     private Pose? _last;
     private double _turnStartHeading;
@@ -118,6 +121,20 @@ public sealed class PushDriver(PushPlan plan)
     /// <summary>Gives up without sending anything more (Better Pushback is missing).</summary>
     public void Abandon(string problem) => Fail(problem, []);
 
+    /// <summary>A command didn't reach Better Pushback. Before the tug moves the push is dropped; after, it is stopped.</summary>
+    public void CommandFailed()
+    {
+        if (Stage is PushStage.PushingBack or PushStage.Turning or PushStage.Straightening)
+        {
+            Problem = "COMMAND FAILED: STOPPED";
+            _stopRequested = true;
+        }
+        else if (Stage is PushStage.CallingTug && !_wasStarted)
+        {
+            Fail("COMMAND FAILED", []);
+        }
+    }
+
     /// <summary>One step: returns the commands to send now, in order.</summary>
     public IReadOnlyList<string> Step(PushInputs x, double now)
     {
@@ -155,7 +172,7 @@ public sealed class PushDriver(PushPlan plan)
         var far = Geo.DistanceMeters(_origin.Value.Latitude, _origin.Value.Longitude, x.Latitude, x.Longitude) > MaxMeters;
         if ((_stopRequested || far) && Stage is < PushStage.Stopping)
         {
-            Problem = far ? "STOPPED: TOO FAR" : null;
+            Problem = far ? "STOPPED: TOO FAR" : Problem;
             if (Stage is PushStage.PushingBack or PushStage.Turning or PushStage.Straightening)
             {
                 commands.Add(StartCommand); // pauses a running manual push
@@ -249,13 +266,25 @@ public sealed class PushDriver(PushPlan plan)
                     commands.Add(StopCommand);
                     Move(PushStage.Disconnecting, now);
                 }
+                else if (now - _stageSince >= PauseSeconds && x.GroundSpeed > MovingSpeed && now - _lastRetry >= RetrySeconds)
+                {
+                    // Still pushing: the pause was lost (it toggles, so it isn't sent again). Stop ends the push outright.
+                    commands.Add(StopCommand);
+                    _lastRetry = now;
+                }
 
                 break;
             case PushStage.Disconnecting:
                 // Better Pushback lowers the nose wheel once the parking brake is set, then waits for "disconnect"
                 // and, after the wing walker's clear signal, for an acknowledgement. Each is ignored until its
                 // moment comes, so both are repeated until the tug has gone.
-                if (x.ParkingBrake >= 0.9 && now - _lastRetry >= RetrySeconds)
+                if (x.Started && x.GroundSpeed > MovingSpeed && now - _lastRetry >= RetrySeconds)
+                {
+                    // Moving again after the stop: the stop was lost.
+                    commands.Add(StopCommand);
+                    _lastRetry = now;
+                }
+                else if (x.ParkingBrake >= 0.9 && now - _lastRetry >= RetrySeconds)
                 {
                     commands.Add(DisconnectCommand);
                     commands.Add(AcknowledgeCommand);
