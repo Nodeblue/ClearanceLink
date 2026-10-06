@@ -218,6 +218,9 @@ public sealed class PanelController : IAsyncDisposable
             case CduKey.OpenModelsHelp:
                 Cli.OpenInBrowser(CduPages.ModelsHelp);
                 return "OPENING HELP PAGE";
+            case CduKey.OpenXPlaneSettingsHelp:
+                Cli.OpenInBrowser(CduPages.XPlaneSettingsHelp);
+                return "OPENING HELP PAGE";
             case CduKey.ConvertFsltl:
                 return await ConvertFsltlAsync().ConfigureAwait(false);
             case CduKey.InstallTrafficAddOn:

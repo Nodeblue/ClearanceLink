@@ -132,12 +132,15 @@ public sealed class PanelTests
     public void Traffic_add_on_is_offered_on_setup_and_its_aircraft_shown_on_status()
     {
         var missing = Ready with { TrafficAddOn = PluginInstall.State.NotInstalled };
-        Assert.Contains(CduPages.Build(PanelPage.Setup, missing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn && r.Right.Text == "INSTALL>");
-        Assert.Contains(CduPages.Build(PanelPage.Status, missing).Rows, r => r.Right.Text == "SEE SETUP");
+        Assert.Contains(CduPages.Build(PanelPage.Traffic, missing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn && r.Right.Text == "INSTALL>");
+        Assert.Contains(CduPages.Build(PanelPage.Setup, missing).Rows, r => r.Left.Text == "INSTALL PLUGIN" && r.KeyRight == CduKey.GoTraffic);
+        Assert.Contains(CduPages.Build(PanelPage.Status, missing).Rows, r => r.Right.Text == "SET UP>" && r.KeyRight == CduKey.GoTraffic);
 
         var drawing = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 42 };
         Assert.Contains(CduPages.Build(PanelPage.Status, drawing).Rows, r => r.Right.Text == "42 AIRCRAFT");
-        Assert.DoesNotContain(CduPages.Build(PanelPage.Setup, drawing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
+        Assert.DoesNotContain(CduPages.Build(PanelPage.Traffic, drawing).Rows, r => r.KeyRight == CduKey.InstallTrafficAddOn);
+        Assert.Contains(CduPages.Build(PanelPage.Traffic, drawing).Rows, r => r.LabelRight == "AIRCRAFT" && r.Right.Text == "42 AIRCRAFT");
+        Assert.Contains(CduPages.Build(PanelPage.Setup, drawing).Rows, r => r.Left.Text == "42 AIRCRAFT");
     }
 
     [Fact]
@@ -225,7 +228,7 @@ public sealed class PanelTests
     }
 
     [AvaloniaFact]
-    public void Getting_started_steps_forward_and_back_and_reopens_from_support()
+    public void Getting_started_steps_forward_and_back_and_reopens_from_setup()
     {
         var window = new PanelWindow(() => Ready) { StartWithGettingStarted = true };
         window.Show();
@@ -240,8 +243,8 @@ public sealed class PanelTests
 
         window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.None);
         Assert.Equal(PanelPage.StartXPlane, window.Page);
-        window.KeyPress(Key.F3, RawInputModifiers.None, PhysicalKey.F3, null);
-        window.KeyPressQwerty(PhysicalKey.Digit5, RawInputModifiers.None);
+        window.KeyPress(Key.F2, RawInputModifiers.None, PhysicalKey.F2, null);
+        window.KeyPressQwerty(PhysicalKey.Digit6, RawInputModifiers.None);
         Assert.Equal(PanelPage.Welcome, window.Page);
 
         // SKIP on the first page (no server behind this window, so it just goes to STATUS).
@@ -301,7 +304,7 @@ public sealed class PanelTests
         window.KeyPress(Key.F3, RawInputModifiers.None, PhysicalKey.F3, null);
         Assert.Equal(PanelPage.Support, window.Page);
         Assert.Equal("<CREATE SUPPORT FILE", window.Shown!.Rows[2].Left.Text);
-        Assert.Equal(CduKey.ShowGettingStarted, window.Shown!.Rows[4].KeyLeft);
+        Assert.Equal(CduKey.OpenHelp, window.Shown!.Rows[4].KeyRight);
         window.Close();
     }
 
@@ -332,12 +335,12 @@ public sealed class PanelTests
     }
 
     [AvaloniaFact]
-    public async Task No_models_key_opens_the_aircraft_models_page()
+    public async Task No_models_key_opens_the_traffic_page()
     {
         var window = new PanelWindow(() => Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 0, PluginModels = 0 });
         window.Show();
         await window.PressAsync(4, right: true);
-        Assert.Equal(PanelPage.StartModels, window.Page);
+        Assert.Equal(PanelPage.Traffic, window.Page);
         window.Close();
     }
 
@@ -450,12 +453,12 @@ public sealed class PanelTests
         Assert.Equal(("12 AIRCRAFT", CduKey.GoModels), (flying.Right.Text, flying.KeyRight));
 
         var setup = CduPages.Build(PanelPage.Setup, outOfDate).Rows[4];
-        Assert.Equal(("FSLTL MODELS", "OUT OF DATE", "UPDATE>", CduKey.GoModels),
-            (setup.LabelLeft, setup.Left.Text, setup.Right.Text, setup.KeyRight));
+        Assert.Equal(("TRAFFIC", "UPDATE MODELS", CduColor.Amber, "SET UP>", CduKey.GoTraffic),
+            (setup.LabelLeft, setup.Left.Text, setup.Left.Color, setup.Right.Text, setup.KeyRight));
+        Assert.Contains(CduPages.Build(PanelPage.Traffic, outOfDate).Rows, r => r.Left.Text == "UPDATE NEEDED" && r.KeyRight == CduKey.ConvertFsltl);
 
-        // Up to date, or converting: the plugin row and the plain traffic cell as before.
-        Assert.Equal("X-PLANE PLUGIN", CduPages.Build(PanelPage.Setup, outOfDate with { FsltlOutOfDate = false }).Rows[4].LabelLeft);
-        Assert.Equal("X-PLANE PLUGIN", CduPages.Build(PanelPage.Setup, outOfDate with { FsltlConverting = true }).Rows[4].LabelLeft);
+        // Up to date, or converting: the plain traffic cell as before.
+        Assert.Equal("READY", CduPages.Build(PanelPage.Setup, outOfDate with { FsltlOutOfDate = false }).Rows[4].Left.Text);
         Assert.Equal("WAITING", CduPages.Build(PanelPage.Status, outOfDate with { FsltlConverting = true }).Rows[4].Right.Text);
     }
 

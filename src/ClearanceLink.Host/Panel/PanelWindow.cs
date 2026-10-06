@@ -198,7 +198,8 @@ public sealed class PanelWindow : Window
                 ShowPage(CduPages.StartPages[0]);
                 return;
             case CduKey.GoModels:
-                ShowPage(PanelPage.StartModels);
+            case CduKey.GoTraffic:
+                ShowPage(PanelPage.Traffic);
                 return;
             case CduKey.Next:
             case CduKey.Back:
