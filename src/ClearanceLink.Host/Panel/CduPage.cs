@@ -535,8 +535,9 @@ public static class CduPages
         { FsltlConverting: true } => Row("FSLTL", "", new(Progress(s.FsltlProgress), CduColor.Amber), new("")),
         { FsltlLiveries: > 0, FsltlOutOfDate: true, FsltlFolder: not null } =>
             Row("FSLTL", "", new("UPDATE NEEDED", CduColor.Amber), new("UPDATE>"), CduKey.None, CduKey.ConvertFsltl),
-        { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "" : "UPDATE>"),
-            CduKey.None, s.FsltlFolder is null ? CduKey.None : CduKey.ConvertFsltl),
+        // Converted, but the FSLTL folder isn't known (MSFS gone, or never chosen): CHOOSE, so BeyondATC can be shown it (ADR-0014).
+        { FsltlLiveries: > 0 } => Row("FSLTL", "", new($"{s.FsltlLiveries} LIVERIES", CduColor.Green), new(s.FsltlFolder is null ? "CHOOSE>" : "UPDATE>"),
+            CduKey.None, s.FsltlFolder is null ? CduKey.ChooseFsltlFolder : CduKey.ConvertFsltl),
         { FsltlFolder: not null } => Row("FSLTL", "", new(s.MsfsInstalled ? "FOUND IN MSFS" : "FOUND", CduColor.Green), new("CONVERT>"), CduKey.None, CduKey.ConvertFsltl),
         // No MSFS on this PC: FSLTL can still be copied from another PC, so the folder can still be chosen.
         { MsfsInstalled: false } => Row("FSLTL", "", new("NEEDS MSFS"), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder),

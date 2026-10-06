@@ -734,10 +734,35 @@ namespace ClearanceLink.Host
                 }
             }
 
+            // An FSLTL folder chosen on TRAFFIC while serve runs is shown to BeyondATC too (no restart, BATC wouldn't reconnect).
+            async Task WatchFsltlFolderAsync()
+            {
+                var last = FsltlFolder(options);
+                try
+                {
+                    while (batcModels is not null)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                        var now = FsltlFolder(options);
+                        if (!string.Equals(now, last, StringComparison.OrdinalIgnoreCase))
+                        {
+                            last = now;
+                            FollowModels(msfs.IsRunning);
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Closing.
+                }
+            }
+
+            var watchTask = Task.CompletedTask;
             try
             {
                 FollowModels(msfs.IsRunning);
                 msfs.Changed += FollowModels;
+                watchTask = WatchFsltlFolderAsync();
                 await server.RunAsync(ct);
             }
             finally
@@ -759,6 +784,7 @@ namespace ClearanceLink.Host
                 await bridgeTask;
                 await stubTask;
                 await pushTask;
+                await watchTask;
             }
         }
 

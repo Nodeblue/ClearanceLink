@@ -217,6 +217,8 @@ public sealed class PanelTests
         var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl).Rows, r => r.Left.Text == "FOUND IN MSFS" && r.KeyRight == CduKey.ConvertFsltl);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "UPDATE>");
+        // Converted earlier but the folder isn't known now (no MSFS): CHOOSE, so BeyondATC can be shown it (ADR-0014).
+        Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "CHOOSE>" && r.KeyRight == CduKey.ChooseFsltlFolder);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlConverting = true }).Rows, r => r.Left.Text == "CONVERTING..." && r.KeyRight == CduKey.None);
         Assert.Equal(CduKey.FinishGettingStarted, CduPages.Build(PanelPage.StartDone, Ready).Rows[5].KeyRight);
     }
