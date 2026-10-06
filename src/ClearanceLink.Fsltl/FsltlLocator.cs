@@ -37,7 +37,9 @@ public static class FsltlLocator
         if (given is not null) return FromChosen(given);
         foreach (var cfg in userCfgs ?? UserCfgCandidates())
         {
-            if (!File.Exists(cfg) || InstalledPackagesPath(File.ReadAllText(cfg)) is not { } packages) continue;
+            if (!File.Exists(cfg)) continue;
+            var text = File.ReadAllText(cfg);
+            if (IsStandIn(text) || InstalledPackagesPath(text) is not { } packages) continue;
             var candidate = Path.Combine(packages, "Community", FsltlCatalog.PackageName);
             if (IsPackage(candidate)) return candidate;
         }
@@ -67,7 +69,14 @@ public static class FsltlLocator
     }
 
     /// <summary>Whether MSFS 2020 or 2024 has ever run on this PC (it writes UserCfg.opt); FSLTL is installed through MSFS.</summary>
-    public static bool MsfsInstalled(IEnumerable<string>? userCfgs = null) => (userCfgs ?? UserCfgCandidates()).Any(File.Exists);
+    public static bool MsfsInstalled(IEnumerable<string>? userCfgs = null) =>
+        (userCfgs ?? UserCfgCandidates()).Any(f => File.Exists(f) && !IsStandIn(File.ReadAllText(f)));
+
+    /// <summary>First line of the UserCfg.opt ClearanceLink writes for BeyondATC while it runs (no MSFS 2024 on the PC).</summary>
+    public const string StandInMarker = "// ClearanceLink: lets BeyondATC find FSLTL while ClearanceLink is open; removed when it closes";
+
+    /// <summary>Whether a UserCfg.opt is ClearanceLink's stand-in for BeyondATC, not one MSFS wrote.</summary>
+    public static bool IsStandIn(string userCfgText) => userCfgText.StartsWith(StandInMarker, StringComparison.Ordinal);
 
     public static bool IsPackage(string folder) =>
         Directory.Exists(folder) && FileLookup.Resolve(folder, "SimObjects/Airplanes") is { } airplanes && Directory.Exists(airplanes);
