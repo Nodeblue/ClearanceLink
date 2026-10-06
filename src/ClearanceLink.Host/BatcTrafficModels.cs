@@ -77,6 +77,28 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
     }
 
     /// <summary>
+    /// What <see cref="Provide"/> would do, without writing anything: for the window's warning that BeyondATC will
+    /// find no traffic models (<see cref="Outcome.NotInMsfs2024"/> or <see cref="Outcome.NoFsltl"/>).
+    /// </summary>
+    public Outcome Check(string? fsltl)
+    {
+        try
+        {
+            if (MsfsUserCfg() is { } cfg)
+            {
+                var packages = FsltlLocator.InstalledPackagesPath(File.ReadAllText(cfg));
+                return packages is not null && HasTrafficModels(Path.Combine(packages, "Community")) ? Outcome.Found : Outcome.NotInMsfs2024;
+            }
+
+            return fsltl is null ? Outcome.NoFsltl : Outcome.Pointed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Outcome.Failed;
+        }
+    }
+
+    /// <summary>
     /// Makes sure BeyondATC will find FSLTL (<paramref name="fsltl"/>: the fsltl-traffic-base folder ClearanceLink uses,
     /// or null). Never throws for a file problem: <see cref="Outcome.Failed"/>.
     /// </summary>

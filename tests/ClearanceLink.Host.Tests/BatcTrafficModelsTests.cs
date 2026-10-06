@@ -227,4 +227,20 @@ public sealed class BatcTrafficModelsTests : IDisposable
 
         Assert.True(File.Exists(Path.Combine(real, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg")));
     }
+
+    [Fact]
+    public void Check_predicts_what_beyondatc_finds_without_writing()
+    {
+        Assert.Equal(BatcTrafficModels.Outcome.NoFsltl, Models.Check(null));
+        var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
+        Assert.Equal(BatcTrafficModels.Outcome.Pointed, Models.Check(fsltl));
+        Assert.False(File.Exists(Steam));
+
+        var packages = Path.Combine(_root, "MSFS2024", "Packages");
+        Directory.CreateDirectory(Path.Combine(packages, "Community"));
+        WriteUserCfg(Store, packages);
+        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, Models.Check(fsltl));
+        Fsltl(Path.Combine(packages, "Community", "fsltl-traffic-base"));
+        Assert.Equal(BatcTrafficModels.Outcome.Found, Models.Check(null));
+    }
 }

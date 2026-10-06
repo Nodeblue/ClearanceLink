@@ -145,7 +145,8 @@ public sealed record PanelState(
     bool MsfsInstalled = true,
     FlightPlanView? FlightPlan = null,
     bool LoadArmed = false,
-    PushView? Push = null);
+    PushView? Push = null,
+    bool BatcNoModels = false);
 
 /// <summary>Builds the four pages from the state. Pure, so the pages are tested without a window.</summary>
 public static class CduPages
@@ -209,6 +210,7 @@ public static class CduPages
             {
                 { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
                 { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
+                { BatcNoModels: true, TrafficAircraft: null or 0 } => CduKey.GoTraffic,
                 { TrafficAircraft: null } => CduKey.GoTraffic,
                 _ => CduKey.None,
             }) with { Help = "How long ClearanceLink has been open, and how many of BeyondATC's aircraft are drawn in X-Plane." },
@@ -580,7 +582,10 @@ public static class CduPages
             FsltlRow(s) with { Help = "FSLTL: the MSFS traffic models. BeyondATC needs them for any traffic; they're converted for X-Plane from your own copy. Close X-Plane to convert." },
             Row("X-PLANE SETTINGS", "", new("3 TO TURN OFF"), new("HOW TO>"), CduKey.None, CduKey.OpenXPlaneSettingsHelp)
                 with { Help = "In X-Plane, set Radios to 0, Draw parked aircraft off and AI aircraft to none, so only BeyondATC talks and flies traffic." },
-            CduRow.Empty,
+            s.BatcNoModels
+                ? Row("BEYONDATC TRAFFIC", "", new("NO FSLTL: NO TRAFFIC", CduColor.Amber), new(""))
+                    with { Help = "BeyondATC creates traffic only when it finds FSLTL. With MSFS 2024, install FSLTL in its Community folder; without it, CHOOSE your FSLTL folder above." }
+                : CduRow.Empty,
             Row("", "", new("<SETUP"), new("STATUS>"), CduKey.GoSetup, CduKey.GoStatus),
         };
         return new($"{AppName} TRAFFIC", rows, ModelsLine(s, flash));
@@ -593,6 +598,7 @@ public static class CduPages
         { TrafficAddOn: PluginInstall.State.Outdated } => new("UPDATE PLUGIN", CduColor.Amber),
         { FsltlOutOfDate: true, FsltlConverting: false } => new("UPDATE MODELS", CduColor.Amber),
         { FsltlConverting: true } => new("CONVERTING", CduColor.Amber),
+        { BatcNoModels: true } => new("NO FSLTL", CduColor.Amber),
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.Installed } => new("READY", CduColor.Green),
@@ -666,6 +672,8 @@ public static class CduPages
     {
         // The plugin runs but has no CSL package to draw with: the key opens the aircraft models page.
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
+        // BeyondATC won't find FSLTL, so it creates no traffic at all (ADR-0014): the key opens TRAFFIC.
+        { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
         // FSLTL changed since the models were converted: the key opens the aircraft models page, which has UPDATE.
         // While aircraft are drawn the count stays (the old models still work); the key still opens that page.
         { FsltlOutOfDate: true, FsltlConverting: false, TrafficAircraft: null or 0 } => new(UpdateModels, CduColor.Amber),
