@@ -45,8 +45,8 @@ public sealed class PanelWindow : Window
     private readonly TextBlock[] _labelRight = new TextBlock[6];
     private readonly TextBlock[] _dataLeft = new TextBlock[6];
     private readonly TextBlock[] _dataRight = new TextBlock[6];
-    private readonly Control[] _info = new Control[6];
-    private readonly Control[][] _rowParts = new Control[6][];
+    private readonly Control[] _infoLeft = new Control[6];
+    private readonly Control[] _infoRight = new Control[6];
     private readonly Button[] _lskLeft = new Button[6];
     private readonly Button[] _lskRight = new Button[6];
     private readonly Dictionary<PanelPage, Button> _pageKeys = [];
@@ -125,13 +125,12 @@ public sealed class PanelWindow : Window
             _lskLeft[i].IsEnabled = row.KeyLeft != CduKey.None;
             _lskRight[i].IsEnabled = row.KeyRight != CduKey.None;
 
-            // Help: the explanation on hover anywhere on the row or its keys, and an "i" after the label to say so
-            // (rows without a label belong to the labelled row above, so they get no mark of their own).
-            _info[i].IsVisible = row.Help is not null && row.LabelLeft.Length + row.LabelRight.Length > 0;
-            foreach (var part in _rowParts[i])
-            {
-                ToolTip.SetTip(part, row.Help);
-            }
+            // Help: the explanation shows on hover over the "i" only (not the whole row, or moving the mouse across
+            // the screen would open one after another), on the side of the label it explains.
+            _infoLeft[i].IsVisible = row.Mark == HelpMark.Left;
+            _infoRight[i].IsVisible = row.Mark == HelpMark.Right;
+            ToolTip.SetTip(_infoLeft[i], row.Help);
+            ToolTip.SetTip(_infoRight[i], row.Help);
         }
 
         ShowMessage(page);
@@ -366,8 +365,12 @@ public sealed class PanelWindow : Window
             _labelRight[i] = Text(LabelSize, Colour(CduColor.Cyan));
             _dataLeft[i] = Text(DataSize);
             _dataRight[i] = Text(DataSize);
-            _info[i] = InfoMark();
-            var labelLine = Line(new StackPanel { Orientation = Orientation.Horizontal, Children = { _labelLeft[i], _info[i] } }, _labelRight[i], null);
+            _infoLeft[i] = InfoMark(new Thickness(5, 1, 0, 0));
+            _infoRight[i] = InfoMark(new Thickness(0, 1, 5, 0));
+            var labelLine = Line(
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { _labelLeft[i], _infoLeft[i] } },
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { _infoRight[i], _labelRight[i] } },
+                null);
             var dataLine = Line(_dataLeft[i], _dataRight[i], i);
             Place(grid, labelLine, 1 + (i * 2));
             Place(grid, dataLine, 2 + (i * 2));
@@ -380,11 +383,10 @@ public sealed class PanelWindow : Window
             Grid.SetColumn(_lskRight[i], 2);
             grid.Children.Add(_lskLeft[i]);
             grid.Children.Add(_lskRight[i]);
-            _rowParts[i] = [labelLine, dataLine, _lskLeft[i], _lskRight[i]];
-            foreach (var part in _rowParts[i])
+            foreach (var mark in new[] { _infoLeft[i], _infoRight[i] })
             {
-                ToolTip.SetShowDelay(part, 350);
-                ToolTip.SetPlacement(part, PlacementMode.Bottom);
+                ToolTip.SetShowDelay(mark, 250);
+                ToolTip.SetPlacement(mark, PlacementMode.Bottom);
             }
         }
 
@@ -428,15 +430,17 @@ public sealed class PanelWindow : Window
         return new StackPanel { Children = { grid, keys } };
     }
 
-    /// <summary>A small dim "i" in a circle after a row's label: the row explains itself on hover.</summary>
-    private static Border InfoMark() => new()
+    /// <summary>A small dim "i" in a circle beside a row's label: hovering it explains the row.</summary>
+    private static Border InfoMark(Thickness margin) => new()
     {
         Width = 12,
         Height = 12,
         CornerRadius = new CornerRadius(6),
         BorderBrush = Brush("#3B8794"),
         BorderThickness = new Thickness(1),
-        Margin = new Thickness(5, 1, 0, 0),
+        Background = Brushes.Transparent, // the whole circle answers the mouse, not just its outline and letter
+        Cursor = new Cursor(StandardCursorType.Help),
+        Margin = margin,
         VerticalAlignment = VerticalAlignment.Center,
         IsVisible = false,
         Child = new TextBlock
@@ -451,7 +455,7 @@ public sealed class PanelWindow : Window
         },
     };
 
-    private Grid Line(Control left, TextBlock right, int? row)
+    private Grid Line(Control left, Control right, int? row)
     {
         // Width fixed to 24 characters of the data font; the right half is flush with the screen's right edge.
         var line = new Grid
