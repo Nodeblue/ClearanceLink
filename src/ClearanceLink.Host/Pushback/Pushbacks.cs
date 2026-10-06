@@ -72,6 +72,14 @@ public sealed class Pushbacks(
     private TimeSpan? _positionSince;
     private bool _autoPending;
     private bool _replan;
+    private PushChoice? _plannedChoice;
+    private DateTimeOffset _autoPendingAt;
+
+    /// <summary>TUG AUTO acts on a clearance only this soon after it; later the pilot presses CALL TUG.</summary>
+    private static readonly TimeSpan AutoStartWithin = TimeSpan.FromSeconds(30);
+
+    /// <summary>The tug is only called for an aircraft standing still.</summary>
+    private const double StillSpeed = 0.3;
 
     public PushView View
     {
@@ -194,14 +202,14 @@ public sealed class Pushbacks(
                 {
                     previewAt = await TickAsync(_time.GetElapsedTime(started), previewAt, ct).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
                     // A bug here must not end pushbacks for the session, nor the app.
                     log($"pushback: step failed: {ex.GetType().Name}: {ex.Message}");
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // Closing.
         }
@@ -223,7 +231,9 @@ public sealed class Pushbacks(
 
             // ON CLEARANCE: BeyondATC's approval calls the tug, as it calls GSX in MSFS, once Better Pushback is known
             // to be there. Without it the page says BETTER PUSHBACK MISSING and nothing is sent.
-            if (_autoPending && (!_view.Automatic || _view.Clearance is null || _view.Running || found is false))
+            // A clearance not acted on soon (X-Plane was away) is stale: the pilot calls the tug by hand if still wanted.
+            if (_autoPending && (!_view.Automatic || _view.Clearance is null || _view.Running || found is false
+                || _time.GetUtcNow() - _autoPendingAt > AutoStartWithin))
             {
                 _autoPending = false;
             }
@@ -280,9 +290,9 @@ public sealed class Pushbacks(
                 await xplane.CommandAsync(command, ct).ConfigureAwait(false);
                 await Task.Delay(TimeSpan.FromMilliseconds(120), _time, ct).ConfigureAwait(false);
             }
-            catch (InvalidOperationException ex)
+            catch (XPlaneCommandMissingException ex)
             {
-                // X-Plane has no such command: Better Pushback isn't installed (or is too old for manual push).
+                // Better Pushback isn't loaded (or is too old for manual push).
                 log($"pushback: command {command} failed: {ex.Message}");
                 lock (_gate)
                 {
@@ -291,9 +301,17 @@ public sealed class Pushbacks(
 
                 break;
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException
+                || (ex is OperationCanceledException && !ct.IsCancellationRequested))
             {
-                log($"pushback: command {command} not sent: {ex.Message}");
+                // Refused or timed out (X-Plane busy loading scenery): stop a moving push, drop one not yet started.
+                log($"pushback: command {command} not sent: {ex.GetType().Name}: {ex.Message}");
+                lock (_gate)
+                {
+                    driver.CommandFailed();
+                }
+
+                break;
             }
         }
 
@@ -336,6 +354,7 @@ public sealed class Pushbacks(
 
     private PushDriver? TakeStart(PushInputs x)
     {
+        PushView view;
         lock (_gate)
         {
             if (!_startRequested)
@@ -344,13 +363,31 @@ public sealed class Pushbacks(
             }
 
             _startRequested = false;
-            if (_view.Selected is not { } choice || _view.BetterPushback is false)
+            view = _view;
+        }
+
+        if (view.Selected is not { } choice || view.BetterPushback is false || view.Running)
+        {
+            return null;
+        }
+
+        if (x.GroundSpeed > StillSpeed)
+        {
+            log($"pushback: not started, aircraft moving at {x.GroundSpeed:0.0} m/s");
+            lock (_gate)
             {
-                return null;
+                _view = _view with { Stage = PushStage.Failed, Problem = "AIRCRAFT IS MOVING" };
             }
 
-            var plan = PushPlanner.Plan(x.Pose, choice, _view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose), Wheelbase());
+            return null;
+        }
+
+        // Airport files are read here, outside the lock, so the window never waits for them.
+        var plan = PushPlanner.Plan(x.Pose, choice, view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose), Wheelbase());
+        lock (_gate)
+        {
             _driver = new PushDriver(plan);
+            _plannedChoice = _view.Choice;
             _view = _view with { Preview = plan, Stage = PushStage.CallingTug, Problem = null, Stalled = false, Pushed = 0 };
             return _driver;
         }
@@ -359,19 +396,38 @@ public sealed class Pushbacks(
     /// <summary>The pilot changed the turn while the tug was on its way: plan again from where the aircraft is.</summary>
     private void Replan(PushInputs x)
     {
+        PushView view;
+        PushDriver? driver;
         lock (_gate)
         {
-            if (!_replan || _driver is null || _view.Selected is not { } choice)
+            if (!_replan)
             {
                 return;
             }
 
             _replan = false;
-            var plan = PushPlanner.Plan(x.Pose, choice, _view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose), Wheelbase());
-            if (_driver.Replan(plan))
+            (view, driver) = (_view, _driver);
+        }
+
+        if (driver is null || view.Selected is not { } choice)
+        {
+            return;
+        }
+
+        var plan = PushPlanner.Plan(x.Pose, choice, view.Clearance?.FaceBearing, TaxiwaysAt(x.Pose), Wheelbase());
+        lock (_gate)
+        {
+            if (driver.Replan(plan))
             {
+                _plannedChoice = _view.Choice;
                 _view = _view with { Preview = plan };
                 log($"pushback: replanned {Describe(plan)}");
+            }
+            else
+            {
+                // Too late: the tug was already moving. Show the turn that is being flown.
+                _view = _view with { Choice = _plannedChoice };
+                log("pushback: turn change ignored, push already moving");
             }
         }
     }
@@ -405,6 +461,7 @@ public sealed class Pushbacks(
                 log($"pushback: BATC cleared pushback{(clearance.FaceWord is { } w ? $", face {w}" : "")}: {clearance.Text}");
                 _view = _view with { Clearance = clearance, Choice = null, Stage = _view.Stage is PushStage.Done or PushStage.Failed ? null : _view.Stage };
                 _autoPending = _view.Automatic;
+                _autoPendingAt = now;
             }
             else if (_view.Clearance is { } old && now - old.At > ClearanceKept && !_view.Running)
             {
@@ -450,9 +507,10 @@ public sealed class Pushbacks(
                 {
                     airport = loadAirport(icao);
                 }
-                catch (Exception ex) when (ex is IOException or InvalidDataException or FormatException)
+                catch (Exception ex)
                 {
-                    log($"pushback: {icao} taxiways not read: {ex.Message}");
+                    // Remembered as no taxiways, so a bad file is read (and logged) once.
+                    log($"pushback: {icao} taxiways not read: {ex.GetType().Name}: {ex.Message}");
                 }
 
                 known = (airport, airport is null ? [] : PushPlanner.Taxiways(airport));

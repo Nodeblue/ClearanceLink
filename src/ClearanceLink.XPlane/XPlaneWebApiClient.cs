@@ -153,7 +153,7 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
     public async Task CommandAsync(string command, CancellationToken ct = default)
     {
         var id = await LookupCommandAsync(command, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"X-Plane has no command {command}");
+            ?? throw new XPlaneCommandMissingException(command);
         using var response = await _http.PostAsJsonAsync($"api/v2/command/{id}/activate", new JsonObject { ["duration"] = 0 }, ct).ConfigureAwait(false);
         await EnsureOkAsync(response, $"command {command}", ct).ConfigureAwait(false);
     }

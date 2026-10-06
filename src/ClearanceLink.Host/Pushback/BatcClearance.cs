@@ -25,7 +25,7 @@ public static partial class BatcClearance
         ("north", 0), ("east", 90), ("south", 180), ("west", 270),
     ];
 
-    [GeneratedRegex(@"^\[Instruction\]\s*(?<text>.*\bpush\s?back\b.*\bapproved\b.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\[Instruction\]\s*(?!.*\bnot\s+(?:yet\s+)?approved\b)(?<text>.*\bpush\s?back\b.*\bapproved\b.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Approved();
 
     [GeneratedRegex(@"\bfac(?:e|ing)\s+(?<dir>(?:north|south)\s?(?:east|west)|north|south|east|west)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -61,7 +61,8 @@ public sealed class BatcLogFollower(string path, TimeProvider? time = null)
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private long _offset = -1;
-    private string _partial = "";
+    private DateTime _created;
+    private byte[] _partial = [];
 
     public string Path => path;
 
@@ -82,15 +83,18 @@ public sealed class BatcLogFollower(string path, TimeProvider? time = null)
             return [];
         }
 
-        if (_offset < 0 || info.Length < _offset)
+        if (_offset < 0)
         {
-            // First look: skip what is already there. A shorter file is a new BATC session: read it from the start.
-            _offset = _offset < 0 ? info.Length : 0;
-            _partial = "";
-            if (_offset > 0)
-            {
-                return [];
-            }
+            // First look: skip what is already there.
+            (_offset, _created) = (info.Length, info.CreationTimeUtc);
+            return [];
+        }
+
+        // Windows keeps a file's creation time; elsewhere it is the last change, so only the length tells there.
+        if (info.Length < _offset || (OperatingSystem.IsWindows() && info.CreationTimeUtc != _created))
+        {
+            // A shorter or newly made file is a new BATC session: read it from the start.
+            (_offset, _created, _partial) = (0, info.CreationTimeUtc, []);
         }
 
         if (info.Length == _offset)
@@ -98,13 +102,14 @@ public sealed class BatcLogFollower(string path, TimeProvider? time = null)
             return [];
         }
 
-        string added;
+        byte[] added;
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             stream.Seek(_offset, SeekOrigin.Begin);
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            added = reader.ReadToEnd();
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            added = buffer.ToArray();
             _offset = stream.Position;
         }
         catch (IOException)
@@ -112,15 +117,16 @@ public sealed class BatcLogFollower(string path, TimeProvider? time = null)
             return [];
         }
 
-        var text = _partial + added;
-        var end = text.LastIndexOf('\n');
-        _partial = end < 0 ? text : text[(end + 1)..];
+        // Only whole lines are decoded, so a line (or a UTF-8 character) cut at the end of the file waits for the rest.
+        var bytes = _partial.Length == 0 ? added : [.. _partial, .. added];
+        var end = Array.LastIndexOf(bytes, (byte)'\n');
+        _partial = bytes[(end + 1)..];
         if (end < 0)
         {
             return [];
         }
 
         var now = _time.GetUtcNow();
-        return text[..end].Split('\n').Select(l => BatcClearance.Parse(l.TrimEnd('\r'), now)).OfType<PushClearance>().ToList();
+        return Encoding.UTF8.GetString(bytes, 0, end).Split('\n').Select(l => BatcClearance.Parse(l.TrimEnd('\r'), now)).OfType<PushClearance>().ToList();
     }
 }

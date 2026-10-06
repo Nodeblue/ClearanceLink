@@ -37,6 +37,8 @@ public sealed class PushbackTests
     [InlineData("[Instruction] N123AB, Ramp 29, request pushback and engine start.")]
     [InlineData("[Instruction] N123AB, taxi to holding point runway 01L via A, B4.")]
     [InlineData("[GSX] Pushback selection timed out.")]
+    [InlineData("[Instruction] N123AB, pushback not approved, hold position.")]
+    [InlineData("[Instruction] N123AB, pushback is not yet approved, expect a short delay.")]
     public void Other_lines_are_not_approvals(string line) => Assert.Null(BatcClearance.Parse(line, At));
 
     [Fact]
@@ -490,5 +492,87 @@ public sealed class PushbackTests
         var built = CduPages.Build(page, Flying with { Push = new PushView(XPlane: true) });
         Assert.All(built.Rows.Where(r => r.LabelLeft.Length + r.LabelRight.Length > 0 || r.KeyLeft is not (CduKey.None or CduKey.GoStatus or CduKey.GoSetup)),
             r => Assert.False(string.IsNullOrWhiteSpace(r.Help), $"{page} row {r.LabelLeft}/{r.Left.Text} has no help"));
+    }
+
+    [Fact]
+    public void Follower_waits_for_a_character_cut_at_the_end_and_rereads_a_new_log()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"clearancelink-player-{Guid.NewGuid():N}.log");
+        try
+        {
+            File.WriteAllText(path, new string('x', 500) + "\n");
+            var follower = new BatcLogFollower(path);
+            Assert.Empty(follower.Poll());
+
+            // "Brisbane Ground – " with an en dash (3 UTF-8 bytes) written in two pieces.
+            var line = System.Text.Encoding.UTF8.GetBytes("[Instruction] N123AB, Ground \u2013 pushback approved. Face north.\n");
+            var cut = Array.IndexOf(line, (byte)0xE2) + 1;
+            using (var f = new FileStream(path, FileMode.Append))
+            {
+                f.Write(line, 0, cut);
+            }
+
+            Assert.Empty(follower.Poll());
+            using (var f = new FileStream(path, FileMode.Append))
+            {
+                f.Write(line, cut, line.Length - cut);
+            }
+
+            var found = Assert.Single(follower.Poll());
+            Assert.Contains("\u2013", found.Text, StringComparison.Ordinal);
+            Assert.Equal(0.0, found.FaceBearing);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_lost_pause_is_followed_by_a_stop()
+    {
+        var driver = new PushDriver(new PushPlan(15, 0, 309, null));
+        var sim = new Sim();
+        driver.Step(sim.Inputs, 0);
+        sim.Started = sim.Connected = true;
+        sim.Brake = 0;
+        sim.Speed = 1;
+        driver.Step(sim.Inputs, 1);
+        driver.Step(sim.Inputs, 2);
+        driver.RequestStop();
+        Assert.Equal([PushDriver.StartCommand], driver.Step(sim.Inputs, 3)); // pause, which never arrives
+        Assert.Empty(driver.Step(sim.Inputs, 6));
+        Assert.Equal([PushDriver.StopCommand], driver.Step(sim.Inputs, 12));
+        Assert.Empty(driver.Step(sim.Inputs, 13));
+        Assert.Equal([PushDriver.StopCommand], driver.Step(sim.Inputs, 18));
+    }
+
+    [Fact]
+    public void A_refused_command_stops_a_moving_push_and_drops_one_not_started()
+    {
+        var waiting = new PushDriver(new PushPlan(15, 0, 309, null));
+        waiting.Step(new Sim().Inputs, 0);
+        waiting.CommandFailed();
+        Assert.Equal((PushStage.Failed, "COMMAND FAILED"), (waiting.Stage, waiting.Problem));
+
+        var moving = new PushDriver(new PushPlan(15, 0, 309, null));
+        var sim = new Sim();
+        moving.Step(sim.Inputs, 0);
+        sim.Started = sim.Connected = true;
+        sim.Brake = 0;
+        sim.Speed = 1;
+        moving.Step(sim.Inputs, 1);
+        moving.Step(sim.Inputs, 2);
+        moving.CommandFailed();
+        Assert.Equal([PushDriver.StartCommand], moving.Step(sim.Inputs, 3));
+        Assert.Equal(PushStage.Stopping, moving.Stage);
+    }
+
+    [Fact]
+    public void A_long_taxiway_name_still_fits_the_line()
+    {
+        var view = new PushView(Preview: new PushPlan(21, 90, 39, "TAXIWAY BRAVO NORTH LINK"), XPlane: true);
+        var row = CduPages.Build(PanelPage.Push, Flying with { Push = view }).Rows[1];
+        Assert.True(row.Left.Text.Length + row.Right.Text.Length + 1 <= CduPages.Width, $"{row.Left.Text}|{row.Right.Text}");
     }
 }
