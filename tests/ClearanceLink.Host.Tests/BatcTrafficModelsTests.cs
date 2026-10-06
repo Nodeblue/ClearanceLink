@@ -12,7 +12,17 @@ public sealed class BatcTrafficModelsTests : IDisposable
 
     private BatcTrafficModels Models => new(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"));
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        // Windows can't delete a junction recursively: remove the links first (the folders they point at stay).
+        foreach (var link in Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories)
+            .Select(d => new DirectoryInfo(d)).Where(d => d.LinkTarget is not null).ToList())
+        {
+            link.Delete();
+        }
+
+        Directory.Delete(_root, recursive: true);
+    }
 
     /// <summary>A FSLTL package as installed: SimObjects\Airplanes\...\aircraft.cfg.</summary>
     private static string Fsltl(string folder)
