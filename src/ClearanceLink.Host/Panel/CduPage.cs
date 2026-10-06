@@ -209,8 +209,8 @@ public static class CduPages
             Row("RUNNING FOR", Traffic(s).Text == UpdateModels ? "FSLTL MODELS" : "TRAFFIC", new(Duration(s.Uptime)), Traffic(s), CduKey.None, s switch
             {
                 { TrafficAircraft: not null, PluginModels: 0 } => CduKey.GoModels,
-                { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
                 { BatcNoModels: true, TrafficAircraft: null or 0 } => CduKey.GoTraffic,
+                { FsltlOutOfDate: true, FsltlConverting: false } => CduKey.GoModels,
                 { TrafficAircraft: null } => CduKey.GoTraffic,
                 _ => CduKey.None,
             }) with { Help = "How long ClearanceLink has been open, and how many of BeyondATC's aircraft are drawn in X-Plane." },
@@ -598,7 +598,7 @@ public static class CduPages
         { TrafficAddOn: PluginInstall.State.Outdated } => new("UPDATE PLUGIN", CduColor.Amber),
         { FsltlOutOfDate: true, FsltlConverting: false } => new("UPDATE MODELS", CduColor.Amber),
         { FsltlConverting: true } => new("CONVERTING", CduColor.Amber),
-        { BatcNoModels: true } => new("NO FSLTL", CduColor.Amber),
+        { BatcNoModels: true, TrafficAircraft: null or 0 } => new("NO FSLTL", CduColor.Amber),
         { TrafficAircraft: not null, PluginModels: 0 } => new("NO MODELS", CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.Installed } => new("READY", CduColor.Green),

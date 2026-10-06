@@ -704,6 +704,7 @@ namespace ClearanceLink.Host
             var batcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default : null;
             var modelsLock = new Lock();
             var pointed = false;
+            var closing = false;
             void FollowModels(bool msfsRunning)
             {
                 if (batcModels is null)
@@ -713,6 +714,11 @@ namespace ClearanceLink.Host
 
                 lock (modelsLock)
                 {
+                    if (closing)
+                    {
+                        return;
+                    }
+
                     if (msfsRunning)
                     {
                         if (pointed && batcModels.Remove() is { } removed)
@@ -724,7 +730,19 @@ namespace ClearanceLink.Host
                         return;
                     }
 
-                    var models = batcModels.Provide(FsltlFolder(options));
+                    string? fsltl;
+                    try
+                    {
+                        fsltl = FsltlFolder(options);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // MSFS rewriting its UserCfg.opt as it is read: the next change or check tries again.
+                        PacketConsole.Info($"batc-models: FSLTL folder check failed ({ex.Message})");
+                        return;
+                    }
+
+                    var models = batcModels.Provide(fsltl);
                     PacketConsole.Info(models.Line);
                     pointed = models.Outcome == BatcTrafficModels.Outcome.Pointed;
                     if (pointed)
@@ -737,17 +755,38 @@ namespace ClearanceLink.Host
             // An FSLTL folder chosen on TRAFFIC while serve runs is shown to BeyondATC too (no restart, BATC wouldn't reconnect).
             async Task WatchFsltlFolderAsync()
             {
-                var last = FsltlFolder(options);
+                string? last = null;
+                var first = true;
+                try
+                {
+                    last = FsltlFolder(options);
+                    first = false;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Recorded on the first check that works.
+                }
+
                 try
                 {
                     while (batcModels is not null)
                     {
                         await Task.Delay(TimeSpan.FromSeconds(5), ct);
-                        var now = FsltlFolder(options);
-                        if (!string.Equals(now, last, StringComparison.OrdinalIgnoreCase))
+                        try
                         {
+                            var now = FsltlFolder(options);
+                            if (!first && !string.Equals(now, last, StringComparison.OrdinalIgnoreCase))
+                            {
+                                FollowModels(msfs.IsRunning);
+                            }
+
                             last = now;
-                            FollowModels(msfs.IsRunning);
+                            first = false;
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            // MSFS rewriting its UserCfg.opt as it is read: try again in 5 s.
+                            PacketConsole.Info($"batc-models: FSLTL folder check failed ({ex.Message})");
                         }
                     }
                 }
@@ -760,8 +799,8 @@ namespace ClearanceLink.Host
             var watchTask = Task.CompletedTask;
             try
             {
-                FollowModels(msfs.IsRunning);
                 msfs.Changed += FollowModels;
+                FollowModels(msfs.IsRunning);
                 watchTask = WatchFsltlFolderAsync();
                 await server.RunAsync(ct);
             }
@@ -770,6 +809,8 @@ namespace ClearanceLink.Host
                 msfs.Changed -= FollowModels;
                 lock (modelsLock)
                 {
+                    closing = true;
+
                     // Only the file this ClearanceLink wrote: another one still serving keeps its own.
                     if (pointed && batcModels?.Remove() is { } removed)
                     {
