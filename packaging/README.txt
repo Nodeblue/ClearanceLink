@@ -45,8 +45,17 @@ Traffic
 -------
 BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin with CSL aircraft models. Two libraries are
 tested: Bluebell (free from the X-Plane.org forums: unzip into X-Plane 12\Custom Data\CSL) and FSLTL
-(if installed for MSFS, press CONVERT on the TRAFFIC page with X-Plane closed; converted on your PC, never
-share the result). Close X-Plane before installing or updating the plugin from the SETUP page.
+(https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the TRAFFIC page with X-Plane
+closed; converted on your PC, never share the result). Close X-Plane before installing or updating the
+plugin from the SETUP page.
+
+
+Pushback
+--------
+The PUSH page pushes you back when BeyondATC clears you, like GSX in MSFS. It needs the free Better
+Pushback plugin, version 1.14 or later:
+https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/
+Unzip it into X-Plane 12\Resources\plugins with X-Plane closed.
 
 
 Problems

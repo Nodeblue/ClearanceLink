@@ -321,7 +321,7 @@ public sealed class PushbackTests
 
     [Theory]
     [InlineData(PushStage.WaitingForBrake, true, false, "RELEASE PARKING BRAKE")]
-    [InlineData(PushStage.WaitingForBrake, false, true, "NOT MOVING: SEE HELP")]
+    [InlineData(PushStage.WaitingForBrake, false, true, "NOT MOVING: PRESS STOP")]
     [InlineData(PushStage.Disconnecting, false, false, "SET PARKING BRAKE")]
     [InlineData(PushStage.Disconnecting, true, false, "DISCONNECTING TUG")]
     [InlineData(PushStage.Done, true, false, "PUSHBACK COMPLETE")]
