@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using ClearanceLink.Airports;
 using ClearanceLink.Fsltl;
 using ClearanceLink.Host;
+using ClearanceLink.Host.Pushback;
 using ClearanceLink.Host.Status;
 using ClearanceLink.Host.Support;
 using ClearanceLink.Host.Traffic;
@@ -79,7 +80,7 @@ namespace ClearanceLink.Host
                   Started by serve: once process <pid> ends, point BeyondATC back at MSFS (connection automatic).
               clearancelink serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
                     [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--no-traffic] [--status-port <port> | --no-status] [--open-status]
-                    [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
+                    [--out <file.jsonl>] [--throttle-ms <ms>] [--batc-log <Player.log> | --no-batc-log] [--quiet]
                   Stand in for MSFS 2024 and answer BATC from X-Plane. Without --listen: tcp:5112, with BeyondATC pointed
                   at it while serve runs and MSFS is closed (connection automatic; MSFS's default pipe plus tcp:5112 when
                   BeyondATC's folder can't be written), or tcp:5112 only (always-on). Defaults:
@@ -87,6 +88,7 @@ namespace ClearanceLink.Host
                   Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
                   --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
                   process BATC checks for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status; --open-status opens it in the browser.
+                  Pushback approvals are read from BeyondATC's Player.log (--batc-log, else its usual place) for the PUSH page.
               clearancelink xplane-check [--xplane <url>] [--mapping <dir>] [--seconds <n>]
                   Connect to X-Plane, read every mapped dataref and print what BATC would be sent. Checks the mapping.
               clearancelink record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
@@ -631,7 +633,7 @@ namespace ClearanceLink.Host
             var ground = new AirportGround();
             var traffic = new TrafficRegistry();
             var liveries = LoadLiveries(options);
-            var facilities = ServeFacilities(options, ground);
+            var facilities = ServeFacilities(options, ground, out var xplaneAirports);
             using var stub = new StubLauncher();
             var stubLine = "not started (--no-stub)";
             msfs.Check();
@@ -669,6 +671,19 @@ namespace ClearanceLink.Host
             }
 
             board.FlightPlans = plans;
+
+            // The PUSH page: BATC's pushback approvals (from its log) carried out by Better Pushback (ADR-0013).
+            var pushbacks = new Pushbacks(
+                xplane,
+                () => server.Sessions.SelectMany(s => s.Stats.Airports).OrderByDescending(a => a.At).Select(a => a.Icao).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                icao => xplaneAirports?.Airport(icao),
+                options.Has("no-batc-log") ? null : new BatcLogFollower(options.Get("batc-log") ?? BatcClearance.DefaultLog),
+                PacketConsole.Info)
+            {
+                Automatic = AppSettings.Load(AppFolders.Default.Settings).PushAutomatic,
+            };
+            var pushTask = pushbacks.RunAsync(ct);
+            board.Pushbacks = pushbacks;
             onBoard?.Invoke(board);
             await using var status = new StatusServer(board, int.Parse(options.Get("status-port") ?? $"{StatusServer.DefaultPort}", System.Globalization.CultureInfo.InvariantCulture), PacketConsole.Info);
             if (!options.Has("no-status") && status.Start(ct) && options.Has("open-status"))
@@ -686,6 +701,7 @@ namespace ClearanceLink.Host
                 await msfsTask;
                 await bridgeTask;
                 await stubTask;
+                await pushTask;
             }
         }
 
@@ -1288,8 +1304,9 @@ namespace ClearanceLink.Host
         }
 
         /// <summary>Recorded answers first (when --facilities is given), then airports built from X-Plane's files.</summary>
-        private static FacilitySourceChain? ServeFacilities(Options options, AirportGround? ground = null)
+        private static FacilitySourceChain? ServeFacilities(Options options, AirportGround? ground, out XPlaneAirports? xplaneAirports)
         {
+            xplaneAirports = null;
             var sources = new List<IFacilitySource>();
             if (LoadFacilities(options) is { } replay)
             {
@@ -1300,6 +1317,7 @@ namespace ClearanceLink.Host
             {
                 var airports = new XPlaneAirports(install, PacketConsole.Info, AppFolders.Default.AptIndex);
                 airports.Start();
+                xplaneAirports = airports;
                 sources.Add(new XPlaneFacilitySource(airports, ground));
                 PacketConsole.Info($"Airports: from X-Plane at {install.Root}");
             }
@@ -1396,7 +1414,7 @@ namespace ClearanceLink.Host
                 }
 
                 var key = arg[2..];
-                options._named[key] = key is "quiet" or "no-stub" or "no-status" or "open-status" or "force" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
+                options._named[key] = key is "quiet" or "no-stub" or "no-batc-log" or "no-status" or "open-status" or "force" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
             }
 
             return options;

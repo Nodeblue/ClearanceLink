@@ -15,7 +15,7 @@ Double-click ClearanceLink.exe. Windows may warn that it doesn't know the app: p
 Run anyway. Six WELCOME pages then find BeyondATC and X-Plane, install the X-Plane plugin that draws
 BeyondATC's traffic, set up aircraft models and list the X-Plane settings to turn down. Press the button
 beside a row, or click the row. On the keyboard: 1-6 for the left buttons, Shift+1-6 for the right ones.
-You can open the WELCOME pages again from the SUPPORT page.
+You can open the WELCOME pages again from the SETUP page.
 
 You need Windows 10 or 11 (64-bit), X-Plane 12.1.4 or later and BeyondATC. Nothing else.
 
@@ -45,8 +45,17 @@ Traffic
 -------
 BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin with CSL aircraft models. Two libraries are
 tested: Bluebell (free from the X-Plane.org forums: unzip into X-Plane 12\Custom Data\CSL) and FSLTL
-(if installed for MSFS, press CONVERT on WELCOME page 4 with X-Plane closed; converted on your PC, never
-share the result). Close X-Plane before installing or updating the plugin from the SETUP page.
+(https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the TRAFFIC page with X-Plane
+closed; converted on your PC, never share the result). Close X-Plane before installing or updating the
+plugin from the SETUP page.
+
+
+Pushback
+--------
+The PUSH page pushes you back when BeyondATC clears you, like GSX in MSFS. It needs the free Better
+Pushback plugin, version 1.14 or later:
+https://forums.x-plane.org/files/file/90556-better-pushback-for-x-plane-1112/
+Unzip it into X-Plane 12\Resources\plugins with X-Plane closed.
 
 
 Problems

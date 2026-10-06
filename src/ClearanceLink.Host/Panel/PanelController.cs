@@ -152,7 +152,8 @@ public sealed class PanelController : IAsyncDisposable
             found.XPlaneRunning,
             found.MsfsInstalled,
             _board?.FlightPlans?.View,
-            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil);
+            LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
+            Push: _board?.Pushbacks?.View);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -173,6 +174,24 @@ public sealed class PanelController : IAsyncDisposable
 
                 _loadArmedUntil = DateTimeOffset.MinValue;
                 return _board?.FlightPlans?.Load() ?? "STARTING...";
+            case CduKey.PushTailLeft:
+            case CduKey.PushTailRight:
+            case CduKey.PushStraight:
+            case CduKey.PushAsCleared:
+                return _board?.Pushbacks?.Choose(key switch
+                {
+                    CduKey.PushTailLeft => Pushback.PushChoice.TailLeft,
+                    CduKey.PushTailRight => Pushback.PushChoice.TailRight,
+                    CduKey.PushStraight => Pushback.PushChoice.Straight,
+                    _ => null,
+                }) is { Length: > 0 } chosen ? chosen : null;
+            case CduKey.PushStart:
+                return _board?.Pushbacks?.Start() ?? "STARTING...";
+            case CduKey.PushStop:
+                return _board?.Pushbacks?.Stop() ?? "STARTING...";
+            case CduKey.PushAuto:
+            case CduKey.PushManual:
+                return SetPushAutomatic(key == CduKey.PushAuto);
             case CduKey.ConnectionAutomatic:
             case CduKey.ConnectionAlwaysOn:
                 return await SetConnectionAsync(key == CduKey.ConnectionAutomatic ? ConnectionMode.Automatic : ConnectionMode.AlwaysOn).ConfigureAwait(false);
@@ -198,6 +217,9 @@ public sealed class PanelController : IAsyncDisposable
                 return "OPENING HELP PAGE";
             case CduKey.OpenModelsHelp:
                 Cli.OpenInBrowser(CduPages.ModelsHelp);
+                return "OPENING HELP PAGE";
+            case CduKey.OpenXPlaneSettingsHelp:
+                Cli.OpenInBrowser(CduPages.XPlaneSettingsHelp);
                 return "OPENING HELP PAGE";
             case CduKey.ConvertFsltl:
                 return await ConvertFsltlAsync().ConfigureAwait(false);
@@ -296,6 +318,22 @@ public sealed class PanelController : IAsyncDisposable
             PacketConsole.Info($"panel: could not start BeyondATC: {ex.Message}");
             return "COULD NOT START BATC";
         }
+    }
+
+    /// <summary>TUG AUTO / MANUAL on the PUSH page: saved, and used from the next clearance on.</summary>
+    private string? SetPushAutomatic(bool automatic)
+    {
+        if (_board?.Pushbacks is not { } pushbacks)
+        {
+            return "STARTING...";
+        }
+
+        var settings = AppSettings.Load(AppFolders.Default.Settings);
+        settings.PushAutomatic = automatic;
+        settings.Save(AppFolders.Default.Settings);
+        pushbacks.Automatic = settings.PushAutomatic;
+        PacketConsole.Info($"panel: pushback start {(settings.PushAutomatic ? "auto" : "manual")}");
+        return null;
     }
 
     /// <summary>Saves that the getting-started pages are done; restarts the server when a folder was chosen meanwhile.</summary>
