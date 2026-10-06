@@ -18,7 +18,7 @@ If the workflow stops with "already released", raise `<Version>` first. Pushing 
 works; the workflow refuses a tag that doesn't match `Directory.Build.props`.
 
 The X-Plane plugin has its own version (`plugin/CMakeLists.txt`). Raise it when the plugin changes; users see
-"NEWER VERSION" on SETUP whenever the plugin in the zip differs from the one installed.
+"UPDATE PLUGIN" on SETUP (and NEWER VERSION on TRAFFIC) whenever the plugin in the zip differs from the one installed.
 
 ## Before the first public release
 - The repository must be public, or the update check (and downloads) only work for people with access.
