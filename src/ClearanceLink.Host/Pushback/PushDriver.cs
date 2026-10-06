@@ -37,6 +37,8 @@ public enum PushStage
 /// </summary>
 public sealed class PushDriver(PushPlan plan)
 {
+    private PushPlan _plan = plan;
+
     public const string StartCommand = "BetterPushback/manual_push_start_no_yoke";
     public const string LeftCommand = "BetterPushback/manual_push_left";
     public const string RightCommand = "BetterPushback/manual_push_right";
@@ -80,7 +82,19 @@ public sealed class PushDriver(PushPlan plan)
     private bool _stopRequested;
     private double? _brakeOffSince;
 
-    public PushPlan Plan => plan;
+    public PushPlan Plan => _plan;
+
+    /// <summary>A new plan from the pilot while the tug is still coming or waiting for the brake; false once moving.</summary>
+    public bool Replan(PushPlan newPlan)
+    {
+        if (Stage is not (PushStage.CallingTug or PushStage.WaitingForBrake))
+        {
+            return false;
+        }
+
+        _plan = newPlan;
+        return true;
+    }
 
     public PushStage Stage { get; private set; } = PushStage.CallingTug;
 
@@ -185,12 +199,12 @@ public sealed class PushDriver(PushPlan plan)
 
                 break;
             case PushStage.PushingBack:
-                if (Pushed >= plan.StraightMeters)
+                if (Pushed >= _plan.StraightMeters)
                 {
-                    if (plan.Turns)
+                    if (_plan.Turns)
                     {
                         // manual_push_right swings the tail right, so the heading falls (Ben's PC 2026-10-05).
-                        commands.AddRange(Enumerable.Repeat(plan.TailLeft ? LeftCommand : RightCommand, TurnSteps));
+                        commands.AddRange(Enumerable.Repeat(_plan.TailLeft ? LeftCommand : RightCommand, TurnSteps));
                         _turnStartHeading = x.Heading;
                         _rateSample = (now, x.Heading);
                         _rate = 0;
@@ -211,11 +225,11 @@ public sealed class PushDriver(PushPlan plan)
                     _rateSample = (now, x.Heading);
                 }
 
-                var turned = PushPlanner.Delta(_turnStartHeading, x.Heading) * Math.Sign(plan.TurnDegrees);
-                var left = Math.Abs(plan.TurnDegrees) - turned;
+                var turned = PushPlanner.Delta(_turnStartHeading, x.Heading) * Math.Sign(_plan.TurnDegrees);
+                var left = Math.Abs(_plan.TurnDegrees) - turned;
                 if (left <= Math.Max(2, _rate * TurnLeadSeconds))
                 {
-                    commands.AddRange(Enumerable.Repeat(plan.TailLeft ? RightCommand : LeftCommand, TurnSteps));
+                    commands.AddRange(Enumerable.Repeat(_plan.TailLeft ? RightCommand : LeftCommand, TurnSteps));
                     _straightenFrom = Pushed;
                     Move(PushStage.Straightening, now);
                 }

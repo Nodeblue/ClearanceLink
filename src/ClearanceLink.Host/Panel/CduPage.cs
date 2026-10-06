@@ -72,7 +72,9 @@ public enum CduKey
     PushStraight,
     PushStart,
     PushStop,
-    PushAutomatic,
+    PushAsCleared,
+    PushAuto,
+    PushManual,
 }
 
 public sealed record CduCell(string Text, CduColor Color = CduColor.White);
@@ -288,8 +290,9 @@ public static class CduPages
     }
 
     /// <summary>
-    /// The pushback page: BeyondATC's clearance ("FACE EAST"), the push it plans, keys to choose the tail's way
-    /// instead, and START PUSH, which has Better Pushback's tug do it (ADR-0013). Nothing moves until it is pressed.
+    /// The pushback page: BeyondATC's clearance ("FACE EAST"), the push it plans, keys to turn the tail another way,
+    /// and the tug: AUTO calls Better Pushback's tug when BeyondATC approves (as it calls GSX in MSFS), MANUAL waits
+    /// for CALL TUG (ADR-0013). Either way the push only moves once the pilot releases the parking brake.
     /// </summary>
     private static CduPage Push(PanelState s, string? flash)
     {
@@ -299,19 +302,22 @@ public static class CduPages
             ? new CduCell(c.FaceWord is { } w ? $"FACE {w}" : "APPROVED", v.Choice is null ? CduColor.Green : CduColor.White)
             : new CduCell("-----");
         var plan = v.Preview is { } p
-            ? new CduCell(p.Turns ? $"BACK {p.StraightMeters:0}M TAIL {(p.TailLeft ? "L" : "R")}" : $"BACK {p.StraightMeters:0}M")
+            ? new CduCell(p.Turns ? $"{p.StraightMeters:0}M, TAIL {(p.TailLeft ? "LEFT" : "RIGHT")}" : $"{p.StraightMeters:0}M, NO TURN")
             : new CduCell("-----");
+        var asCleared = v is { Choice: not null, Clearance: not null };
+        var callTug = v.CanStart && !v.Running;
         var rows = new[]
         {
             Row("ATC CLEARANCE", "AT", cleared, new(v.Clearance is { } at ? Zulu(at.At) : "")),
-            Row("PUSH", "THEN FACE", plan, new(v.Preview is { Turns: true } f ? $"{f.FinalHeading:000}" + (f.Taxiway is { } t ? $" {t}" : "") : "")),
-            Row("", "", Choice("<TAIL LEFT", PushChoice.TailLeft), Choice("TAIL RIGHT>", PushChoice.TailRight), CduKey.PushTailLeft, CduKey.PushTailRight),
-            Row("", "START", Choice("<STRAIGHT", PushChoice.Straight),
-                v.Automatic ? new("ON CLEARANCE>", CduColor.Magenta) : new("BY KEY>", CduColor.Magenta), CduKey.PushStraight, CduKey.PushAutomatic),
-            v.Running
-                ? Row("", "", new(""), new("STOP>", CduColor.Amber), CduKey.None, CduKey.PushStop)
-                : Row("", "", new(v.CanStart ? "<START PUSH" : ""), new(""), v.CanStart ? CduKey.PushStart : CduKey.None),
-            Row("", "", new("<STATUS"), new("FPLN>"), CduKey.GoStatus, CduKey.GoFlightPlan),
+            Row("PUSH BACK", "THEN FACE", plan, new(v.Preview is { } f ? $"{f.FinalHeading:000}" + (f.Taxiway is { } t ? $" ON {t}" : "") : "")),
+            Row("TURN", "", Choice("<TAIL LEFT", PushChoice.TailLeft), Choice("TAIL RIGHT>", PushChoice.TailRight), CduKey.PushTailLeft, CduKey.PushTailRight),
+            Row("", "", Choice("<NO TURN", PushChoice.Straight), new(asCleared ? "AS ATC SAID>" : ""), CduKey.PushStraight, asCleared ? CduKey.PushAsCleared : CduKey.None),
+            Row("TUG", "",
+                new(v.Automatic ? "<AUTO" : " AUTO", v.Automatic ? CduColor.Magenta : CduColor.White),
+                new(v.Automatic ? "MANUAL" : "MANUAL>", v.Automatic ? CduColor.White : CduColor.Magenta),
+                CduKey.PushAuto, CduKey.PushManual),
+            Row("", "", new(callTug ? "<CALL TUG" : ""), new(v.Running ? "STOP>" : "", CduColor.Amber),
+                callTug ? CduKey.PushStart : CduKey.None, v.Running ? CduKey.PushStop : CduKey.None),
         };
         return new($"{AppName} PUSH", rows, flash is null ? PushLine(v) : new(flash));
     }
@@ -335,7 +341,8 @@ public static class CduPages
         { BetterPushback: false } => new("BETTER PUSHBACK MISSING", CduColor.Amber),
         { Selected: null } => new("WAIT FOR PUSH CLEARANCE"),
         { Automatic: true, Clearance: not null, Choice: null, BetterPushback: null } => new("CHECKING BETTER PUSHBACK"),
-        _ => new("PRESS START PUSH"),
+        { Automatic: true } => new("TUG COMES WHEN CLEARED"),
+        _ => new("PRESS CALL TUG"),
     };
 
     private static string Zulu(DateTimeOffset at) => at.UtcDateTime.ToString("HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);

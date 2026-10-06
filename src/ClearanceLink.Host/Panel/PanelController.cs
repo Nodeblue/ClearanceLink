@@ -177,18 +177,21 @@ public sealed class PanelController : IAsyncDisposable
             case CduKey.PushTailLeft:
             case CduKey.PushTailRight:
             case CduKey.PushStraight:
+            case CduKey.PushAsCleared:
                 return _board?.Pushbacks?.Choose(key switch
                 {
                     CduKey.PushTailLeft => Pushback.PushChoice.TailLeft,
                     CduKey.PushTailRight => Pushback.PushChoice.TailRight,
-                    _ => Pushback.PushChoice.Straight,
+                    CduKey.PushStraight => Pushback.PushChoice.Straight,
+                    _ => null,
                 }) is { Length: > 0 } chosen ? chosen : null;
             case CduKey.PushStart:
                 return _board?.Pushbacks?.Start() ?? "STARTING...";
             case CduKey.PushStop:
                 return _board?.Pushbacks?.Stop() ?? "STARTING...";
-            case CduKey.PushAutomatic:
-                return SetPushAutomatic();
+            case CduKey.PushAuto:
+            case CduKey.PushManual:
+                return SetPushAutomatic(key == CduKey.PushAuto);
             case CduKey.ConnectionAutomatic:
             case CduKey.ConnectionAlwaysOn:
                 return await SetConnectionAsync(key == CduKey.ConnectionAutomatic ? ConnectionMode.Automatic : ConnectionMode.AlwaysOn).ConfigureAwait(false);
@@ -314,8 +317,8 @@ public sealed class PanelController : IAsyncDisposable
         }
     }
 
-    /// <summary>AUTOMATIC / BY KEY on the PUSH page: saved, and used from the next clearance on.</summary>
-    private string? SetPushAutomatic()
+    /// <summary>TUG AUTO / MANUAL on the PUSH page: saved, and used from the next clearance on.</summary>
+    private string? SetPushAutomatic(bool automatic)
     {
         if (_board?.Pushbacks is not { } pushbacks)
         {
@@ -323,10 +326,10 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         var settings = AppSettings.Load(AppFolders.Default.Settings);
-        settings.PushAutomatic = !pushbacks.Automatic;
+        settings.PushAutomatic = automatic;
         settings.Save(AppFolders.Default.Settings);
         pushbacks.Automatic = settings.PushAutomatic;
-        PacketConsole.Info($"panel: pushback start {(settings.PushAutomatic ? "automatic" : "by key")}");
+        PacketConsole.Info($"panel: pushback start {(settings.PushAutomatic ? "auto" : "manual")}");
         return null;
     }
 

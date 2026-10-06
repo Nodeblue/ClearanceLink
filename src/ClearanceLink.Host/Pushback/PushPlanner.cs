@@ -38,8 +38,23 @@ public sealed record PushPlan(double StraightMeters, double TurnDegrees, double 
 /// </summary>
 public static class PushPlanner
 {
-    /// <summary>Straight push when there is no taxiway to aim for, or for STRAIGHT.</summary>
+    /// <summary>Shortest push with no turn, and the push before a turn when there is no taxiway to aim for.</summary>
     public const double DefaultStraightMeters = 15;
+
+    /// <summary>
+    /// A push with no turn goes back about one aircraft length, so the aircraft clears its stand. X-Plane has no
+    /// reliable length dataref (mapping/simvars.yaml, WING SPAN), so it is taken as 2.5 wheelbases (737-800: 15.6 m
+    /// wheelbase, 39.5 m long; A320: 12.6 m, 37.6 m), from the gear positions Better Pushback itself reads.
+    /// </summary>
+    public const double LengthPerWheelbase = 2.5;
+
+    /// <summary>Longest push with no turn.</summary>
+    public const double MaxNoTurnMeters = 60;
+
+    /// <summary>How far a push with no turn goes for an aircraft with this wheelbase (unknown: 15 m).</summary>
+    public static double NoTurnMeters(double? wheelbase) => wheelbase is > 0 and var w
+        ? Math.Round(Math.Clamp(w * LengthPerWheelbase, DefaultStraightMeters, MaxNoTurnMeters))
+        : DefaultStraightMeters;
 
     /// <summary>Always push at least this far before turning, so the tail clears the stand.</summary>
     public const double MinStraightMeters = 5;
@@ -62,11 +77,12 @@ public static class PushPlanner
     /// <summary>Largest turn the push makes; a pushback doesn't spin the aircraft round.</summary>
     public const double MaxTurnDegrees = 135;
 
-    public static PushPlan Plan(Pose pose, PushChoice choice, double? faceBearing, IReadOnlyList<TaxiwaySegment> taxiways)
+    public static PushPlan Plan(Pose pose, PushChoice choice, double? faceBearing, IReadOnlyList<TaxiwaySegment> taxiways, double? wheelbase = null)
     {
+        var noTurn = new PushPlan(NoTurnMeters(wheelbase), 0, Norm(pose.Heading), null);
         if (choice == PushChoice.Straight || (choice == PushChoice.Face && faceBearing is null))
         {
-            return new PushPlan(DefaultStraightMeters, 0, Norm(pose.Heading), null);
+            return noTurn;
         }
 
         var behind = choice is PushChoice.Face && Math.Abs(Delta(pose.Heading, faceBearing!.Value)) < StraightWithinDegrees
@@ -97,7 +113,7 @@ public static class PushPlanner
             _ => Clamp(Delta(pose.Heading, faceBearing!.Value)),
         };
         return Math.Abs(fallback) < StraightWithinDegrees
-            ? new PushPlan(DefaultStraightMeters, 0, Norm(pose.Heading), null)
+            ? noTurn
             : new PushPlan(DefaultStraightMeters, fallback, Norm(pose.Heading + fallback), null);
     }
 
