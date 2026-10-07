@@ -23,6 +23,9 @@ public sealed class InMemoryXPlane : IXPlaneData
 
     public void SetText(string dataref, string value) => _texts[dataref] = value;
 
+    /// <summary>Forgets a dataref, as if X-Plane had not sent it yet.</summary>
+    public bool Remove(string dataref) => _numbers.TryRemove(dataref, out _);
+
     public void Watch(string dataref) => Watched.Add(dataref);
 
     public bool TryGetNumber(string dataref, out double value) => _numbers.TryGetValue(dataref, out value);
