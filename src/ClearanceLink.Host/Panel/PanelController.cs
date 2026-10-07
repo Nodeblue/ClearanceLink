@@ -295,7 +295,18 @@ public sealed class PanelController : IAsyncDisposable
         var settings = AppSettings.Load(AppFolders.Default.Settings);
         if (settings.Connection == mode)
         {
-            return mode == ConnectionMode.Automatic ? "CLOSE MSFS BEFORE FLYING" : "BATC SET TO X-PLANE";
+            if (mode == ConnectionMode.Automatic)
+            {
+                return "CLOSE MSFS BEFORE FLYING";
+            }
+
+            // Pressed again: write BeyondATC's files in case they went missing (a BeyondATC update, issue #35).
+            return Cli.ApplyConnection(settings, Folders().Batc) switch
+            {
+                null => "BATC SET TO X-PLANE",
+                Cli.BatcNotFoundProblem => "SET BEYONDATC FOLDER",
+                _ => "RUN AS ADMINISTRATOR",
+            };
         }
 
         settings.Connection = mode;

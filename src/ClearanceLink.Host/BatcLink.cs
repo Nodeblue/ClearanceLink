@@ -13,6 +13,8 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
 {
     private readonly Lock _gate = new();
     private bool _guardStarted;
+    private Timer? _keepOn;
+    private bool _released;
 
     /// <summary>Why the files could not be written or removed the last time; null when that worked.</summary>
     public string? Problem { get; private set; }
@@ -46,11 +48,42 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
         }
     }
 
+    /// <summary>
+    /// Connection always on: puts BeyondATC's two files back when they are missing or no longer point at ClearanceLink.
+    /// A BeyondATC update can replace its folder and take them with it (issue #35); serve calls this when it starts
+    /// and every few seconds after (<see cref="KeepOnEvery"/>).
+    /// </summary>
+    public void KeepOn()
+    {
+        lock (_gate)
+        {
+            if (_released)
+            {
+                // A timer tick that ran late, after serve stopped.
+                return;
+            }
+
+            Apply(redirect.SwitchOn, "batc: always on; BeyondATC's config files were missing, written again");
+        }
+    }
+
+    /// <summary>Calls <see cref="KeepOn"/> now and then every <paramref name="period"/> until <see cref="Release"/>.</summary>
+    public void KeepOnEvery(TimeSpan period)
+    {
+        lock (_gate)
+        {
+            _keepOn ??= new Timer(_ => KeepOn(), null, TimeSpan.Zero, period);
+        }
+    }
+
     /// <summary>Serve is stopping: BeyondATC goes back to MSFS, unless the user has just chosen always on.</summary>
     public void Release(ConnectionMode now)
     {
         lock (_gate)
         {
+            _released = true;
+            _keepOn?.Dispose();
+            _keepOn = null;
             if (now == ConnectionMode.Automatic)
             {
                 Apply(redirect.SwitchOff, "batc: ClearanceLink closing; BeyondATC pointed back at MSFS");
@@ -77,8 +110,13 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
         }
         catch (RedirectFailedException ex)
         {
+            // Logged once: always on retries every few seconds.
+            if (Problem != ex.Message)
+            {
+                log($"batc: {ex.Message}");
+            }
+
             Problem = ex.Message;
-            log($"batc: {ex.Message}");
         }
     }
 }
