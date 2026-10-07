@@ -6,7 +6,9 @@ namespace ClearanceLink.Host;
 /// Points BeyondATC at ClearanceLink, or back at MSFS. BATC opens two SimConnect connections: its helper
 /// simconnect_ws.exe (BeyondATC_Data\StreamingAssets) and BeyondATC.exe itself. Each reads a SimConnect.cfg next to
 /// it, so a cfg naming ClearanceLink's TCP port in both folders redirects BATC without touching MSFS
-/// (docs/research/batc-call-inventory.md). Removing them sends BATC back to MSFS's default pipe.
+/// (docs/research/batc-call-inventory.md). From 1.8.22 there is no helper and all connections come from BeyondATC.exe,
+/// so only the cfg next to it is read; the StreamingAssets one stays for older versions. Removing them sends BATC back
+/// to MSFS's default pipe.
 /// </summary>
 public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.DefaultPort)
 {

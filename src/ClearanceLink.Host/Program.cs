@@ -838,7 +838,7 @@ namespace ClearanceLink.Host
                 {
                     await Task.Delay(TimeSpan.FromSeconds(1), ct);
                     var names = server.Sessions.Select(s => s.ClientName).ToList();
-                    var batc = names.Contains(StatusBoard.HelperClient) && names.Contains(StatusBoard.AppClient);
+                    var batc = StatusBoard.BatcConnected(names);
                     if (stub.FollowBatc(batc, msfs.IsRunning, DateTimeOffset.UtcNow) is { } line)
                     {
                         PacketConsole.Info(line);

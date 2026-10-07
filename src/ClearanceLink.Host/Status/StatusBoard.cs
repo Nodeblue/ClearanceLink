@@ -15,11 +15,37 @@ public sealed class StatusBoard(
     string listen,
     TimeProvider? time = null)
 {
-    /// <summary>The connection BATC's helper (simconnect_ws) opens; it asks for airport data.</summary>
+    /// <summary>The connection BATC's helper (simconnect_ws) opens up to BeyondATC 1.8.21; it asks for airport data.</summary>
     public const string HelperClient = "BeyondATC";
+
+    /// <summary>From BeyondATC 1.8.22 there is no helper: BeyondATC.exe asks for airport data on this connection.</summary>
+    public const string FacilitiesClient = "BATC_Facilities";
+
+    /// <summary>BeyondATC 1.8.22's third connection: it reads the user aircraft on every "Frame" event to time traffic.</summary>
+    public const string TrafficSyncClient = "BATC_TrafficSync";
 
     /// <summary>The connection BeyondATC.exe opens; it reads the aircraft and tunes the radios.</summary>
     public const string AppClient = "BATCDLLSimConnection";
+
+    /// <summary>True for the connection that asks for airport data, whichever BeyondATC version opened it.</summary>
+    public static bool IsAirportClient(string name) =>
+        name.Equals(HelperClient, StringComparison.OrdinalIgnoreCase) || name.Equals(FacilitiesClient, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True for any connection BeyondATC opens (as opposed to another MSFS add-on).</summary>
+    public static bool IsBatcClient(string name) =>
+        IsAirportClient(name)
+        || name.Equals(AppClient, StringComparison.OrdinalIgnoreCase)
+        || name.Equals(TrafficSyncClient, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when the app connection is open.</summary>
+    public static bool HasApp(IEnumerable<string> names) => names.Any(n => n.Equals(AppClient, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>True when BeyondATC is fully connected: its app connection and its airport-data connection.</summary>
+    public static bool BatcConnected(IEnumerable<string> names)
+    {
+        var list = names as IReadOnlyCollection<string> ?? names.ToList();
+        return HasApp(list) && list.Any(IsAirportClient);
+    }
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -107,8 +133,8 @@ public sealed class StatusBoard(
     /// <summary>The headline: what works, or the first thing the user has to start.</summary>
     public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions, bool msfsRunning = false)
     {
-        var names = sessions.Select(s => s.ClientName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var batc = names.Contains(HelperClient) || names.Contains(AppClient);
+        var names = sessions.Select(s => s.ClientName).ToList();
+        var batc = names.Any(IsBatcClient);
         if (msfsRunning && !batc)
         {
             return new(StatusLevel.Problem, "Microsoft Flight Simulator is running. Close it so BeyondATC can connect to X-Plane.");
@@ -119,7 +145,7 @@ public sealed class StatusBoard(
             (false, false) => new(StatusLevel.Waiting, "Waiting for X-Plane. Start X-Plane 12 and load a flight."),
             (false, true) => new(StatusLevel.Problem, "BeyondATC is connected but X-Plane is not. Check X-Plane is running with its Web API on."),
             (true, false) => new(StatusLevel.Waiting, "X-Plane connected. Start BeyondATC."),
-            (true, true) when !names.Contains(AppClient) || !names.Contains(HelperClient) =>
+            (true, true) when !BatcConnected(names) =>
                 new(StatusLevel.Waiting, "X-Plane connected. BeyondATC is still connecting."),
             _ => new(StatusLevel.Ok, "Ready. BeyondATC is talking to X-Plane."),
         };
@@ -128,6 +154,8 @@ public sealed class StatusBoard(
     private static string Describe(string clientName) => clientName switch
     {
         HelperClient => "BeyondATC helper: airport data",
+        FacilitiesClient => "BeyondATC: airport data",
+        TrafficSyncClient => "BeyondATC: traffic timing",
         AppClient => "BeyondATC: aircraft and radios",
         "" => "Connecting",
         _ => $"Other MSFS add-on ({clientName}), not used",
