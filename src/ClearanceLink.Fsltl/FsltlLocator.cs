@@ -43,9 +43,15 @@ public static partial class FsltlLocator
         {
             if (!File.Exists(cfg)) continue;
             var text = File.ReadAllText(cfg);
-            if (IsStandIn(text) || InstalledPackagesPath(text) is not { } packages) continue;
-            var candidate = Path.Combine(packages, "Community", FsltlCatalog.PackageName);
-            if (IsPackage(candidate)) return candidate;
+            if (IsStandIn(text)) continue;
+            // NextBoot too: MSFS can name a new packages folder there (issue #29). FSLTL found only there is still
+            // converted; FSLTL CHECK then says BeyondATC won't see it, since BeyondATC reads InstalledPackagesPath only.
+            foreach (var packages in new[] { InstalledPackagesPath(text), InstalledPackagesPathNextBoot(text) })
+            {
+                if (packages is null) continue;
+                var candidate = Path.Combine(packages, "Community", FsltlCatalog.PackageName);
+                if (IsPackage(candidate)) return candidate;
+            }
         }
 
         return null;
