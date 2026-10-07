@@ -43,14 +43,22 @@ Settings > Graphics turn Draw parked aircraft off, and remove the AI aircraft fr
 
 Traffic
 -------
-BeyondATC needs FSLTL for any traffic: without it, it says "No traffic liveries found". Without MSFS 2024,
-choose your FSLTL folder on the TRAFFIC page. BeyondATC's traffic is drawn by ClearanceLink's X-Plane plugin
-with CSL aircraft models: FSLTL (https://fslivetrafficliveries.com/; if installed for MSFS, press CONVERT on the
-TRAFFIC page with X-Plane closed; converted on your PC, never share the result), plus any CSL models such as
-Bluebell (free from the X-Plane.org forums: unzip into X-Plane 12\Custom Data\CSL) or X-CSL (free, from
-x-csl.ru). CSL models only change how traffic looks; BeyondATC still needs FSLTL. CHECK on the TRAFFIC page
-shows what's in your FSLTL folder and whether BeyondATC sees it. Close X-Plane before installing or updating the
-plugin from the SETUP page.
+BeyondATC flies its own traffic and ClearanceLink's X-Plane plugin draws it. Traffic is optional: ATC
+works without it. Everything is on the TRAFFIC page (on SETUP, press SET UP beside TRAFFIC). Close
+X-Plane for steps 1 and 3.
+
+1. Press INSTALL beside X-PLANE PLUGIN.
+2. Install FSLTL (free, https://fslivetrafficliveries.com/). BeyondATC makes no traffic without it.
+   Install it for MSFS 2024 if you have it, else for MSFS 2020. No MSFS? Copy the
+   fsltl-traffic-base folder from a PC that has FSLTL, then press CHOOSE on the FSLTL line and pick it.
+3. Press CONVERT on the FSLTL line and wait until it shows a number of liveries (several minutes,
+   about 13 GB). The converted models stay on your PC: FSLTL's licence doesn't allow sharing them.
+4. Press CHECK beside BEYONDATC TRAFFIC. The bottom line says FSLTL READY, or the one thing to fix.
+
+Optional: free CSL models such as Bluebell or X-CSL fill in aircraft FSLTL doesn't have. Put them in
+X-Plane 12\Custom Data\CSL. They don't replace FSLTL: BeyondATC can't see them.
+
+No traffic? The help page has a checklist under Problems > No traffic.
 
 
 Pushback
