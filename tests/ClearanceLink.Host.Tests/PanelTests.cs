@@ -160,6 +160,8 @@ public sealed class PanelTests
         Assert.Equal("CLOSE MSFS BEFORE FLYING", Help(Ready with { BatcRedirected = true, MsfsRunning = true }));
         Assert.Equal("", Help(Ready));
         Assert.Equal("BATC SET TO X-PLANE", Help(Ready with { Connection = ConnectionMode.AlwaysOn, BatcRedirected = true }));
+        Assert.Equal(CduPages.BatcNotSet, Help(Ready with { Connection = ConnectionMode.AlwaysOn, BatcRedirected = false }));
+        Assert.True(CduPages.BatcNotSet.Length <= CduPages.Width);
     }
 
     [Fact]

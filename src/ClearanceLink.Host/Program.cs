@@ -489,7 +489,7 @@ namespace ClearanceLink.Host
         /// Where serve listens when --listen is not given. Automatic: ClearanceLink's TCP port, with BeyondATC pointed at
         /// it only while ClearanceLink runs and MSFS is closed (<paramref name="link"/>, ADR-0012); when BeyondATC's folder
         /// is unknown or can't be written, MSFS's default pipe while MSFS is closed plus the TCP port, as before. Always
-        /// on: the TCP port only.
+        /// on: the TCP port only, with BeyondATC's files put back if they go missing (<see cref="BatcLink.KeepOn"/>).
         /// </summary>
         private static IListener DefaultServeListener(MsfsGate msfs, out BatcLink? link)
         {
@@ -497,7 +497,16 @@ namespace ClearanceLink.Host
             var tcp = Endpoint.Parse($"tcp:{BatcRedirect.DefaultPort}");
             if (AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn)
             {
-                return Transports.Listen(tcp);
+                var listener = Transports.Listen(tcp);
+
+                // Always on: the files are written when chosen, but a BeyondATC update can remove them (issue #35).
+                if (BatcFolder(new Options()) is { } batc)
+                {
+                    link = new BatcLink(new BatcRedirect(batc), PacketConsole.Info);
+                    link.KeepOnEvery(TimeSpan.FromSeconds(10), () => AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn);
+                }
+
+                return listener;
             }
 
             IListener? port = null;
