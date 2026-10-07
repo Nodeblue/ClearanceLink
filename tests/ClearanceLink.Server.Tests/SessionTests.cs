@@ -105,6 +105,40 @@ public sealed class SessionTests
     }
 
     [Fact]
+    public async Task No_aircraft_data_until_xplane_reports_the_time()
+    {
+        // Issue #36: X-Plane had sent the position but not yet the clock, so BATC got ZULU TIME 0 and ABSOLUTE TIME 0,
+        // and BeyondATC 1.8.22's live-traffic time check threw an OverflowException.
+        var session = NewSession();
+        Assert.True(_xp.TryGetNumber("sim/time/zulu_time_sec", out var zulu));
+        Assert.True(_xp.TryGetNumber("sim/time/local_date_days", out var date));
+        _xp.Remove("sim/time/zulu_time_sec");
+        _xp.Remove("sim/time/local_date_days");
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "PLANE LATITUDE", "degrees"));
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "ZULU TIME", "seconds"));
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "ABSOLUTE TIME", "seconds"));
+        await session.HandleAsync(TestPackets.RequestDataOnSimObject(1004, 17, period: 1));
+        Assert.Empty(_sent);
+
+        _xp["sim/time/zulu_time_sec"] = zulu;
+        _xp["sim/time/local_date_days"] = date;
+        await session.HandleAsync(TestPackets.RequestDataOnSimObject(1004, 17, period: 1));
+        var data = Assert.Single(_sent).Payload[28..];
+        Assert.Equal(zulu, BinaryPrimitives.ReadDoubleLittleEndian(data[8..]), 3);
+    }
+
+    [Fact]
+    public async Task An_unmapped_clock_simvar_does_not_hold_aircraft_data()
+    {
+        var session = NewSession();
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "PLANE LATITUDE", "degrees"));
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "ZULU MONTH OF YEAR", "number"));
+        await session.HandleAsync(TestPackets.RequestDataOnSimObject(1004, 17, period: 1));
+
+        Assert.Single(_sent);
+    }
+
+    [Fact]
     public async Task Com_set_event_writes_xplane_frequency_in_khz()
     {
         var session = NewSession();
