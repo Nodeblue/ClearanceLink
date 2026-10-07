@@ -645,21 +645,24 @@ public static class CduPages
         };
         var looksIn = s switch
         {
-            { BatcCommunity: { } community } => new CduCell(ShortPath(community, Width), s.BatcModels == BatcTrafficModels.Outcome.Found ? CduColor.Green : CduColor.Amber),
             { BatcModels: BatcTrafficModels.Outcome.Pointed or BatcTrafficModels.Outcome.PointedByAnother } => new CduCell("YOUR FSLTL FOLDER", CduColor.Green),
+            { BatcCommunity: { } community } => new CduCell(PlaceName(community, Width), s.BatcModels == BatcTrafficModels.Outcome.Found ? CduColor.Green : CduColor.Amber),
             // MSFS 2024's settings name no packages folder BeyondATC reads (only a NextBoot one, say).
             { BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 } => new CduCell("NOT SET IN MSFS 2024", CduColor.Amber),
             _ => new CduCell("-"),
         };
         var rows = new[]
         {
+            // The folder gets the whole line (CHOOSE is on the bottom row); the full path is in the (i) help.
             (s.FsltlChecking
                 ? Row("FOLDER", "", new("CHECKING..."), new(""))
                 : s.FsltlFolder is null
-                ? Row("FOLDER", "", new("NOT FOUND", CduColor.Amber), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder)
+                ? Row("FOLDER", "", new("NOT FOUND", CduColor.Amber), new("HOW TO GET>"), CduKey.None, CduKey.OpenModelsHelp)
                 : Row("FOLDER", h?.Version is { } v ? Fit($"VERSION {v.ToUpperInvariant()}", 13) : "",
-                    new(ShortPath(Parent(s.FsltlFolder), Width - 8)), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder))
-                with { Help = "Where the fsltl-traffic-base folder ClearanceLink uses is, and FSLTL's version. CHOOSE picks another." },
+                    new(PlaceName(Parent(s.FsltlFolder), Width)), new("")))
+                with { Help = s.FsltlFolder is { } folder && !s.FsltlChecking
+                    ? $"FSLTL is in {folder}. CHOOSE on the bottom row picks another folder."
+                    : "Where the fsltl-traffic-base folder ClearanceLink uses is, and FSLTL's version. CHOOSE on the bottom row picks it." },
             (known
                 ? Row("LIVERIES", "BASE MODELS",
                     h!.Liveries > 0 ? new($"{h.Liveries}", CduColor.Green) : new("NONE", CduColor.Amber),
@@ -669,9 +672,11 @@ public static class CduPages
             Row("BEYONDATC", "", batc.Item1, batc.Item2)
                 with { Help = "Whether BeyondATC will find FSLTL. Without MSFS 2024, ClearanceLink shows it your FSLTL folder while it's open." },
             Row("BEYONDATC LOOKS IN", "", looksIn, new(""))
-                with { Help = "The only Community folder BeyondATC reads, from MSFS 2024's settings (UserCfg.opt). FSLTL must be in it." },
+                with { Help = s.BatcCommunity is { } where && !s.FsltlChecking
+                    ? $"BeyondATC reads {where}, from MSFS 2024's settings (UserCfg.opt). FSLTL must be in it."
+                    : "The only Community folder BeyondATC reads, from MSFS 2024's settings (UserCfg.opt). FSLTL must be in it." },
             CopyRow(s) with { Help = "The copy of FSLTL converted for X-Plane. Close X-Plane to convert or update it." },
-            Row("", "", new("<TRAFFIC"), new("HELP>"), CduKey.GoTraffic, CduKey.OpenModelsHelp),
+            Row("", "", new("<TRAFFIC"), new("CHOOSE>"), CduKey.GoTraffic, CduKey.ChooseFsltlFolder),
         };
         // A conversion runs in the background: its failure, or the restart it needs, must show here too.
         var line = flash is not null ? new CduCell(flash)
@@ -849,6 +854,10 @@ public static class CduPages
         return cut > 0 ? path[..cut] : path;
     }
 
+    /// <summary>
+    /// A path that fits: whole, else the drive and as many of the last folders as fit (C:\...\Sims\BeyondATC). A
+    /// trailing Community says nothing on its own, so it is dropped before the folder above it would be.
+    /// </summary>
     public static string ShortPath(string path, int max)
     {
         path = path.TrimEnd('\\', '/');
@@ -859,8 +868,51 @@ public static class CduPages
 
         // Split by hand: these are Windows paths, also when the tests run elsewhere.
         var parts = path.Split('\\', '/');
-        var shortened = $"{parts[0]}\\...\\{parts[^1]}";
-        return shortened.Length <= max ? shortened : "..." + parts[^1][^Math.Min(parts[^1].Length, max - 3)..];
+        var community = parts.Length > 2 && parts[^1].Equals("Community", StringComparison.OrdinalIgnoreCase);
+        foreach (var segments in community ? new[] { parts, parts[..^1] } : [parts])
+        {
+            if (string.Join('\\', segments) is { } whole && whole.Length <= max && segments.Length < parts.Length)
+            {
+                return whole;
+            }
+
+            for (var n = segments.Length - 2; n >= (community && segments == parts ? 2 : 1); n--)
+            {
+                var tail = $"{segments[0]}\\...\\{string.Join('\\', segments[^n..])}";
+                if (tail.Length <= max)
+                {
+                    return tail;
+                }
+            }
+        }
+
+        var last = community ? parts[^2] : parts[^1];
+        return "..." + last[^Math.Min(last.Length, max - 3)..];
+    }
+
+    /// <summary>
+    /// A Community folder by name when it is MSFS's own (MSFS 2024 COMMUNITY), else as <see cref="ShortPath"/>: the
+    /// Store and Steam paths are too long to tell apart in 24 characters.
+    /// </summary>
+    public static string PlaceName(string path, int max)
+    {
+        var p = path.TrimEnd('\\', '/').Replace('/', '\\');
+        if (p.EndsWith(@"\Packages\Community", StringComparison.OrdinalIgnoreCase))
+        {
+            if (p.Contains(@"\Microsoft.Limitless_8wekyb3d8bbwe\", StringComparison.OrdinalIgnoreCase)
+                || p.Contains(@"\Microsoft Flight Simulator 2024\", StringComparison.OrdinalIgnoreCase))
+            {
+                return "MSFS 2024 COMMUNITY";
+            }
+
+            if (p.Contains(@"\Microsoft.FlightSimulator_8wekyb3d8bbwe\", StringComparison.OrdinalIgnoreCase)
+                || p.Contains(@"\Microsoft Flight Simulator\", StringComparison.OrdinalIgnoreCase))
+            {
+                return "MSFS 2020 COMMUNITY";
+            }
+        }
+
+        return ShortPath(path, max);
     }
 
     public static string Duration(TimeSpan t) => t.TotalHours >= 1

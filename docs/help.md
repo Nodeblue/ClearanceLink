@@ -197,13 +197,13 @@ find it. The bottom line says **FSLTL READY** when all is well, or the one thing
 
 | Line | What it means |
 |---|---|
-| FOLDER, VERSION | Where your `fsltl-traffic-base` folder is, and FSLTL's version. CHOOSE picks another. |
+| FOLDER, VERSION | Where your `fsltl-traffic-base` folder is, and FSLTL's version. **MSFS 2024 COMMUNITY** (or 2020) means MSFS's own Community folder. Rest the mouse on the **i** to see the whole path. **CHOOSE**, at the bottom right, picks another folder. |
 | LIVERIES, BASE MODELS | How many liveries the folder has, and the base aircraft models they use. Every livery needs its base model in the same folder. Microsoft's own aircraft in FSLTL aren't counted or converted. |
 | BEYONDATC | **SEES IT IN MSFS 2024**: BeyondATC finds FSLTL itself. **SEES IT WHILE OPEN**: no MSFS 2024, so ClearanceLink shows BeyondATC your folder while it's open. **WON'T SEE IT**: BeyondATC makes no traffic; the bottom line says what to do. **CAN'T TELL**: see BEYONDATC CHECK FAILED below. |
-| BEYONDATC LOOKS IN | The one Community folder BeyondATC reads, from MSFS 2024's settings. With MSFS 2024, FSLTL must be in this folder. **NOT SET IN MSFS 2024**: MSFS 2024's settings name no folder BeyondATC reads, so it finds no traffic. Make a [support file](#getting-help) and send it. |
+| BEYONDATC LOOKS IN | The one Community folder BeyondATC reads, from MSFS 2024's settings (the **i** shows the whole path). With MSFS 2024, FSLTL must be in this folder, so it should match FOLDER. **NOT SET IN MSFS 2024**: MSFS 2024's settings name no folder BeyondATC reads, so it finds no traffic. Make a [support file](#getting-help) and send it. |
 | X-PLANE COPY | How many liveries are converted for X-Plane, with CONVERT or UPDATE. A few heavy models are left out, so it can be slightly fewer than LIVERIES. |
 
-What the bottom line tells you to do. CHOOSE and CONVERT are on the FOLDER and X-PLANE COPY lines.
+What the bottom line tells you to do. CHOOSE is at the bottom right; CONVERT and UPDATE are on the X-PLANE COPY line.
 
 | Bottom line | What to do |
 |---|---|
@@ -230,7 +230,7 @@ fill in aircraft FSLTL doesn't have. BeyondATC can't see them, so they don't rep
 Bluebell and X-CSL together.
 
 The **CSL MODELS** line on TRAFFIC names what ClearanceLink found (BLUEBELL, X-CSL, OTHER), or the number of packages
-when the names don't fit. Restart X-Plane after adding models.
+when the names don't fit. The names come from the folders: X-CSL is recognised when its folder name has X-CSL in it (the updater's own folder does), and Bluebell by its `BB_` folders. Other packages show as OTHER and work just the same. Restart X-Plane after adding models.
 
 **Bluebell**
 1. Download the **Bluebell OBJ8 CSL packages** from the X-Plane.org forums:
