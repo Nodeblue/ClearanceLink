@@ -73,6 +73,24 @@ public sealed class SessionTests
     }
 
     [Fact]
+    public async Task Batc_1_8_22_traffic_sync_setup_is_answered_quietly()
+    {
+        // BATC_TrafficSync defines two user-aircraft blocks and subscribes to "Frame"; with no Frame events BeyondATC
+        // keeps its older traffic updates on BATCDLLSimConnection (docs/protocol/simconnect.md).
+        var session = NewSession();
+        foreach (var packet in Fixtures.ClientPackets(6, Fixtures.Batc1822Setup))
+        {
+            await session.HandleAsync(packet);
+        }
+
+        await session.TickAsync();
+
+        Assert.Equal("BATC_TrafficSync", session.ClientName);
+        Assert.Equal(RecvId.Open, (RecvId)Assert.Single(_sent).TypeField);
+        Assert.Empty(session.Stats.UnmappedNames);
+    }
+
+    [Fact]
     public async Task No_aircraft_data_until_xplane_reports_a_position()
     {
         var session = NewSession();

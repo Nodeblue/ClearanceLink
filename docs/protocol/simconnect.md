@@ -18,19 +18,20 @@ Client payload: `char[256] appName | u32 0 | u8 0 | char[3] alias ("HK" KittyHaw
 Server reply `RecvId.Open (2)`: `char[256] applicationName | u32 x 8 versions (app then SimConnect) | u32 reserved1 | u32 reserved2`.
 Recorded MSFS 2024 reply (2026-09-30, protocol 6): `"SunRise"`, app 12.2.282174.999, SimConnect 12.2.0.0. BATC's simconnect_ws logs `app='SunRise' version=12.2 -> msfs2024=true`, so it identifies the sim from this reply alone.
 
-## BATC connections (recording 2026-09-30)
+## BATC 1.8.21 connections (recording 2026-09-30)
 - `BeyondATC` (simconnect_ws.exe) reads a 27-SimVar user-aircraft block at about 1 Hz, plus all Facilities data.
 - `BATCDLLSimConnection` (BeyondATC.exe) reads a 35-SimVar block at about 580 Hz, sends COM_RADIO_SET_HZ / COM_STBY_RADIO_SET_HZ, writes GSX L-vars, and creates and drives AI aircraft (AICreateSimulatedObject, AIReleaseControl, SetDataOnSimObject).
 - Both connections honour a `SimConnect.cfg` in the executable's folder.
 - An unknown airport in RequestFacilityData gets exception 1, and BATC retries every minute.
 
-## BATC 1.8.22 connections (recording 20261007-115756-serve on Ben's PC, BATC Player.log, 2026-10-07)
+## BATC 1.8.22 connections (recording 20261007-115756-serve on Ben's PC, excerpt in recordings/samples/batc-1.8.22-setup.jsonl, BATC Player.log, 2026-10-07)
 1.8.22 has no simconnect_ws.exe. BeyondATC.exe loads `BeyondATC_Data\Plugins\x86_64\SimConnect.dll` and opens three connections, all redirected by the `SimConnect.cfg` next to BeyondATC.exe:
 - `BATCDLLSimConnection`: as in 1.8.21 (aircraft, radios, events, AI traffic, EnumerateSimObjectsAndLiveries).
 - `BATC_Facilities`: AddToFacilityDefinition and RequestFacilityData for the player's airports and traffic airports (Player.log `[SimConnectBridge] <ICAO> player|traffic facility data ready`). It took over the facility work of the old `BeyondATC` connection.
 - `BATC_TrafficSync`: two data definitions of the user aircraft (lat, lon, altitude, bank, pitch, true heading, IAS; and lat, lon, true heading, IAS, AGL, pitch) and `SubscribeToSystemEvent "Frame"`. Without Frame events BATC keeps its older per-frame traffic updates (SetDataOnSimObject on `BATCDLLSimConnection`, as 1.8.21).
 - The sim generation comes from the Open reply (`[SimConnectBridge] SimConnect OPEN: app='SunRise' ... -> Msfs2024`); the FlightSimulator2024 process scan is now only a first guess ("No Flight Simulator process visible ... relying on SimConnect").
 - Flight start waits on `CAMERA STATE` ("[FlightLoad] Holding until the player is in the flight"); an unknown value is accepted after 60 s. With 2, Player.log shows `[Sim] CAMERA STATE 0 -> 2 | InFlight`.
+- `BATC_Facilities` and `BATC_TrafficSync` stayed open for the whole flight (no disconnect in the serve log after they reopened).
 - At start BATC may open `BATC_Facilities` and `BATC_TrafficSync`, drop them at once, and open all three again about 17 s later (both times in the same recording).
 
 ## Function ids

@@ -13,11 +13,14 @@ public static class Fixtures
 
     public static string BatcSetup => Path.Combine(RepoRoot, "recordings", "samples", "batc-1.8.21-setup.jsonl");
 
+    /// <summary>BeyondATC 1.8.22's three connections opening, and BATC_TrafficSync's setup (Ben's PC, 2026-10-07).</summary>
+    public static string Batc1822Setup => Path.Combine(RepoRoot, "recordings", "samples", "batc-1.8.22-setup.jsonl");
+
     public static MappingSet Mappings() => MappingSet.LoadDirectory(MappingDir);
 
     /// <summary>The client packets of one connection in the BATC setup recording, in order.</summary>
-    public static List<Packet> ClientPackets(int connection) =>
-        JsonlRecorder.ReadAll(BatcSetup)
+    public static List<Packet> ClientPackets(int connection, string? recording = null) =>
+        JsonlRecorder.ReadAll(recording ?? BatcSetup)
             .Where(e => e.Connection == connection && e.Dir == "c2s")
             .Select(e => new Packet(Direction.ClientToServer, Convert.FromHexString(e.Hex)))
             .ToList();

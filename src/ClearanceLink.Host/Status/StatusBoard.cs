@@ -27,18 +27,16 @@ public sealed class StatusBoard(
     /// <summary>The connection BeyondATC.exe opens; it reads the aircraft and tunes the radios.</summary>
     public const string AppClient = "BATCDLLSimConnection";
 
-    /// <summary>True for the connection that asks for airport data, whichever BeyondATC version opened it.</summary>
+    /// <summary>True for the connection that asks for airport data, whichever BeyondATC version opened it. Names are exact, as recorded.</summary>
     public static bool IsAirportClient(string name) =>
-        name.Equals(HelperClient, StringComparison.OrdinalIgnoreCase) || name.Equals(FacilitiesClient, StringComparison.OrdinalIgnoreCase);
+        name is HelperClient or FacilitiesClient;
 
     /// <summary>True for any connection BeyondATC opens (as opposed to another MSFS add-on).</summary>
     public static bool IsBatcClient(string name) =>
-        IsAirportClient(name)
-        || name.Equals(AppClient, StringComparison.OrdinalIgnoreCase)
-        || name.Equals(TrafficSyncClient, StringComparison.OrdinalIgnoreCase);
+        IsAirportClient(name) || name is AppClient or TrafficSyncClient;
 
     /// <summary>True when the app connection is open.</summary>
-    public static bool HasApp(IEnumerable<string> names) => names.Any(n => n.Equals(AppClient, StringComparison.OrdinalIgnoreCase));
+    public static bool HasApp(IEnumerable<string> names) => names.Contains(AppClient);
 
     /// <summary>True when BeyondATC is fully connected: its app connection and its airport-data connection.</summary>
     public static bool BatcConnected(IEnumerable<string> names)

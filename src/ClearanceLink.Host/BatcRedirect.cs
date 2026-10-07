@@ -3,7 +3,7 @@ using Microsoft.Win32;
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// Points BeyondATC at ClearanceLink, or back at MSFS. BATC opens two SimConnect connections: its helper
+/// Points BeyondATC at ClearanceLink, or back at MSFS. Up to 1.8.21, BATC connects from two programs: its helper
 /// simconnect_ws.exe (BeyondATC_Data\StreamingAssets) and BeyondATC.exe itself. Each reads a SimConnect.cfg next to
 /// it, so a cfg naming ClearanceLink's TCP port in both folders redirects BATC without touching MSFS
 /// (docs/research/batc-call-inventory.md). From 1.8.22 there is no helper and all connections come from BeyondATC.exe,
