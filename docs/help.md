@@ -173,8 +173,8 @@ close X-Plane and press it again.
    installer, the same one MSFS users run.
    - **With MSFS:** install FSLTL for MSFS 2024 if you have it (BeyondATC only looks there), else for MSFS 2020.
      The FSLTL line on TRAFFIC then says **FOUND IN MSFS**.
-   - **No MSFS on this PC:** FSLTL's installer puts FSLTL in MSFS's folders, so copy the `fsltl-traffic-base` folder
-     from a PC that has FSLTL to a folder on this PC. The FSLTL line says **NEEDS MSFS** or **NOT FOUND**: press
+   - **No MSFS on this PC:** copy the `fsltl-traffic-base` folder from a PC that has FSLTL to a folder on this PC.
+     (Installing FSLTL from its website on a PC without MSFS hasn't been tested yet.) The FSLTL line says **NEEDS MSFS** or **NOT FOUND**: press
      **CHOOSE** and pick that folder. ClearanceLink shows it to BeyondATC while ClearanceLink is open.
 3. **Convert FSLTL for X-Plane.** Press **CONVERT** (on TRAFFIC's FSLTL line, or the X-PLANE COPY line of FSLTL
    CHECK). It takes several minutes and about 13 GB on X-Plane's drive; the line counts MODELS and then TEXTURES as
