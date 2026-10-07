@@ -322,6 +322,16 @@ public sealed class PanelTests
     {
         Assert.Equal(@"C:\BeyondATC", CduPages.ShortPath(@"C:\BeyondATC\", 18));
         Assert.Equal(@"D:\...\BeyondATC", CduPages.ShortPath(@"D:\Games\Flight Sim Add-ons\BeyondATC", 18));
+        // As many of the last folders as fit; a bare Community says nothing, so it goes first.
+        Assert.Equal(@"D:\...\Sims\BeyondATC", CduPages.ShortPath(@"D:\Games\Flight Sim Add-ons\Sims\BeyondATC", 24));
+        Assert.Equal(@"D:\MSFS2024 Packages", CduPages.ShortPath(@"D:\MSFS2024 Packages\Community", 24));
+        Assert.Equal(@"E:\...\MSFS\Community", CduPages.ShortPath(@"E:\Games\Microsoft\MSFS\Community", 24));
+        Assert.Equal(@"C:\...\MSFS stuff", CduPages.ShortPath(@"C:\Users\Ben\Documents\MSFS stuff\Community", 24));
+        // MSFS's own Community folders by name: the Store and Steam paths don't fit.
+        Assert.Equal("MSFS 2024 COMMUNITY", CduPages.PlaceName(@"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community", 24));
+        Assert.Equal("MSFS 2024 COMMUNITY", CduPages.PlaceName(@"C:\Users\Pilot\AppData\Roaming\Microsoft Flight Simulator 2024\Packages\Community", 24));
+        Assert.Equal("MSFS 2020 COMMUNITY", CduPages.PlaceName(@"C:\Users\Pilot\AppData\Local\Packages\Microsoft.FlightSimulator_8wekyb3d8bbwe\LocalCache\Packages\Community", 24));
+        Assert.Equal(@"D:\MSFS2024 Packages", CduPages.PlaceName(@"D:\MSFS2024 Packages\Community", 24));
     }
 
     [AvaloniaFact]
@@ -370,7 +380,8 @@ public sealed class PanelTests
         var page = CduPages.Build(PanelPage.Fsltl, good);
         Assert.Equal("FSLTL CHECK", page.Title);
         Assert.Equal(("3350", "98"), (page.Rows[1].Left.Text, page.Rows[1].Right.Text));
-        Assert.Equal((@"C:\...\COMMUNITY", "VERSION 1.5.0", "CHOOSE>"), (page.Rows[0].Left.Text, page.Rows[0].LabelRight, page.Rows[0].Right.Text));
+        Assert.Equal((@"C:\MSFS\COMMUNITY", "VERSION 1.5.0", ""), (page.Rows[0].Left.Text, page.Rows[0].LabelRight, page.Rows[0].Right.Text));
+        Assert.Contains(folder, page.Rows[0].Help);
         Assert.Equal(("SEES IT", "IN MSFS 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
         Assert.Equal(("3350 LIVERIES", CduKey.ConvertFsltl), (page.Rows[4].Left.Text, page.Rows[4].KeyRight));
         Assert.Equal(("FSLTL READY", CduColor.Green), (page.Scratchpad.Text, page.Scratchpad.Color));
@@ -400,7 +411,8 @@ public sealed class PanelTests
 
         // Converted fine, but MSFS 2024 is here without FSLTL in the Community folder BeyondATC reads (issue #29).
         page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024, BatcCommunity = @"C:\Users\Pilot\AppData\Roaming\Microsoft Flight Simulator 2024\Packages\Community" });
-        Assert.Equal(("BEYONDATC LOOKS IN", @"C:\...\COMMUNITY", CduColor.Amber), (page.Rows[3].LabelLeft, page.Rows[3].Left.Text, page.Rows[3].Left.Color));
+        Assert.Equal(("BEYONDATC LOOKS IN", "MSFS 2024 COMMUNITY", CduColor.Amber), (page.Rows[3].LabelLeft, page.Rows[3].Left.Text, page.Rows[3].Left.Color));
+        Assert.Contains(@"Roaming\Microsoft Flight Simulator 2024\Packages\Community", page.Rows[3].Help);
         Assert.Equal(("WON'T SEE IT", "NOT IN 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
         Assert.Equal("COPY FSLTL TO LOOKS IN", page.Scratchpad.Text);
         // MSFS 2024's settings name only a NextBoot folder: BeyondATC reads none.
@@ -420,7 +432,7 @@ public sealed class PanelTests
         // With MSFS, FSLTL is installed through it; with MSFS 2024, it must go there for BeyondATC.
         Assert.Equal("GET FSLTL OR CHOOSE IT", CduPages.Build(PanelPage.Fsltl, Ready).Scratchpad.Text);
         Assert.Equal("GET FSLTL FOR MSFS 2024", CduPages.Build(PanelPage.Fsltl, Ready with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }).Scratchpad.Text);
-        Assert.Equal(CduKey.OpenModelsHelp, page.Rows[5].KeyRight);
+        Assert.Equal((CduKey.OpenModelsHelp, CduKey.ChooseFsltlFolder), (page.Rows[0].KeyRight, page.Rows[5].KeyRight));
 
         // Just after CHOOSE, the old folder's results aren't shown.
         page = CduPages.Build(PanelPage.Fsltl, noModels with { FsltlChecking = true });
@@ -512,8 +524,8 @@ public sealed class PanelTests
         // A typical first run: plugin not yet installed, Bluebell installed, FSLTL found but not converted.
         var firstRun = Ready with
         {
-            TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base",
-            FsltlHealth = new(3350, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\MSFS\Community",
+            TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community\fsltl-traffic-base",
+            FsltlHealth = new(3350, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community",
         };
         var window = new PanelWindow(() => firstRun);
         window.Show();
@@ -544,8 +556,8 @@ public sealed class PanelTests
         };
         var flying = Ready with
         {
-            TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154,
-            FsltlHealth = new(3154, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\MSFS\Community",
+            TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community\fsltl-traffic-base", FsltlLiveries = 3154,
+            FsltlHealth = new(3154, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community",
             FlightPlan = new FlightPlanView(plan, sent.AddMinutes(-2), SavedAs: plan.FileName, SentAt: sent),
         };
         var cleared = new PushView(new PushClearance(sent.AddMinutes(4), 90, "EAST", "pushback approved. Face east."), Preview: new PushPlan(21, 90, 39, "B"), XPlane: true, BetterPushback: true, Automatic: true, Stage: PushStage.WaitingForBrake, BrakeSet: true);
