@@ -67,7 +67,18 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
             return FileState.Missing;
         }
 
-        var keys = File.ReadAllLines(file)
+        string[] lines;
+        try
+        {
+            lines = File.ReadAllLines(file);
+        }
+        catch (IOException)
+        {
+            // Being written right now (always on rewrites it while the window reads it): treat as not there yet.
+            return FileState.Missing;
+        }
+
+        var keys = lines
             .Select(l => l.Split('=', 2, StringSplitOptions.TrimEntries))
             .Where(p => p.Length == 2)
             .GroupBy(p => p[0], StringComparer.OrdinalIgnoreCase)

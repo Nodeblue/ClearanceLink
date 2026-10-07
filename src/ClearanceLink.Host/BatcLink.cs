@@ -14,6 +14,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
     private readonly Lock _gate = new();
     private bool _guardStarted;
     private Timer? _keepOn;
+    private Func<bool> _stillAlwaysOn = () => true;
     private bool _released;
 
     /// <summary>Why the files could not be written or removed the last time; null when that worked.</summary>
@@ -57,21 +58,25 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
     {
         lock (_gate)
         {
-            if (_released)
+            // A timer tick that ran late, after serve stopped, or always on undone from the command line meanwhile.
+            if (_released || !_stillAlwaysOn())
             {
-                // A timer tick that ran late, after serve stopped.
                 return;
             }
 
-            Apply(redirect.SwitchOn, "batc: always on; BeyondATC's config files were missing, written again");
+            Apply(redirect.SwitchOn, "batc: always on; BeyondATC's config files were missing, written again", logOnce: true);
         }
     }
 
-    /// <summary>Calls <see cref="KeepOn"/> now and then every <paramref name="period"/> until <see cref="Release"/>.</summary>
-    public void KeepOnEvery(TimeSpan period)
+    /// <summary>
+    /// Calls <see cref="KeepOn"/> now and then every <paramref name="period"/> until <see cref="Release"/>, while
+    /// <paramref name="stillAlwaysOn"/> says always on is still chosen (the command line can change it).
+    /// </summary>
+    public void KeepOnEvery(TimeSpan period, Func<bool> stillAlwaysOn)
     {
         lock (_gate)
         {
+            _stillAlwaysOn = stillAlwaysOn;
             _keepOn ??= new Timer(_ => KeepOn(), null, TimeSpan.Zero, period);
         }
     }
@@ -97,7 +102,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
     /// </summary>
     public static bool GuardShouldRelease(ConnectionMode now, bool portInUse) => now == ConnectionMode.Automatic && !portInUse;
 
-    private void Apply(Func<IReadOnlyList<string>> change, string line)
+    private void Apply(Func<IReadOnlyList<string>> change, string line, bool logOnce = false)
     {
         try
         {
@@ -110,8 +115,8 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
         }
         catch (RedirectFailedException ex)
         {
-            // Logged once: always on retries every few seconds.
-            if (Problem != ex.Message)
+            // Always on retries every few seconds: the same problem is logged once.
+            if (!logOnce || Problem != ex.Message)
             {
                 log($"batc: {ex.Message}");
             }
