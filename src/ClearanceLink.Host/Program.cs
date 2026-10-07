@@ -503,7 +503,7 @@ namespace ClearanceLink.Host
                 if (BatcFolder(new Options()) is { } batc)
                 {
                     link = new BatcLink(new BatcRedirect(batc), PacketConsole.Info);
-                    link.KeepOnEvery(TimeSpan.FromSeconds(10));
+                    link.KeepOnEvery(TimeSpan.FromSeconds(10), () => AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn);
                 }
 
                 return listener;

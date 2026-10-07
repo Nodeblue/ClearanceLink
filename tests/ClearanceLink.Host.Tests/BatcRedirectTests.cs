@@ -197,12 +197,30 @@ public sealed class BatcRedirectTests : IDisposable
     }
 
     [Fact]
+    public void Always_on_stops_once_the_command_line_switches_it_off()
+    {
+        var redirect = new BatcRedirect(_batc);
+        var alwaysOn = false;
+        var link = new BatcLink(redirect, _ => { });
+
+        link.KeepOnEvery(TimeSpan.FromMinutes(5), () => alwaysOn);
+        Thread.Sleep(200);
+        link.KeepOn();
+        Assert.All(redirect.Files, f => Assert.False(File.Exists(f)));
+
+        alwaysOn = true;
+        link.KeepOn();
+        link.Release(ConnectionMode.AlwaysOn);
+        Assert.True(redirect.IsOn);
+    }
+
+    [Fact]
     public void Always_on_timer_writes_the_files_straight_away()
     {
         var redirect = new BatcRedirect(_batc);
         var link = new BatcLink(redirect, _ => { });
 
-        link.KeepOnEvery(TimeSpan.FromMinutes(5));
+        link.KeepOnEvery(TimeSpan.FromMinutes(5), () => true);
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (!redirect.IsOn && DateTime.UtcNow < deadline)
         {

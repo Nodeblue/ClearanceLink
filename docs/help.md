@@ -274,7 +274,7 @@ BeyondATC goes to MSFS and STATUS says **CLOSE MSFS TO CONNECT**.
 
 If you want MSFS open while flying X-Plane, choose **ALWAYS ON** on SETUP. The two files then stay in place even after
 ClearanceLink closes, so BeyondATC always goes to ClearanceLink. If a BeyondATC update removes them, ClearanceLink
-puts them back when it starts. Choose **AUTOMATIC** again before flying MSFS with BeyondATC.
+puts them back while it runs. A SimConnect.cfg of your own in those places is replaced while ALWAYS ON is chosen. Choose **AUTOMATIC** again before flying MSFS with BeyondATC.
 
 If BeyondATC is in a folder ClearanceLink can't write to (under Program Files, for example), ClearanceLink uses MSFS's
 own connection instead, while MSFS is closed. Running ClearanceLink as administrator lets it use the files.
