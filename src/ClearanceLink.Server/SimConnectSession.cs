@@ -289,10 +289,14 @@ public sealed class SimConnectSession(
         }
 
         // Zeros would put the aircraft at 0,0 and BATC would load the wrong airports, so say nothing until X-Plane has
-        // delivered a position. BATC keeps asking (it polls with ONCE), and periodic requests retry on the next tick.
-        if (!xplane.IsConnected || datums.Any(d => IsPosition(d.Name) && resolver.Resolve(d.Name, d.Units).Status != ResolveStatus.Ok))
+        // delivered a position. A zero clock is as bad: BeyondATC 1.8.22 reads it as year 1 and its live-traffic time
+        // check overflows, stopping the flight load at 25% (issue #36). BATC keeps asking (it polls with ONCE), and
+        // periodic requests retry on the next tick.
+        if (!xplane.IsConnected
+            || datums.Any(d => IsPosition(d.Name) && resolver.Resolve(d.Name, d.Units).Status != ResolveStatus.Ok)
+            || datums.Any(d => IsClock(d.Name) && resolver.Resolve(d.Name, d.Units).Status == ResolveStatus.Pending))
         {
-            LogOnce("waiting-xplane", $"#{connectionId} holding aircraft data until X-Plane is connected and reports a position");
+            LogOnce("waiting-xplane", $"#{connectionId} holding aircraft data until X-Plane is connected and reports a position and the time");
             return;
         }
 
@@ -708,6 +712,11 @@ public sealed class SimConnectSession(
 
     private static bool IsPosition(string simVar) =>
         simVar.Equals("PLANE LATITUDE", StringComparison.OrdinalIgnoreCase) || simVar.Equals("PLANE LONGITUDE", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The sim clock and date. Sent as zero they read as midnight on 1 January of year 1.</summary>
+    private static bool IsClock(string simVar) =>
+        simVar.ToUpperInvariant() is "ZULU TIME" or "LOCAL TIME" or "ZULU DAY OF YEAR" or "ZULU DAY OF WEEK" or "ZULU YEAR"
+            or "ZULU MONTH OF YEAR" or "ZULU DAY OF MONTH" or "LOCAL DAY OF YEAR" or "LOCAL YEAR" or "ABSOLUTE TIME";
 
     private static uint U(Dictionary<string, object?> f, string key) => f.GetValueOrDefault(key) is uint u ? u : 0;
 
