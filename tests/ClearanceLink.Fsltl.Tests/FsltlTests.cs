@@ -37,10 +37,39 @@ public sealed class FsltlTests
     }
 
     [Fact]
+    public void Check_counts_liveries_and_base_models_and_finds_missing_models()
+    {
+        using var package = new FakePackage();
+        File.WriteAllText(Path.Combine(package.Root, "manifest.json"), """{ "package_version": "1.5.0" }""");
+
+        Assert.Equal(new FsltlHealth(2, 1, 0, "1.5.0"), FsltlCheck.Check(package.Root));
+
+        // Microsoft's own models are never converted, so they aren't counted.
+        var asobo = Directory.CreateDirectory(Path.Combine(package.Root, "SimObjects", "Airplanes", "FSLTL_Asobo_C172")).FullName;
+        File.WriteAllText(Path.Combine(asobo, "aircraft.cfg"), "[FLTSIM.0]\ntitle = \"FSLTL_Asobo_C172\"\n");
+        Assert.Equal(new FsltlHealth(2, 1, 0, "1.5.0"), FsltlCheck.Check(package.Root));
+
+        // The base model gone (a half-copied FSLTL): both liveries are still found, but nothing can be converted.
+        Directory.Delete(Path.Combine(package.Root, "SimObjects", "Airplanes", "FSLTL_A20N", "model.CFM"), recursive: true);
+        var broken = FsltlCheck.Check(package.Root);
+        Assert.Equal(new FsltlHealth(2, 0, 2, "1.5.0"), broken);
+        Assert.True(broken!.NoModels);
+        Assert.Contains("no base models", FsltlCheck.Describe(package.Root, broken), StringComparison.Ordinal);
+
+        // Not a package at all.
+        Assert.Null(FsltlCheck.Check(Path.Combine(package.Root, "nothing")));
+    }
+
+    [Fact]
     public void Locator_reads_installed_packages_path()
     {
         Assert.Equal(@"D:\MSFS\Packages", FsltlLocator.InstalledPackagesPath("Version 1\nInstalledPackagesPath \"D:\\MSFS\\Packages\"\n"));
         Assert.Null(FsltlLocator.InstalledPackagesPath("Version 1\n"));
+        // BeyondATC skips InstalledPackagesPathNextBoot, wherever it is in the file (issue #29).
+        var both = "InstalledPackagesPathNextBoot \"D:\\MSFS2024 Packages\"\nInstalledPackagesPath \"C:\\Roaming\\Packages\"\n";
+        Assert.Equal(@"C:\Roaming\Packages", FsltlLocator.InstalledPackagesPath(both));
+        Assert.Equal(@"D:\MSFS2024 Packages", FsltlLocator.InstalledPackagesPathNextBoot(both));
+        Assert.Null(FsltlLocator.InstalledPackagesPath("InstalledPackagesPathNextBoot \"D:\\X\"\n"));
     }
 
     [Fact]
