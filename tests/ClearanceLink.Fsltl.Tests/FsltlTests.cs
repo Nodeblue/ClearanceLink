@@ -65,6 +65,11 @@ public sealed class FsltlTests
     {
         Assert.Equal(@"D:\MSFS\Packages", FsltlLocator.InstalledPackagesPath("Version 1\nInstalledPackagesPath \"D:\\MSFS\\Packages\"\n"));
         Assert.Null(FsltlLocator.InstalledPackagesPath("Version 1\n"));
+        // BeyondATC skips InstalledPackagesPathNextBoot, wherever it is in the file (issue #29).
+        var both = "InstalledPackagesPathNextBoot \"D:\\MSFS2024 Packages\"\nInstalledPackagesPath \"C:\\Roaming\\Packages\"\n";
+        Assert.Equal(@"C:\Roaming\Packages", FsltlLocator.InstalledPackagesPath(both));
+        Assert.Equal(@"D:\MSFS2024 Packages", FsltlLocator.InstalledPackagesPathNextBoot(both));
+        Assert.Null(FsltlLocator.InstalledPackagesPath("InstalledPackagesPathNextBoot \"D:\\X\"\n"));
     }
 
     [Fact]

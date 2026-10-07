@@ -370,9 +370,9 @@ public sealed class PanelTests
         var page = CduPages.Build(PanelPage.Fsltl, good);
         Assert.Equal("FSLTL CHECK", page.Title);
         Assert.Equal(("3350", "98"), (page.Rows[1].Left.Text, page.Rows[1].Right.Text));
-        Assert.Equal((@"C:\MSFS\COMMUNITY", "1.5.0"), (page.Rows[0].Left.Text, page.Rows[0].Right.Text));
+        Assert.Equal((@"C:\...\COMMUNITY", "VERSION 1.5.0", "CHOOSE>"), (page.Rows[0].Left.Text, page.Rows[0].LabelRight, page.Rows[0].Right.Text));
         Assert.Equal(("SEES IT", "IN MSFS 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
-        Assert.Equal(("3350 LIVERIES", CduKey.ConvertFsltl), (page.Rows[3].Left.Text, page.Rows[3].KeyRight));
+        Assert.Equal(("3350 LIVERIES", CduKey.ConvertFsltl), (page.Rows[4].Left.Text, page.Rows[4].KeyRight));
         Assert.Equal(("FSLTL READY", CduColor.Green), (page.Scratchpad.Text, page.Scratchpad.Color));
         Assert.Contains(page.Rows, r => r.KeyRight == CduKey.ChooseFsltlFolder);
         Assert.Contains(page.Rows, r => r.KeyLeft == CduKey.GoTraffic);
@@ -383,7 +383,7 @@ public sealed class PanelTests
         page = CduPages.Build(PanelPage.Fsltl, noModels);
         Assert.Equal(("NONE", CduColor.Amber), (page.Rows[1].Right.Text, page.Rows[1].Right.Color));
         Assert.Equal(("LIVERIES BUT NO MODELS", CduColor.Amber), (page.Scratchpad.Text, page.Scratchpad.Color));
-        Assert.Equal("-", page.Rows[3].Left.Text);
+        Assert.Equal("-", page.Rows[4].Left.Text);
         Assert.Contains(CduPages.Build(PanelPage.Traffic, noModels).Rows, r => r.LabelLeft == "FSLTL" && r.Left.Text == "NO BASE MODELS" && r.KeyRight == CduKey.GoFsltl);
         Assert.Contains(CduPages.Build(PanelPage.Setup, noModels).Rows, r => r.Left.Text == "CHECK FSLTL");
 
@@ -392,8 +392,9 @@ public sealed class PanelTests
         Assert.Equal(CduColor.Amber, page.Rows[1].Right.Color);
         Assert.Equal("120 LIVERIES: NO MODEL", page.Scratchpad.Text);
 
-        // Converted fine, but MSFS 2024 is here without FSLTL in its Community folder (issue #29).
-        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 });
+        // Converted fine, but MSFS 2024 is here without FSLTL in the Community folder BeyondATC reads (issue #29).
+        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024, BatcCommunity = @"C:\Users\Pilot\AppData\Roaming\Microsoft Flight Simulator 2024\Packages\Community" });
+        Assert.Equal(("BEYONDATC LOOKS IN", @"C:\...\COMMUNITY", CduColor.Amber), (page.Rows[3].LabelLeft, page.Rows[3].Left.Text, page.Rows[3].Left.Color));
         Assert.Equal(("WON'T SEE IT", "NOT IN 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
         Assert.Equal("PUT FSLTL IN MSFS 2024", page.Scratchpad.Text);
 
@@ -403,7 +404,7 @@ public sealed class PanelTests
 
         // Found but not converted yet; no folder at all.
         page = CduPages.Build(PanelPage.Fsltl, good with { FsltlLiveries = 0 });
-        Assert.Equal(("NOT CONVERTED", "CONVERT>"), (page.Rows[3].Left.Text, page.Rows[3].Right.Text));
+        Assert.Equal(("NOT CONVERTED", "CONVERT>"), (page.Rows[4].Left.Text, page.Rows[4].Right.Text));
         Assert.Equal("READY TO CONVERT", page.Scratchpad.Text);
         page = CduPages.Build(PanelPage.Fsltl, Ready);
         Assert.Equal(("NOT FOUND", "CHOOSE YOUR FSLTL FOLDER"), (page.Rows[0].Left.Text, page.Scratchpad.Text));
@@ -485,7 +486,7 @@ public sealed class PanelTests
         var firstRun = Ready with
         {
             TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base",
-            FsltlHealth = new(3350, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found,
+            FsltlHealth = new(3350, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\MSFS\Community",
         };
         var window = new PanelWindow(() => firstRun);
         window.Show();
@@ -517,7 +518,7 @@ public sealed class PanelTests
         var flying = Ready with
         {
             TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3154,
-            FsltlHealth = new(3154, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found,
+            FsltlHealth = new(3154, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\MSFS\Community",
             FlightPlan = new FlightPlanView(plan, sent.AddMinutes(-2), SavedAs: plan.FileName, SentAt: sent),
         };
         var cleared = new PushView(new PushClearance(sent.AddMinutes(4), 90, "EAST", "pushback approved. Face east."), Preview: new PushPlan(21, 90, 39, "B"), XPlane: true, BetterPushback: true, Automatic: true, Stage: PushStage.WaitingForBrake, BrakeSet: true);

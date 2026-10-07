@@ -150,7 +150,8 @@ public sealed record PanelState(
     PushView? Push = null,
     BatcTrafficModels.Outcome? BatcModels = null,
     FsltlHealth? FsltlHealth = null,
-    string? CslNames = null)
+    string? CslNames = null,
+    string? BatcCommunity = null)
 {
     /// <summary>BeyondATC won't find FSLTL (or AIG / FS Traffic), so it creates no traffic at all (ADR-0014).</summary>
     public bool BatcNoModels => BatcModels is BatcTrafficModels.Outcome.NoFsltl or BatcTrafficModels.Outcome.NotInMsfs2024;
@@ -623,7 +624,6 @@ public static class CduPages
     {
         var h = s.FsltlHealth;
         var known = s.FsltlFolder is not null && h is not null;
-        var version = h?.Version is { } v ? Fit(v.ToUpperInvariant(), 8) : "-";
         var batc = s.BatcModels switch
         {
             BatcTrafficModels.Outcome.Found => (new CduCell("SEES IT", CduColor.Green), new CduCell("IN MSFS 2024", CduColor.Green)),
@@ -633,12 +633,19 @@ public static class CduPages
             BatcTrafficModels.Outcome.Failed => (new CduCell("CAN'T TELL", CduColor.Amber), new CduCell("")),
             _ => (new CduCell("-"), new CduCell("")),
         };
+        var looksIn = s switch
+        {
+            { BatcCommunity: { } community } => new CduCell(ShortPath(community, Width), s.BatcModels == BatcTrafficModels.Outcome.Found ? CduColor.Green : CduColor.Amber),
+            { BatcModels: BatcTrafficModels.Outcome.Pointed or BatcTrafficModels.Outcome.PointedByAnother } => new CduCell("YOUR FSLTL FOLDER", CduColor.Green),
+            _ => new CduCell("-"),
+        };
         var rows = new[]
         {
             (s.FsltlFolder is null
-                ? Row("FOLDER", "VERSION", new("NOT FOUND", CduColor.Amber), new("-"))
-                : Row("FOLDER", "VERSION", new(ShortPath(Parent(s.FsltlFolder), Width - 1 - version.Length)), new(version)))
-                with { Help = "Where the fsltl-traffic-base folder ClearanceLink uses is: usually MSFS's Community folder. CHOOSE FOLDER picks another." },
+                ? Row("FOLDER", "", new("NOT FOUND", CduColor.Amber), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder)
+                : Row("FOLDER", h?.Version is { } v ? Fit($"VERSION {v.ToUpperInvariant()}", 13) : "",
+                    new(ShortPath(Parent(s.FsltlFolder), Width - 8)), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder))
+                with { Help = "Where the fsltl-traffic-base folder ClearanceLink uses is, and FSLTL's version. CHOOSE picks another." },
             (known
                 ? Row("LIVERIES", "BASE MODELS",
                     h!.Liveries > 0 ? new($"{h.Liveries}", CduColor.Green) : new("NONE", CduColor.Amber),
@@ -646,9 +653,10 @@ public static class CduPages
                 : Row("LIVERIES", "BASE MODELS", new("-"), new("-")))
                 with { Help = "FSLTL's liveries and the base aircraft models they use. Every livery needs its base model, in the same folder, to be converted." },
             Row("BEYONDATC", "", batc.Item1, batc.Item2)
-                with { Help = "BeyondATC only looks for FSLTL in MSFS 2024's Community folder. Without MSFS 2024, ClearanceLink shows it your FSLTL folder while it's open." },
+                with { Help = "Whether BeyondATC will find FSLTL. Without MSFS 2024, ClearanceLink shows it your FSLTL folder while it's open." },
+            Row("BEYONDATC LOOKS IN", "", looksIn, new(""))
+                with { Help = "The only Community folder BeyondATC reads, from MSFS 2024's settings (UserCfg.opt). FSLTL must be in it." },
             CopyRow(s) with { Help = "The copy of FSLTL converted for X-Plane. Close X-Plane to convert or update it." },
-            Row("", "", new(""), new("CHOOSE FOLDER>"), CduKey.None, CduKey.ChooseFsltlFolder),
             Row("", "", new("<TRAFFIC"), new(""), CduKey.GoTraffic),
         };
         // A conversion runs in the background: its failure, or the restart it needs, must show here too.

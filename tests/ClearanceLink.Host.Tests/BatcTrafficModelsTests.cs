@@ -58,6 +58,26 @@ public sealed class BatcTrafficModelsTests : IDisposable
     }
 
     [Fact]
+    public void A_next_boot_packages_folder_is_not_where_beyondatc_looks()
+    {
+        // Issue #29: MSFS 2024 (Steam) with FSLTL under InstalledPackagesPathNextBoot, written before the line BeyondATC reads.
+        var roaming = Path.Combine(_root, "Roaming", "Microsoft Flight Simulator 2024", "Packages");
+        var moved = Path.Combine(_root, "D", "MSFS2024 Packages");
+        var fsltl = Fsltl(Path.Combine(moved, "Community", "fsltl-traffic-base"));
+        Directory.CreateDirectory(Path.GetDirectoryName(Steam)!);
+        File.WriteAllText(Steam, $"Version 1\r\nInstalledPackagesPathNextBoot \"{moved}\"\r\nInstalledPackagesPath \"{roaming}\"\r\n");
+
+        Assert.Empty(WhatBatcFinds());
+        Assert.Equal((Path.Combine(roaming, "Community"), Path.Combine(moved, "Community")), Models.Where());
+        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, Models.Check(fsltl));
+        var result = Models.Provide(fsltl);
+        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, result.Outcome);
+        Assert.Contains(Path.Combine(roaming, "Community"), result.Line, StringComparison.Ordinal);
+        Assert.Contains("InstalledPackagesPathNextBoot", result.Line, StringComparison.Ordinal);
+        Assert.Contains("which has traffic models", result.Line, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Without_msfs_2024_beyondatc_is_pointed_at_a_chosen_fsltl_folder_until_close()
     {
         var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
