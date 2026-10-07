@@ -27,6 +27,9 @@ public static class FsltlCatalog
 {
     public const string PackageName = "fsltl-traffic-base";
 
+    /// <summary>The end of a <see cref="Load"/> problem line for a livery whose base model is missing.</summary>
+    public const string NoModelProblem = "model folder or XML not found";
+
     /// <summary>Liveries of every aircraft folder under <paramref name="packageRoot"/>/SimObjects/Airplanes.</summary>
     /// <param name="problems">Gets one line per livery that could not be resolved.</param>
     /// <param name="skipFolder">Aircraft folders (by name) not to read at all.</param>
@@ -74,7 +77,7 @@ public static class FsltlCatalog
             var model = ResolveModel(folder, baseFolder, cfg.Get(section, "model") ?? "");
             if (model is null)
             {
-                problems?.Add($"{title}: model folder or XML not found");
+                problems?.Add($"{title}: {NoModelProblem}");
                 continue;
             }
 

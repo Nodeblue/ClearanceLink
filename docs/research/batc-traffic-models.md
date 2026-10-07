@@ -29,6 +29,15 @@ commonData)` once BeyondATC knows which sim it is on. ClearanceLink answers as M
 
 The log line `[CommunityFolder] <path>` shows the folder it used.
 
+## InstalledPackagesPathNextBoot (issue #29)
+A tester's MSFS 2024 (Steam) UserCfg.opt named two folders: an `InstalledPackagesPathNextBoot` line with the drive
+their FSLTL was on (`D:\MSFS2024 Packages`), and an `InstalledPackagesPath` line with the default
+`%APPDATA%\Microsoft Flight Simulator 2024\Packages`. BeyondATC's regex (`InstalledPackagesPath\s+"..."`) skips the
+NextBoot line, and its Player.log showed `[CommunityFolder]` as the default folder, so it found no traffic models.
+ClearanceLink 0.7.3 read the NextBoot line by mistake (it matched any line starting with InstalledPackagesPath) and
+logged a garbled path; from 0.7.4 it reads the file as BeyondATC does and logs both folders. Why MSFS kept both lines
+(a move not yet finished, or something else) is not known.
+
 ## What this means for ClearanceLink
 - BeyondATC needs FSLTL (or AIG / FS Traffic) installed **as an MSFS package**, in MSFS 2024's Community folder, to
   create any traffic. ClearanceLink's converted X-Plane models and Bluebell are invisible to it; they only decide how

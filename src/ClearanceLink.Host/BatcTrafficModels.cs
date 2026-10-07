@@ -110,11 +110,14 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
             {
                 // A stand-in left by a crash goes now that MSFS 2024 has its own file.
                 Remove(onlyOurs: false);
-                var packages = FsltlLocator.InstalledPackagesPath(File.ReadAllText(cfg));
-                var community = packages is null ? null : Path.Combine(packages, "Community");
+                var (community, nextBoot) = Where();
+                // MSFS 2024 can also name an InstalledPackagesPathNextBoot folder; BeyondATC doesn't read it (issue #29).
+                var notRead = nextBoot is not null && !string.Equals(nextBoot, community, StringComparison.OrdinalIgnoreCase)
+                    ? $"; UserCfg.opt's InstalledPackagesPathNextBoot names {nextBoot}{(HasTrafficModels(nextBoot) ? ", which has traffic models" : "")}, but BeyondATC doesn't read that line"
+                    : "";
                 return community is not null && HasTrafficModels(community)
-                    ? new(Outcome.Found, $"batc-models: BeyondATC finds traffic models in MSFS 2024's {community}")
-                    : new(Outcome.NotInMsfs2024, $"batc-models: BeyondATC looks for traffic models only in MSFS 2024's {community ?? cfg} and there are none; install FSLTL for MSFS 2024 there or BeyondATC shows no traffic");
+                    ? new(Outcome.Found, $"batc-models: BeyondATC finds traffic models in MSFS 2024's {community} ({cfg})")
+                    : new(Outcome.NotInMsfs2024, $"batc-models: BeyondATC looks for traffic models only in MSFS 2024's {community ?? cfg} ({cfg}) and there are none{notRead}; install FSLTL for MSFS 2024 there or BeyondATC shows no traffic");
             }
 
             if (OwnerOf(steamUserCfg) is { } other && other != _owner && _isAlive(other))
@@ -242,6 +245,26 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
     }
 
     /// <summary>MSFS 2024's own UserCfg.opt, the way BeyondATC picks it (Store first), ignoring ClearanceLink's.</summary>
+    /// <summary>
+    /// With MSFS 2024 installed: the Community folder BeyondATC reads (null when UserCfg.opt names none), and the one
+    /// UserCfg.opt's InstalledPackagesPathNextBoot names, if any (BeyondATC doesn't read that line). Both null without
+    /// MSFS 2024 or when the file can't be read.
+    /// </summary>
+    public (string? Community, string? NextBoot) Where()
+    {
+        try
+        {
+            if (MsfsUserCfg() is not { } cfg) return (null, null);
+            var text = File.ReadAllText(cfg);
+            return (FsltlLocator.InstalledPackagesPath(text) is { } p ? Path.Combine(p, "Community") : null,
+                FsltlLocator.InstalledPackagesPathNextBoot(text) is { } n ? Path.Combine(n, "Community") : null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (null, null);
+        }
+    }
+
     private string? MsfsUserCfg() =>
         new[] { storeUserCfg, steamUserCfg }.FirstOrDefault(f => File.Exists(f) && !FsltlLocator.IsStandIn(File.ReadAllText(f)));
 
