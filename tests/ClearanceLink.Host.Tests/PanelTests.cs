@@ -94,9 +94,11 @@ public sealed class PanelTests
     [InlineData(true, false, true, true, false, "BEYONDATC CONNECTING")]
     [InlineData(true, false, false, true, true, "X-PLANE NOT CONNECTED")]
     [InlineData(true, true, true, true, true, "READY FOR CLEARANCE")]
-    public void Scratchpad_says_what_to_do_next(bool serving, bool msfs, bool xplane, bool helper, bool app, string expected)
+    [InlineData(true, false, true, false, false, "BEYONDATC CONNECTING", true)]
+    [InlineData(true, false, false, false, false, "X-PLANE NOT CONNECTED", true)]
+    public void Scratchpad_says_what_to_do_next(bool serving, bool msfs, bool xplane, bool helper, bool app, string expected, bool trafficSync = false)
     {
-        var state = Ready with { Serving = serving, MsfsRunning = msfs, XPlaneConnected = xplane, BatcHelper = helper, BatcApp = app };
+        var state = Ready with { Serving = serving, MsfsRunning = msfs, XPlaneConnected = xplane, BatcHelper = helper, BatcApp = app, BatcTrafficSync = trafficSync };
 
         Assert.Equal(expected, CduPages.Advice(state).Text);
     }

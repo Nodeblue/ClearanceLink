@@ -3,7 +3,7 @@
 This is the single source of instructions for coding agents (Codex, Claude Code) working on ClearanceLink. `CLAUDE.md` only imports this file.
 
 ## What this is
-ClearanceLink lets BeyondATC (BATC), an MSFS-only ATC add-on, run against X-Plane 12. BATC's helper `simconnect_ws.exe` speaks SimConnect. ClearanceLink acts as the SimConnect **server**, standing in for MSFS, and answers from X-Plane:
+ClearanceLink lets BeyondATC (BATC), an MSFS-only ATC add-on, run against X-Plane 12. BATC speaks SimConnect (from 1.8.22 BeyondATC.exe itself; before that also its helper `simconnect_ws.exe`). ClearanceLink acts as the SimConnect **server**, standing in for MSFS, and answers from X-Plane:
 - Aircraft state, radios and events come from the X-Plane Web API (REST + WebSocket, `localhost:8086`, X-Plane 12.1.1+).
 - Airports, taxiways, gates and procedures come from X-Plane's data files (`apt.dat`, CIFP). This is planned for Phase 2.
 - AI traffic is a stretch goal and needs a C++ X-Plane plugin (XPMP2) later.

@@ -10,8 +10,8 @@ Ben found that BeyondATC only needs the process when it connects (first start or
 BeyondATC carried on.
 
 ## Decision
-ClearanceLink starts the stand-in as before, closes it once both BeyondATC connections (`BeyondATC` and
-`BATCDLLSimConnection`) have been open for 5 s, and starts it again within about a second when either drops. While
+ClearanceLink starts the stand-in as before, closes it once BeyondATC's app and airport-data connections (`BATCDLLSimConnection`, and `BeyondATC`, or
+`BATC_Facilities` from 1.8.22; see the update below) have been open for 5 s, and starts it again within about a second when either drops. While
 the real MSFS runs nothing changes (no stand-in). `StubLauncher.FollowBatc`, checked once a second by `serve`.
 
 ## Alternatives
