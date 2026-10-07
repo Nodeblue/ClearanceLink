@@ -206,9 +206,10 @@ bottom line says **FSLTL READY** when all is well, or the one thing to fix.
 
 | Line | What it means |
 |---|---|
-| FOLDER, VERSION | Where your `fsltl-traffic-base` folder is, and FSLTL's version. CHOOSE FOLDER picks another. |
+| FOLDER, VERSION | Where your `fsltl-traffic-base` folder is, and FSLTL's version. CHOOSE picks another. |
 | LIVERIES, BASE MODELS | How many liveries the folder has, and the base aircraft models they use. Every livery needs its base model in the same folder. Microsoft's own aircraft in FSLTL aren't counted or converted. A few heavy models are left out of the conversion too, so X-PLANE COPY can show slightly fewer liveries. |
 | BEYONDATC | **SEES IT IN MSFS 2024**: BeyondATC finds FSLTL itself. **SEES IT WHILE OPEN**: no MSFS 2024, so ClearanceLink shows BeyondATC your folder while it's open. **WON'T SEE IT**: BeyondATC makes no traffic (see Problems). |
+| BEYONDATC LOOKS IN | The only Community folder BeyondATC reads, taken from MSFS 2024's settings. FSLTL must be in this folder. |
 | X-PLANE COPY | How many liveries are converted for X-Plane, with CONVERT or UPDATE. |
 
 ### How a model is picked
@@ -265,7 +266,7 @@ MSFS for that X-Plane has no equivalent of (those are ignored).
 | A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |
 | No traffic visible | On TRAFFIC (from SETUP), the X-PLANE PLUGIN must say INSTALLED and BEYONDATC TRAFFIC must say SEES FSLTL. Traffic must be on in BeyondATC. |
 | TRAFFIC's BEYONDATC TRAFFIC says NO FSLTL (STATUS or SETUP: NO FSLTL) | BeyondATC won't find FSLTL, so it creates no traffic. See the next row. |
-| BEYONDATC TRAFFIC says NOT IN MSFS 2024, with liveries converted | MSFS 2024 is on this PC but FSLTL isn't in its Community folder. BeyondATC only looks there, and ClearanceLink doesn't change MSFS 2024's files. Install FSLTL for MSFS 2024 (in its Community folder). The converted copy for X-Plane isn't enough: BeyondATC can't see it. STATUS and SETUP say NO FSLTL in this case. |
+| BEYONDATC TRAFFIC says NOT IN MSFS 2024, with liveries converted | MSFS 2024 is on this PC but FSLTL isn't in its Community folder. BeyondATC only looks there, and ClearanceLink doesn't change MSFS 2024's files. Open FSLTL CHECK: BEYONDATC LOOKS IN shows the folder BeyondATC reads. Put FSLTL in that folder (or change MSFS 2024's package folder so it is that one). The converted copy for X-Plane isn't enough: BeyondATC can't see it. STATUS and SETUP say NO FSLTL in this case. If you moved MSFS 2024's packages to another drive, its settings file can name both the old and the new folder, and BeyondATC reads the old one; the ClearanceLink log's `batc-models:` line names both. |
 | FSLTL says NO BASE MODELS, or FSLTL CHECK says LIVERIES BUT NO MODELS | The folder has FSLTL's liveries but not the base aircraft models they use, so nothing can be converted. Update or reinstall FSLTL Traffic Base with the FSLTL injector, then choose the folder again. |
 | FSLTL CHECK says CAN'T READ THIS FOLDER | The FSLTL folder is on a drive that isn't connected, or Windows won't let ClearanceLink read it. Connect the drive, or CHOOSE FOLDER again. |
 | FSLTL CHECK says *n* LIVERIES: NO MODEL | Some liveries' base models are missing (a partly copied or updated FSLTL). The rest convert as usual; those aircraft are drawn with CSL models. Updating FSLTL usually fixes it. |

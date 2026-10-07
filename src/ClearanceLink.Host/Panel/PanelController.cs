@@ -156,7 +156,8 @@ public sealed class PanelController : IAsyncDisposable
             Push: _board?.Pushbacks?.View,
             BatcModels: found.BatcModels,
             FsltlHealth: found.FsltlHealth,
-            CslNames: found.CslNames);
+            CslNames: found.CslNames,
+            BatcCommunity: found.BatcCommunity);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -561,6 +562,7 @@ public sealed class PanelController : IAsyncDisposable
             XPlaneRunning = XPlaneRunning(),
             MsfsInstalled = Fsltl.FsltlLocator.MsfsInstalled(),
             BatcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Check(fsltl) : null,
+            BatcCommunity = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Where().Community : null,
             At = DateTime.Now,
         };
     }
@@ -722,6 +724,7 @@ public sealed class PanelController : IAsyncDisposable
         public bool MsfsInstalled { get; init; } = true;
         public BatcTrafficModels.Outcome? BatcModels { get; init; }
         public string? CslNames { get; init; }
+        public string? BatcCommunity { get; init; }
         public Fsltl.FsltlHealth? FsltlHealth { get; init; }
         public DateTime At { get; init; }
     }
