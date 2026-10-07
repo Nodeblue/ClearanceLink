@@ -713,10 +713,12 @@ public sealed class SimConnectSession(
     private static bool IsPosition(string simVar) =>
         simVar.Equals("PLANE LATITUDE", StringComparison.OrdinalIgnoreCase) || simVar.Equals("PLANE LONGITUDE", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The sim clock and date. Sent as zero they read as midnight on 1 January of year 1.</summary>
+    /// <summary>
+    /// The mapped sim clock and date (mapping/simvars.yaml). Sent as zero they read as midnight on 1 January of year 1.
+    /// Only Pending holds the block: an unmapped name never arrives, so it must not hold.
+    /// </summary>
     private static bool IsClock(string simVar) =>
-        simVar.ToUpperInvariant() is "ZULU TIME" or "LOCAL TIME" or "ZULU DAY OF YEAR" or "ZULU DAY OF WEEK" or "ZULU YEAR"
-            or "ZULU MONTH OF YEAR" or "ZULU DAY OF MONTH" or "LOCAL DAY OF YEAR" or "LOCAL YEAR" or "ABSOLUTE TIME";
+        simVar.ToUpperInvariant() is "ZULU TIME" or "LOCAL TIME" or "ZULU DAY OF YEAR" or "ZULU DAY OF WEEK" or "ZULU YEAR" or "ABSOLUTE TIME";
 
     private static uint U(Dictionary<string, object?> f, string key) => f.GetValueOrDefault(key) is uint u ? u : 0;
 

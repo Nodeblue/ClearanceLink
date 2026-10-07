@@ -128,6 +128,17 @@ public sealed class SessionTests
     }
 
     [Fact]
+    public async Task An_unmapped_clock_simvar_does_not_hold_aircraft_data()
+    {
+        var session = NewSession();
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "PLANE LATITUDE", "degrees"));
+        await session.HandleAsync(TestPackets.AddToDataDefinition(17, "ZULU MONTH OF YEAR", "number"));
+        await session.HandleAsync(TestPackets.RequestDataOnSimObject(1004, 17, period: 1));
+
+        Assert.Single(_sent);
+    }
+
+    [Fact]
     public async Task Com_set_event_writes_xplane_frequency_in_khz()
     {
         var session = NewSession();
