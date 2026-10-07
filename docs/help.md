@@ -273,8 +273,8 @@ To fly MSFS, close ClearanceLink and start MSFS. If MSFS starts while ClearanceL
 BeyondATC goes to MSFS and STATUS says **CLOSE MSFS TO CONNECT**.
 
 If you want MSFS open while flying X-Plane, choose **ALWAYS ON** on SETUP. The two files then stay in place even after
-ClearanceLink closes, so BeyondATC always goes to ClearanceLink. Choose **AUTOMATIC** again before flying MSFS with
-BeyondATC.
+ClearanceLink closes, so BeyondATC always goes to ClearanceLink. If a BeyondATC update removes them, ClearanceLink
+puts them back when it starts. Choose **AUTOMATIC** again before flying MSFS with BeyondATC.
 
 If BeyondATC is in a folder ClearanceLink can't write to (under Program Files, for example), ClearanceLink uses MSFS's
 own connection instead, while MSFS is closed. Running ClearanceLink as administrator lets it use the files.
@@ -296,6 +296,7 @@ MSFS for that X-Plane has no equivalent of (those are ignored).
 |---|---|
 | BeyondATC says "Flight Simulator is not running!" | Start ClearanceLink first, then BeyondATC. |
 | STATUS says CLOSE MSFS TO CONNECT | Close MSFS, or choose ALWAYS ON on SETUP. |
+| BeyondATC says it can't connect to Microsoft Flight Simulator | Start ClearanceLink first and leave it open. If SETUP says BATC NOT SET TO X-PLANE, press ALWAYS ON (or AUTOMATIC), then start BeyondATC again. |
 | STATUS says START X-PLANE 12 with X-Plane open | Load an aircraft; X-Plane answers once a flight is loaded. Check X-Plane is 12.1.4 or later. |
 | STATUS says X-PLANE NOT CONNECTED | BeyondATC is connected but X-Plane isn't. Start X-Plane and load a flight. |
 | A folder says NOT FOUND | On SETUP (or WELCOME page 2), press CHOOSE beside it and pick the folder. |

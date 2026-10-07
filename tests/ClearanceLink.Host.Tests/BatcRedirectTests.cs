@@ -152,6 +152,67 @@ public sealed class BatcRedirectTests : IDisposable
         Assert.Contains(log, l => l.StartsWith("batc: could not write ", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Always_on_puts_back_files_a_BeyondATC_update_removed()
+    {
+        // Issue #35: connection always on, both files gone, BeyondATC fell back to MSFS's pipe and could not connect.
+        var redirect = new BatcRedirect(_batc);
+        redirect.SwitchOn();
+        var log = new List<string>();
+        var link = new BatcLink(redirect, log.Add);
+
+        link.KeepOn();
+        Assert.Empty(log); // Already in place: nothing to say.
+
+        redirect.Files.ToList().ForEach(File.Delete);
+        link.KeepOn();
+        Assert.True(redirect.IsOn);
+        Assert.Contains(log, l => l.StartsWith("batc: always on; BeyondATC's config files were missing, written again", StringComparison.Ordinal));
+
+        // Serve stopping in always on leaves them, and a late timer tick does nothing.
+        link.Release(ConnectionMode.AlwaysOn);
+        redirect.Files.ToList().ForEach(File.Delete);
+        link.KeepOn();
+        Assert.All(redirect.Files, f => Assert.False(File.Exists(f)));
+    }
+
+    [Fact]
+    public void Always_on_keeps_trying_and_logs_a_problem_once()
+    {
+        var redirect = new BatcRedirect(_batc);
+        Directory.CreateDirectory(redirect.Files[1]);
+        var log = new List<string>();
+        var link = new BatcLink(redirect, log.Add);
+
+        link.KeepOn();
+        link.KeepOn();
+
+        Assert.StartsWith("could not write ", link.Problem);
+        Assert.Single(log, l => l.StartsWith("batc: could not write ", StringComparison.Ordinal));
+
+        Directory.Delete(redirect.Files[1]);
+        link.KeepOn();
+        Assert.Null(link.Problem);
+        Assert.True(redirect.IsOn);
+    }
+
+    [Fact]
+    public void Always_on_timer_writes_the_files_straight_away()
+    {
+        var redirect = new BatcRedirect(_batc);
+        var link = new BatcLink(redirect, _ => { });
+
+        link.KeepOnEvery(TimeSpan.FromMinutes(5));
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!redirect.IsOn && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(20);
+        }
+
+        link.Release(ConnectionMode.AlwaysOn);
+        Assert.True(redirect.IsOn);
+    }
+
     [Theory]
     [InlineData(ConnectionMode.Automatic, false, true)]
     [InlineData(ConnectionMode.Automatic, true, false)]

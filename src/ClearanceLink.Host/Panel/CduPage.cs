@@ -407,6 +407,9 @@ public static class CduPages
     /// <summary>SETUP's bottom line while connection automatic has BeyondATC pointed at ClearanceLink.</summary>
     public const string BatcUntilClose = "BATC: X-PLANE TILL EXIT";
 
+    /// <summary>SETUP's bottom line when always on is chosen but BeyondATC's files are missing (issue #35).</summary>
+    public const string BatcNotSet = "BATC NOT SET TO X-PLANE";
+
     private static CduPage Setup(PanelState s, string? flash)
     {
         var automatic = s.Connection == ConnectionMode.Automatic;
@@ -433,6 +436,7 @@ public static class CduPages
         // closed (ADR-0012); closing ClearanceLink sends it back to MSFS.
         var help = s switch
         {
+            _ when !automatic && s.BatcFolder is not null && !s.BatcRedirected => new CduCell(BatcNotSet, CduColor.Amber),
             _ when !automatic => new CduCell("BATC SET TO X-PLANE", CduColor.Magenta),
             { MsfsRunning: true } => new CduCell("CLOSE MSFS BEFORE FLYING"),
             { BatcRedirected: true } => new CduCell(BatcUntilClose, CduColor.Magenta),
