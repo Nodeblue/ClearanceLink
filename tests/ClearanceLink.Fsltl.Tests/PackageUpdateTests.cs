@@ -173,6 +173,11 @@ public sealed class PackageUpdateTests
             Assert.Equal(fsltl, FsltlLocator.Find(Path.Combine(fsltl, "SimObjects")));
             Assert.Null(FsltlLocator.Find(Path.Combine(community, "other-package")));
             Assert.Null(FsltlLocator.Find(root));
+
+            // Found through UserCfg.opt's NextBoot folder too (issue #29), after the folder BeyondATC reads.
+            var cfg = Path.Combine(root, "UserCfg.opt");
+            File.WriteAllText(cfg, $"InstalledPackagesPathNextBoot \"{Path.Combine(root, "Packages")}\"\nInstalledPackagesPath \"{Path.Combine(root, "Empty")}\"\n");
+            Assert.Equal(fsltl, FsltlLocator.Find(userCfgs: [cfg]));
         }
         finally
         {

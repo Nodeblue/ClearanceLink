@@ -151,7 +151,8 @@ public sealed record PanelState(
     BatcTrafficModels.Outcome? BatcModels = null,
     FsltlHealth? FsltlHealth = null,
     string? CslNames = null,
-    string? BatcCommunity = null)
+    string? BatcCommunity = null,
+    bool FsltlChecking = false)
 {
     /// <summary>BeyondATC won't find FSLTL (or AIG / FS Traffic), so it creates no traffic at all (ADR-0014).</summary>
     public bool BatcNoModels => BatcModels is BatcTrafficModels.Outcome.NoFsltl or BatcTrafficModels.Outcome.NotInMsfs2024;
@@ -592,7 +593,7 @@ public static class CduPages
         var rows = new[]
         {
             (TrafficAddOn(s) is { } plugin && plugin != CduRow.Empty
-                ? plugin with { LabelRight = "AIRCRAFT", Right = plugin.KeyRight == CduKey.None ? Traffic(s) : plugin.Right }
+                ? plugin with { LabelRight = "AIRCRAFT", Right = plugin.KeyRight == CduKey.None ? NoKey(Traffic(s)) : plugin.Right }
                 : Row("X-PLANE PLUGIN", "", new("NOT IN THIS COPY"), new(""))) with
                 { Help = "ClearanceLink's X-Plane plugin draws BeyondATC's traffic. Install or update it with X-Plane closed." },
             CslRow(s) with { Help = "X-Plane aircraft models such as Bluebell or X-CSL (free). Used where there's no converted FSLTL livery. HOW TO shows where to get them." },
@@ -605,6 +606,9 @@ public static class CduPages
         };
         return new($"{AppName} TRAFFIC", rows, ModelsLine(s, flash));
     }
+
+    /// <summary>A STATUS cell shown where it has no key of its own: without the "&gt;" that would make it look pressable.</summary>
+    private static CduCell NoKey(CduCell cell) => cell with { Text = cell.Text.TrimEnd('>') };
 
     /// <summary>The TRAFFIC page's BeyondATC line: whether BeyondATC will find FSLTL (or AIG / FS Traffic) at all.</summary>
     private static CduCell BatcSees(PanelState s) => s.BatcModels switch
@@ -622,6 +626,12 @@ public static class CduPages
     /// </summary>
     private static CduPage FsltlPage(PanelState s, string? flash)
     {
+        // Just after CHOOSE, until the new folder has been read: show nothing of the old one.
+        if (s.FsltlChecking)
+        {
+            s = s with { FsltlHealth = null, BatcModels = null, BatcCommunity = null };
+        }
+
         var h = s.FsltlHealth;
         var known = s.FsltlFolder is not null && h is not null;
         var batc = s.BatcModels switch
@@ -637,11 +647,15 @@ public static class CduPages
         {
             { BatcCommunity: { } community } => new CduCell(ShortPath(community, Width), s.BatcModels == BatcTrafficModels.Outcome.Found ? CduColor.Green : CduColor.Amber),
             { BatcModels: BatcTrafficModels.Outcome.Pointed or BatcTrafficModels.Outcome.PointedByAnother } => new CduCell("YOUR FSLTL FOLDER", CduColor.Green),
+            // MSFS 2024's settings name no packages folder BeyondATC reads (only a NextBoot one, say).
+            { BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 } => new CduCell("NOT SET IN MSFS 2024", CduColor.Amber),
             _ => new CduCell("-"),
         };
         var rows = new[]
         {
-            (s.FsltlFolder is null
+            (s.FsltlChecking
+                ? Row("FOLDER", "", new("CHECKING..."), new(""))
+                : s.FsltlFolder is null
                 ? Row("FOLDER", "", new("NOT FOUND", CduColor.Amber), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder)
                 : Row("FOLDER", h?.Version is { } v ? Fit($"VERSION {v.ToUpperInvariant()}", 13) : "",
                     new(ShortPath(Parent(s.FsltlFolder), Width - 8)), new("CHOOSE>"), CduKey.ChooseFsltlFolder, CduKey.ChooseFsltlFolder))
@@ -649,7 +663,7 @@ public static class CduPages
             (known
                 ? Row("LIVERIES", "BASE MODELS",
                     h!.Liveries > 0 ? new($"{h.Liveries}", CduColor.Green) : new("NONE", CduColor.Amber),
-                    h.Models > 0 ? new($"{h.Models}", h.WithoutModel > 0 ? CduColor.Amber : CduColor.Green) : new("NONE", CduColor.Amber))
+                    h.Models > 0 ? new($"{h.Models}", CduColor.Green) : new("NONE", CduColor.Amber))
                 : Row("LIVERIES", "BASE MODELS", new("-"), new("-")))
                 with { Help = "FSLTL's liveries and the base aircraft models they use. Every livery needs its base model, in the same folder, to be converted." },
             Row("BEYONDATC", "", batc.Item1, batc.Item2)
@@ -657,7 +671,7 @@ public static class CduPages
             Row("BEYONDATC LOOKS IN", "", looksIn, new(""))
                 with { Help = "The only Community folder BeyondATC reads, from MSFS 2024's settings (UserCfg.opt). FSLTL must be in it." },
             CopyRow(s) with { Help = "The copy of FSLTL converted for X-Plane. Close X-Plane to convert or update it." },
-            Row("", "", new("<TRAFFIC"), new(""), CduKey.GoTraffic),
+            Row("", "", new("<TRAFFIC"), new("HELP>"), CduKey.GoTraffic, CduKey.OpenModelsHelp),
         };
         // A conversion runs in the background: its failure, or the restart it needs, must show here too.
         var line = flash is not null ? new CduCell(flash)
@@ -682,17 +696,22 @@ public static class CduPages
     /// <summary>FSLTL CHECK's bottom line: the one thing to do, or that FSLTL is ready.</summary>
     private static CduCell FsltlVerdict(PanelState s) => (s, s.FsltlHealth) switch
     {
+        ({ FsltlChecking: true }, _) => new("CHECKING FOLDER"),
+        // No FSLTL found: with MSFS, it's installed through MSFS (BeyondATC needs it in MSFS 2024's Community folder).
+        ({ FsltlFolder: null, BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 }, _) => new("GET FSLTL FOR MSFS 2024", CduColor.Amber),
+        ({ FsltlFolder: null, MsfsInstalled: true }, _) => new("GET FSLTL OR CHOOSE IT", CduColor.Amber),
         ({ FsltlFolder: null }, _) => new("CHOOSE YOUR FSLTL FOLDER", CduColor.Amber),
         // The check runs with the folder lookup, so no result means the folder couldn't be read (a drive gone, no access).
         (_, null) => new("CAN'T READ THIS FOLDER", CduColor.Amber),
-        (_, { Liveries: 0 }) => new("NO LIVERIES IN THIS FOLDER", CduColor.Amber),
+        (_, { Liveries: 0 }) => new("NOT AN FSLTL FOLDER", CduColor.Amber),
         (_, { NoModels: true }) => new("LIVERIES BUT NO MODELS", CduColor.Amber),
-        ({ BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 }, _) => new("PUT FSLTL IN MSFS 2024", CduColor.Amber),
+        ({ BatcModels: BatcTrafficModels.Outcome.NotInMsfs2024 }, _) => new("COPY FSLTL TO LOOKS IN", CduColor.Amber),
         ({ BatcModels: BatcTrafficModels.Outcome.Failed }, _) => new("BEYONDATC CHECK FAILED", CduColor.Amber),
-        (_, { WithoutModel: > 0 } h) => new(Fit($"{h.WithoutModel} LIVERIES: NO MODEL", Width), CduColor.Amber),
         ({ FsltlConverting: true }, _) => new("KEEP THIS WINDOW OPEN"),
         ({ FsltlLiveries: 0 }, _) => s.XPlaneRunning ? new("CLOSE X-PLANE TO CONVERT") : new("READY TO CONVERT", CduColor.Green),
         ({ FsltlOutOfDate: true }, _) => new(s.XPlaneRunning ? "CLOSE X-PLANE TO UPDATE" : "UPDATE NEEDED", CduColor.Amber),
+        // A few liveries without their model are drawn with CSL models; nothing to fix until FSLTL is updated.
+        (_, { WithoutModel: > 0 } h) => new(Fit($"READY: {h.WithoutModel} HAVE NO MODEL", Width), CduColor.Green),
         _ => new("FSLTL READY", CduColor.Green),
     };
 
@@ -783,7 +802,7 @@ public static class CduPages
         // FSLTL changed since the models were converted: the key opens the aircraft models page, which has UPDATE.
         // While aircraft are drawn the count stays (the old models still work); the key still opens that page.
         // Liveries but no base models: an UPDATE would convert nothing, so this comes before it; the key opens FSLTL CHECK.
-        { FsltlFolder: not null, FsltlHealth.NoModels: true, TrafficAircraft: null or 0 } => new("CHECK FSLTL", CduColor.Amber),
+        { FsltlFolder: not null, FsltlHealth.NoModels: true, TrafficAircraft: null or 0 } => new("CHECK FSLTL>", CduColor.Amber),
         { FsltlOutOfDate: true, FsltlConverting: false, TrafficAircraft: null or 0 } => new(UpdateModels, CduColor.Amber),
         { TrafficAircraft: { } n } => new($"{n} AIRCRAFT", CduColor.Green),
         { TrafficAddOn: PluginInstall.State.NotInstalled or PluginInstall.State.Outdated } => new("SET UP>", CduColor.Amber),

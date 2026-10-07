@@ -157,7 +157,8 @@ public sealed class PanelController : IAsyncDisposable
             BatcModels: found.BatcModels,
             FsltlHealth: found.FsltlHealth,
             CslNames: found.CslNames,
-            BatcCommunity: found.BatcCommunity);
+            BatcCommunity: found.BatcCommunity,
+            FsltlChecking: found.At < _fsltlChosenAt);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -256,6 +257,9 @@ public sealed class PanelController : IAsyncDisposable
             // The package itself, found from the Community folder or a folder inside it.
             settings.FsltlFolder = Path.GetFullPath(Fsltl.FsltlLocator.Find(folder)!);
             settings.Save(AppFolders.Default.Settings);
+            // Choosing the folder again (after repairing FSLTL, as help says) checks it again.
+            _health = null;
+            _fsltlChosenAt = DateTime.Now;
             RefreshFolders();
             return FsltlSaved;
         }
@@ -543,6 +547,8 @@ public sealed class PanelController : IAsyncDisposable
 
     private Found LookUp()
     {
+        // When it started: a folder chosen meanwhile isn't in this result (FsltlChecking).
+        var started = DateTime.Now;
         var none = new Options();
         var xplane = Cli.FindXPlane(none)?.Root;
         var fsltl = Cli.FsltlFolder(none);
@@ -558,40 +564,69 @@ public sealed class PanelController : IAsyncDisposable
             FsltlHealth = fsltl is null ? null : Health(fsltl),
             Fsltl = fsltl,
             FsltlLiveries = output is null ? 0 : Fsltl.FsltlImporter.LoadCatalogue(output).Count,
-            FsltlOutOfDate = fsltl is not null && output is not null && Fsltl.FsltlImporter.OutOfDate(fsltl, output) is not null,
+            FsltlOutOfDate = fsltl is not null && output is not null && OutOfDate(fsltl, output),
             XPlaneRunning = XPlaneRunning(),
             MsfsInstalled = Fsltl.FsltlLocator.MsfsInstalled(),
             BatcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Check(fsltl) : null,
             BatcCommunity = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Where().Community : null,
-            At = DateTime.Now,
+            At = started,
         };
     }
 
-    private sealed record HealthCheck(string Folder, string Version, Fsltl.FsltlHealth? Health);
+    /// <summary>When an FSLTL folder was last chosen: FSLTL CHECK says CHECKING until a lookup after it has finished.</summary>
+    private DateTime _fsltlChosenAt;
 
-    private HealthCheck? _health;
+    private sealed record HealthCheck(string Folder, string Version, Fsltl.FsltlHealth? Health, DateTime At);
+
+    private volatile HealthCheck? _health;
+
+    /// <summary>A folder with a problem is checked again this often, so a repaired FSLTL shows without a restart.</summary>
+    private static readonly TimeSpan HealthRecheck = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    /// What the FSLTL folder holds (FSLTL CHECK). Reading every aircraft.cfg takes a second or two, so it is done
-    /// again only for another folder or another FSLTL version, and logged once each time.
+    /// What the FSLTL folder holds (FSLTL CHECK). Reading every aircraft.cfg takes a second or two, so a good result
+    /// is kept until the folder or FSLTL's version changes or the folder is chosen again; a problem is checked again
+    /// every minute. Logged when the result changes.
     /// </summary>
     private Fsltl.FsltlHealth? Health(string fsltl)
     {
-        var version = Fsltl.FsltlImporter.FsltlVersion(fsltl);
-        if (_health is { } last && last.Folder == fsltl && last.Version == version)
+        var last = _health;
+        try
         {
-            return last.Health;
-        }
+            var version = Fsltl.FsltlImporter.FsltlVersion(fsltl);
+            var problem = last?.Health is null or { NoModels: true } or { Liveries: 0 } or { WithoutModel: > 0 };
+            if (last is not null && last.Folder == fsltl && last.Version == version && !(problem && DateTime.Now - last.At >= HealthRecheck))
+            {
+                return last.Health;
+            }
 
-        var health = Fsltl.FsltlCheck.Check(fsltl);
-        // An unreadable folder (a drive not connected) is tried again at the next lookup, but logged only once.
-        if (_health is not { Health: null } failed || failed.Folder != fsltl)
+            var health = Fsltl.FsltlCheck.Check(fsltl);
+            if (last is null || last.Folder != fsltl || last.Health != health)
+            {
+                PacketConsole.Info(Fsltl.FsltlCheck.Describe(fsltl, health));
+            }
+
+            _health = new HealthCheck(fsltl, version, health, DateTime.Now);
+            return health;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            PacketConsole.Info(Fsltl.FsltlCheck.Describe(fsltl, health));
+            // The version fingerprint reads the folder too: a drive gone mid-read is CAN'T READ THIS FOLDER, not a failed lookup.
+            _health = new HealthCheck(fsltl, "", null, DateTime.Now);
+            return null;
         }
+    }
 
-        _health = new HealthCheck(fsltl, health is null ? "" : version, health);
-        return health;
+    private static bool OutOfDate(string fsltl, string output)
+    {
+        try
+        {
+            return Fsltl.FsltlImporter.OutOfDate(fsltl, output) is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The plugin check hashes every bundled file: done again only for another X-Plane, after an install, or every 5 minutes.</summary>
@@ -670,7 +705,7 @@ public sealed class PanelController : IAsyncDisposable
                 foreach (var problem in result.Problems.Take(MaxProblemsLogged)) PacketConsole.Info($"fsltl problem: {problem}");
                 if (result.Problems.Count > MaxProblemsLogged) PacketConsole.Info($"fsltl: {result.Problems.Count - MaxProblemsLogged} more problems not shown");
                 PacketConsole.Info($"fsltl: imported {result.Liveries} liveries ({result.Models} models, {result.Skipped} skipped, {result.Problems.Count} problems)");
-                _fsltlMessage = result.Liveries == 0 ? "CONVERT FAILED: SEE LIVE LOG" : $"{result.Liveries} LIVERIES CONVERTED";
+                _fsltlMessage = result.Liveries == 0 ? "CONVERT FAILED: SEE LOG" : $"{result.Liveries} LIVERIES CONVERTED";
                 _fsltlConverting = false;
                 _ = RefreshFolders();
                 // The server read the catalogue when it started; it must read the new one for BATC's aircraft to be
@@ -695,7 +730,7 @@ public sealed class PanelController : IAsyncDisposable
                 // Anything, not only I/O: an unexpected failure (a texture the decoder cannot read, out of memory)
                 // must be seen on the page and in the log, not vanish with the background task.
                 PacketConsole.Info($"fsltl: import failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
-                _fsltlMessage = "CONVERT FAILED: SEE LIVE LOG";
+                _fsltlMessage = "CONVERT FAILED: SEE LOG";
             }
             finally
             {

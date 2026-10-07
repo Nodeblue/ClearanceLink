@@ -387,16 +387,25 @@ public sealed class PanelTests
         Assert.Contains(CduPages.Build(PanelPage.Traffic, noModels).Rows, r => r.LabelLeft == "FSLTL" && r.Left.Text == "NO BASE MODELS" && r.KeyRight == CduKey.GoFsltl);
         Assert.Contains(CduPages.Build(PanelPage.Setup, noModels).Rows, r => r.Left.Text == "CHECK FSLTL");
 
-        // Some models missing: those liveries fall back to CSL models.
-        page = CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = new(3350, 92, 120, "1.5.0") });
-        Assert.Equal(CduColor.Amber, page.Rows[1].Right.Color);
-        Assert.Equal("120 LIVERIES: NO MODEL", page.Scratchpad.Text);
+        // Some models missing: those liveries fall back to CSL models, nothing to fix, so it's still ready.
+        var someMissing = good with { FsltlHealth = new(3350, 92, 120, "1.5.0") };
+        page = CduPages.Build(PanelPage.Fsltl, someMissing);
+        Assert.Equal(CduColor.Green, page.Rows[1].Right.Color);
+        Assert.Equal(("READY: 120 HAVE NO MODEL", CduColor.Green), (page.Scratchpad.Text, page.Scratchpad.Color));
+        // While converting, that comes second.
+        Assert.Equal("KEEP THIS WINDOW OPEN", CduPages.Build(PanelPage.Fsltl, someMissing with { FsltlConverting = true }).Scratchpad.Text);
+
+        // Not an FSLTL package at all.
+        Assert.Equal("NOT AN FSLTL FOLDER", CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = new(0, 0, 0, null) }).Scratchpad.Text);
 
         // Converted fine, but MSFS 2024 is here without FSLTL in the Community folder BeyondATC reads (issue #29).
         page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024, BatcCommunity = @"C:\Users\Pilot\AppData\Roaming\Microsoft Flight Simulator 2024\Packages\Community" });
         Assert.Equal(("BEYONDATC LOOKS IN", @"C:\...\COMMUNITY", CduColor.Amber), (page.Rows[3].LabelLeft, page.Rows[3].Left.Text, page.Rows[3].Left.Color));
         Assert.Equal(("WON'T SEE IT", "NOT IN 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
-        Assert.Equal("PUT FSLTL IN MSFS 2024", page.Scratchpad.Text);
+        Assert.Equal("COPY FSLTL TO LOOKS IN", page.Scratchpad.Text);
+        // MSFS 2024's settings name only a NextBoot folder: BeyondATC reads none.
+        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 });
+        Assert.Equal(("NOT SET IN MSFS 2024", CduColor.Amber), (page.Rows[3].Left.Text, page.Rows[3].Left.Color));
 
         // No MSFS 2024: ClearanceLink points BeyondATC at FSLTL while it's open.
         page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.Pointed });
@@ -406,8 +415,16 @@ public sealed class PanelTests
         page = CduPages.Build(PanelPage.Fsltl, good with { FsltlLiveries = 0 });
         Assert.Equal(("NOT CONVERTED", "CONVERT>"), (page.Rows[4].Left.Text, page.Rows[4].Right.Text));
         Assert.Equal("READY TO CONVERT", page.Scratchpad.Text);
-        page = CduPages.Build(PanelPage.Fsltl, Ready);
+        page = CduPages.Build(PanelPage.Fsltl, Ready with { MsfsInstalled = false });
         Assert.Equal(("NOT FOUND", "CHOOSE YOUR FSLTL FOLDER"), (page.Rows[0].Left.Text, page.Scratchpad.Text));
+        // With MSFS, FSLTL is installed through it; with MSFS 2024, it must go there for BeyondATC.
+        Assert.Equal("GET FSLTL OR CHOOSE IT", CduPages.Build(PanelPage.Fsltl, Ready).Scratchpad.Text);
+        Assert.Equal("GET FSLTL FOR MSFS 2024", CduPages.Build(PanelPage.Fsltl, Ready with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }).Scratchpad.Text);
+        Assert.Equal(CduKey.OpenModelsHelp, page.Rows[5].KeyRight);
+
+        // Just after CHOOSE, the old folder's results aren't shown.
+        page = CduPages.Build(PanelPage.Fsltl, noModels with { FsltlChecking = true });
+        Assert.Equal(("CHECKING...", "-", "CHECKING FOLDER"), (page.Rows[0].Left.Text, page.Rows[1].Left.Text, page.Scratchpad.Text));
 
         // A folder that can't be read (a drive not connected), and a UserCfg.opt that can't be read.
         Assert.Equal("CAN'T READ THIS FOLDER", CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = null }).Scratchpad.Text);
@@ -415,8 +432,8 @@ public sealed class PanelTests
         Assert.Equal(("CAN'T TELL", "BEYONDATC CHECK FAILED"), (page.Rows[2].Left.Text, page.Scratchpad.Text));
 
         // A conversion started here that failed later, or needs a restart, says so here as well as on TRAFFIC.
-        page = CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "CONVERT FAILED: SEE LIVE LOG" });
-        Assert.Equal(("CONVERT FAILED: SEE LIVE LOG", CduColor.Amber), (page.Scratchpad.Text, page.Scratchpad.Color));
+        page = CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "CONVERT FAILED: SEE LOG" });
+        Assert.Equal(("CONVERT FAILED: SEE LOG", CduColor.Amber), (page.Scratchpad.Text, page.Scratchpad.Color));
         Assert.Equal("RESTART TO USE MODELS", CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "RESTART TO USE MODELS" }).Scratchpad.Text);
         Assert.Equal("FSLTL READY", CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "3350 LIVERIES CONVERTED" }).Scratchpad.Text);
 
@@ -424,7 +441,17 @@ public sealed class PanelTests
         var brokenAndOld = noModels with { FsltlLiveries = 3154, FsltlOutOfDate = true, TrafficAddOn = PluginInstall.State.Installed };
         Assert.Contains(CduPages.Build(PanelPage.Setup, brokenAndOld).Rows, r => r.Left.Text == "CHECK FSLTL");
         var status = CduPages.Build(PanelPage.Status, brokenAndOld).Rows[4];
-        Assert.Equal(("CHECK FSLTL", CduKey.GoFsltl), (status.Right.Text, status.KeyRight));
+        Assert.Equal(("CHECK FSLTL>", CduKey.GoFsltl), (status.Right.Text, status.KeyRight));
+        // On TRAFFIC the same cell has no key of its own, so no ">".
+        Assert.Contains(CduPages.Build(PanelPage.Traffic, good with { FsltlOutOfDate = true, TrafficAddOn = PluginInstall.State.Installed }).Rows,
+            r => r.LabelRight == "AIRCRAFT" && r.Right.Text == "UPDATE");
+
+        // Every bottom line fits.
+        foreach (var state in new[] { good, noModels, someMissing, Ready, Ready with { MsfsInstalled = false }, good with { FsltlHealth = new(0, 0, 0, null) },
+            good with { FsltlHealth = new(9999, 92, 999, null) }, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }, good with { FsltlLiveries = 0, XPlaneRunning = true } })
+        {
+            Assert.True(CduPages.Build(PanelPage.Fsltl, state).Scratchpad.Text.Length <= CduPages.Width, state.ToString());
+        }
     }
 
     [Fact]
@@ -462,7 +489,7 @@ public sealed class PanelTests
     {
         var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3112 };
         Assert.Equal("3112 LIVERIES CONVERTED", CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "3112 LIVERIES CONVERTED" }).Scratchpad.Text);
-        var failed = CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "CONVERT FAILED: SEE LIVE LOG" }).Scratchpad;
+        var failed = CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "CONVERT FAILED: SEE LOG" }).Scratchpad;
         Assert.Equal(CduColor.Amber, failed.Color);
         Assert.Equal("FLASH", CduPages.Build(PanelPage.StartModels, fsltl with { FsltlMessage = "3112 LIVERIES CONVERTED" }, "FLASH").Scratchpad.Text);
     }

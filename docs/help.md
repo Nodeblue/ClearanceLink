@@ -200,7 +200,7 @@ find it. The bottom line says **FSLTL READY** when all is well, or the one thing
 | FOLDER, VERSION | Where your `fsltl-traffic-base` folder is, and FSLTL's version. CHOOSE picks another. |
 | LIVERIES, BASE MODELS | How many liveries the folder has, and the base aircraft models they use. Every livery needs its base model in the same folder. Microsoft's own aircraft in FSLTL aren't counted or converted. |
 | BEYONDATC | **SEES IT IN MSFS 2024**: BeyondATC finds FSLTL itself. **SEES IT WHILE OPEN**: no MSFS 2024, so ClearanceLink shows BeyondATC your folder while it's open. **WON'T SEE IT**: BeyondATC makes no traffic; the bottom line says what to do. **CAN'T TELL**: see BEYONDATC CHECK FAILED below. |
-| BEYONDATC LOOKS IN | The one Community folder BeyondATC reads, from MSFS 2024's settings. With MSFS 2024, FSLTL must be in this folder. |
+| BEYONDATC LOOKS IN | The one Community folder BeyondATC reads, from MSFS 2024's settings. With MSFS 2024, FSLTL must be in this folder. **NOT SET IN MSFS 2024**: MSFS 2024's settings name no folder BeyondATC reads, so it finds no traffic. Make a [support file](#getting-help) and send it. |
 | X-PLANE COPY | How many liveries are converted for X-Plane, with CONVERT or UPDATE. A few heavy models are left out, so it can be slightly fewer than LIVERIES. |
 
 What the bottom line tells you to do. CHOOSE and CONVERT are on the FOLDER and X-PLANE COPY lines.
@@ -208,16 +208,19 @@ What the bottom line tells you to do. CHOOSE and CONVERT are on the FOLDER and X
 | Bottom line | What to do |
 |---|---|
 | FSLTL READY | Nothing. Traffic is set up. |
-| CHOOSE YOUR FSLTL FOLDER | Press CHOOSE and pick the `fsltl-traffic-base` folder. |
+| CHECKING FOLDER | ClearanceLink is reading the folder you just chose. Wait a moment. |
+| GET FSLTL FOR MSFS 2024 | No FSLTL found. Install it for MSFS 2024 with FSLTL's installer: BeyondATC only looks there. |
+| GET FSLTL OR CHOOSE IT | No FSLTL found. Install it for MSFS with FSLTL's installer, or press CHOOSE if you have it in another folder. |
+| CHOOSE YOUR FSLTL FOLDER | No MSFS on this PC. Press CHOOSE and pick the `fsltl-traffic-base` folder. |
 | READY TO CONVERT, or CLOSE X-PLANE TO CONVERT | Close X-Plane, then press CONVERT. |
 | UPDATE NEEDED, or CLOSE X-PLANE TO UPDATE | FSLTL or ClearanceLink changed since the last conversion. Close X-Plane, then press UPDATE. Textures already converted are kept, so it is quicker than the first time. |
 | KEEP THIS WINDOW OPEN | Converting. Closing the window would stop it. |
 | RESTART TO USE MODELS | The conversion finished while BeyondATC was connected. Close BeyondATC and ClearanceLink and start them again. |
-| CONVERT FAILED: SEE LIVE LOG | Make a [support file](#getting-help) and send it. LIVE LOG on SUPPORT shows what went wrong. |
-| PUT FSLTL IN MSFS 2024 | BeyondATC won't find FSLTL. See [No traffic](#no-traffic) below. |
+| CONVERT FAILED: SEE LOG | Make a [support file](#getting-help) and send it. LIVE LOG on SUPPORT shows what went wrong. |
+| COPY FSLTL TO LOOKS IN | BeyondATC won't find FSLTL: it isn't in the folder on the BEYONDATC LOOKS IN line. See [No traffic](#no-traffic) below. |
 | LIVERIES BUT NO MODELS | The folder has FSLTL's liveries but not the base aircraft they need. Update or reinstall FSLTL with its installer, then CHOOSE the folder again. |
-| *n* LIVERIES: NO MODEL | A few liveries' base models are missing (FSLTL partly copied or updated). The rest convert and traffic works; this line stays until FSLTL is updated. |
-| NO LIVERIES IN THIS FOLDER | This isn't the `fsltl-traffic-base` folder. CHOOSE again. |
+| READY: *n* HAVE NO MODEL | Traffic is set up. A few liveries' base models are missing (FSLTL partly copied or updated), so those aircraft are drawn with CSL models. Updating FSLTL usually fixes it. |
+| NOT AN FSLTL FOLDER | This isn't the `fsltl-traffic-base` folder. CHOOSE again. |
 | CAN'T READ THIS FOLDER | The drive isn't connected, or Windows won't let ClearanceLink read it. Connect the drive, or CHOOSE again. |
 | BEYONDATC CHECK FAILED | ClearanceLink couldn't show BeyondATC your FSLTL folder (BEYONDATC TRAFFIC says CAN'T TELL). If FSLTL is on a network drive, or its folder name has a `%` or `"` in it, copy it to a local folder and CHOOSE again. Otherwise make a [support file](#getting-help) and send it. |
 
