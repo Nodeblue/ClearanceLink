@@ -124,9 +124,9 @@ public sealed class PanelController : IAsyncDisposable
             Serving: snapshot is not null,
             XPlaneConnected: snapshot?.XPlane.Connected ?? false,
             XPlaneVersion: snapshot?.XPlane.Version,
-            BatcHelper: names.Contains(StatusBoard.HelperClient),
-            BatcApp: names.Contains(StatusBoard.AppClient),
-            OtherAddOns: names.Count(n => n is not (StatusBoard.HelperClient or StatusBoard.AppClient or "")),
+            BatcHelper: names.Any(StatusBoard.IsAirportClient),
+            BatcApp: StatusBoard.HasApp(names),
+            OtherAddOns: names.Count(n => n != "" && !StatusBoard.IsBatcClient(n)),
             LastAirport: airport?.Icao,
             LastAirportSource: airport?.Source,
             MsfsRunning: snapshot?.MsfsRunning ?? false,
@@ -158,7 +158,8 @@ public sealed class PanelController : IAsyncDisposable
             FsltlHealth: found.FsltlHealth,
             CslNames: found.CslNames,
             BatcCommunity: found.BatcCommunity,
-            FsltlChecking: found.At < _fsltlChosenAt);
+            FsltlChecking: found.At < _fsltlChosenAt,
+            BatcTrafficSync: names.Contains(StatusBoard.TrafficSyncClient));
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -306,7 +307,7 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         settings.Save(AppFolders.Default.Settings);
-        var batcWasConnected = State() is { BatcHelper: true } or { BatcApp: true };
+        var batcWasConnected = State().BatcSeen;
         await RestartAsync().ConfigureAwait(false);
         return batcWasConnected ? "NOW RESTART BEYONDATC" : mode == ConnectionMode.Automatic ? "AUTOMATIC SELECTED" : "ALWAYS ON SELECTED";
     }
@@ -352,7 +353,7 @@ public sealed class PanelController : IAsyncDisposable
         var settings = AppSettings.Load(AppFolders.Default.Settings);
         settings.GettingStartedDone = true;
         settings.Save(AppFolders.Default.Settings);
-        if (_foldersChanged && State() is { BatcHelper: false, BatcApp: false })
+        if (_foldersChanged && !State().BatcSeen)
         {
             _foldersChanged = false;
             await RestartAsync().ConfigureAwait(false);
@@ -710,7 +711,7 @@ public sealed class PanelController : IAsyncDisposable
                 _ = RefreshFolders();
                 // The server read the catalogue when it started; it must read the new one for BATC's aircraft to be
                 // drawn with these liveries. Not while BeyondATC is connected: a restart would drop it.
-                if (result.Liveries > 0 && State() is { BatcHelper: false, BatcApp: false })
+                if (result.Liveries > 0 && !State().BatcSeen)
                 {
                     await RestartAsync().ConfigureAwait(false);
                 }

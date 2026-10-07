@@ -152,8 +152,12 @@ public sealed record PanelState(
     FsltlHealth? FsltlHealth = null,
     string? CslNames = null,
     string? BatcCommunity = null,
-    bool FsltlChecking = false)
+    bool FsltlChecking = false,
+    bool BatcTrafficSync = false)
 {
+    /// <summary>Any BeyondATC connection is open (1.8.22's BATC_TrafficSync can open before the other two).</summary>
+    public bool BatcSeen => BatcHelper || BatcApp || BatcTrafficSync;
+
     /// <summary>BeyondATC won't find FSLTL (or AIG / FS Traffic), so it creates no traffic at all (ADR-0014).</summary>
     public bool BatcNoModels => BatcModels is BatcTrafficModels.Outcome.NoFsltl or BatcTrafficModels.Outcome.NotInMsfs2024;
 }
@@ -200,10 +204,10 @@ public static class CduPages
 
     private static CduPage Status(PanelState s, string? flash)
     {
-        var batc = (s.BatcHelper, s.BatcApp) switch
+        var batc = s switch
         {
-            (true, true) => new CduCell("CONNECTED", CduColor.Green),
-            (false, false) => new CduCell("WAITING"),
+            { BatcHelper: true, BatcApp: true } => new CduCell("CONNECTED", CduColor.Green),
+            { BatcSeen: false } => new CduCell("WAITING"),
             _ => new CduCell("CONNECTING", CduColor.Amber),
         };
         var rows = new[]
@@ -277,7 +281,7 @@ public static class CduPages
 
     private static CduCell NextStep(PanelState s)
     {
-        var batc = s.BatcHelper || s.BatcApp;
+        var batc = s.BatcSeen;
         return s switch
         {
             { Serving: false } => new("STARTING..."),
