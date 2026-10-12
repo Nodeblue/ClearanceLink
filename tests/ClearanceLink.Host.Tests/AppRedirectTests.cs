@@ -79,6 +79,31 @@ public sealed class AppRedirectTests : IDisposable
     }
 
     [Fact]
+    public void An_upgraded_user_without_a_saved_folder_keeps_the_app_found_where_it_used_to_be_looked_for()
+    {
+        var upgraded = new AppSettings { GettingStartedDone = true };
+        upgraded.CarryOverApp(() => [null, Path.Combine(_folder, "nowhere"), _folder]);
+        Assert.Equal(Path.Combine(_folder, "Tower.exe"), upgraded.AppExe);
+
+        // Never set up, or saved by 0.7.7 with no app (the user's choice): nothing is looked for.
+        var fresh = new AppSettings();
+        fresh.CarryOverApp(() => [_folder]);
+        Assert.Null(fresh.AppExe);
+        var none = new AppSettings { GettingStartedDone = true, Format = 1 };
+        none.CarryOverApp(() => [_folder]);
+        Assert.Null(none.AppExe);
+    }
+
+    [Fact]
+    public void A_saved_folder_whose_exe_is_not_found_yet_is_kept()
+    {
+        var settings = new AppSettings { OldAppFolder = Path.Combine(_folder, "drive-not-connected") };
+        settings.CarryOverApp(() => []);
+        Assert.Null(settings.AppExe);
+        Assert.NotNull(settings.OldAppFolder);
+    }
+
+    [Fact]
     public void Choosing_another_app_takes_the_files_from_the_old_one()
     {
         var other = Directory.CreateTempSubdirectory("clearancelink-other").FullName;
@@ -94,6 +119,13 @@ public sealed class AppRedirectTests : IDisposable
             Assert.Equal(radar.Exe, settings.AppExe);
             Assert.True(new AppRedirect(radar).IsOn);
             Assert.All(new AppRedirect(_app).Files, f => Assert.False(File.Exists(f)));
+
+            // Automatic writes nothing when the app is chosen: serve points the app at ClearanceLink while it runs.
+            settings.Connection = ConnectionMode.Automatic;
+            Assert.Null(Cli.ChangeApp(settings, _app));
+            Assert.Equal(_app.Exe, settings.AppExe);
+            Assert.False(new AppRedirect(_app).IsOn);
+            Assert.False(new AppRedirect(radar).IsOn);
         }
         finally
         {

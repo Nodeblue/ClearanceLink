@@ -3,7 +3,9 @@ namespace ClearanceLink.Host.Status;
 /// <summary>
 /// Which SimConnect connections make up the ATC app, and what each is for. Any app can be bridged: a connection is
 /// known only by the name its Open carries, so an app ClearanceLink has never seen counts as connected as soon as it
-/// opens one. Some names were recorded from one ATC app (docs/research/atc-app-call-inventory.md); that app opens more
+/// opens one, when only the app can reach ClearanceLink (<c>anyName</c>: serve answers on its own TCP port, which only
+/// the app's SimConnect.cfg points at). On MSFS's default connection any MSFS add-on can connect, so there only the
+/// recorded names count. Some names were recorded from one ATC app (docs/research/atc-app-call-inventory.md); that app opens more
 /// than one connection and is only ready once two of them are open, which the stand-in waits for (ADR-0010). The
 /// names are exact, as the app sends them.
 /// </summary>
@@ -31,21 +33,21 @@ public static class KnownClients
     public const string MsfsBridgeService = "FS2024BridgeService";
 
     /// <summary>The number of the ATC app's connections that have opened (a connection names itself in its Open).</summary>
-    public static int Open(IEnumerable<string> names) => names.Count(IsApp);
+    public static int Open(IEnumerable<string> names, bool anyName = true) => names.Count(n => IsApp(n, anyName));
 
     /// <summary>
     /// True when the ATC app is connected: for the recorded app, its main connection and its airport-data connection;
-    /// for any other app, any connection.
+    /// for any other app, any connection (only with <paramref name="anyName"/>).
     /// </summary>
-    public static bool AppConnected(IEnumerable<string> names)
+    public static bool AppConnected(IEnumerable<string> names, bool anyName = true)
     {
-        var list = names.Where(IsApp).ToList();
+        var list = names.Where(n => IsApp(n, anyName)).ToList();
         return list.Any(IsKnown)
             ? list.Contains(AircraftAndRadios) && list.Any(IsAirports)
             : list.Count > 0;
     }
 
-    private static bool IsApp(string name) => name is not ("" or MsfsBridgeService);
+    private static bool IsApp(string name, bool anyName) => anyName ? name is not ("" or MsfsBridgeService) : IsKnown(name);
 
     /// <summary>What a connection is for, on the status page.</summary>
     public static string Describe(string name) => name switch
@@ -56,6 +58,6 @@ public static class KnownClients
         AircraftAndRadios => "ATC app: aircraft and radios",
         "" => "Connecting",
         MsfsBridgeService => "MSFS service, not used",
-        _ => $"SimConnect app ({name})",
+        _ => $"SimConnect client ({name})",
     };
 }

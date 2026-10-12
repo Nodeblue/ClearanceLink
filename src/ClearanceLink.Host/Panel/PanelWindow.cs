@@ -282,7 +282,8 @@ public sealed class PanelWindow : Window
         });
         if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)
         {
-            Flash(_controller.SetFolder(CduKey.ChooseApp, path));
+            Flash("WORKING...");
+            Flash(await _controller.SetAppAsync(path));
         }
     }
 

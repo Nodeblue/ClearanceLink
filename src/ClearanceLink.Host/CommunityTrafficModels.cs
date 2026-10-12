@@ -195,7 +195,26 @@ public sealed class CommunityTrafficModels(string storeUserCfg, string steamUser
     /// deleting ClearanceLink's folder can never reach FSLTL through it (Windows PowerShell 5.1's Remove-Item -Recurse
     /// follows junctions). Provide makes it again in milliseconds.
     /// </summary>
-    private bool RemoveLink()
+    private bool RemoveLink() => RemoveLink(linkFolder);
+
+    /// <summary>
+    /// Removes the link a version up to 0.7.6 made under its old folder name (<see cref="Support.OldNames.TrafficLinkFolder"/>),
+    /// next to <c>linkFolder</c>, so it can't be followed into FSLTL. Returns a line, or null when there was none.
+    /// </summary>
+    public string? RemoveOldLink()
+    {
+        var old = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(linkFolder))!, Support.OldNames.TrafficLinkFolder);
+        try
+        {
+            return RemoveLink(old) ? $"traffic-models: removed the link an earlier version left in {old}" : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"traffic-models: could not remove the link in {old} ({ex.Message})";
+        }
+    }
+
+    private static bool RemoveLink(string linkFolder)
     {
         var link = new DirectoryInfo(Path.Combine(linkFolder, "Community", FsltlCatalog.PackageName));
         if (link.LinkTarget is null)

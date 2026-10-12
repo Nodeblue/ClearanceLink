@@ -16,7 +16,13 @@ public sealed class StatusBoard(
     TimeProvider? time = null)
 {
     /// <summary>True when the ATC app is connected (<see cref="KnownClients.AppConnected"/>).</summary>
-    public static bool AppConnected(IEnumerable<string> names) => KnownClients.AppConnected(names);
+    public static bool AppConnected(IEnumerable<string> names, bool anyName = true) => KnownClients.AppConnected(names, anyName);
+
+    /// <summary>
+    /// True when only the ATC app can reach serve (its own TCP port), so any client is the app; false while MSFS's
+    /// default connection is answered too, where other MSFS add-ons connect (<see cref="KnownClients"/>).
+    /// </summary>
+    public bool AnyClientIsTheApp { get; set; } = true;
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -70,7 +76,7 @@ public sealed class StatusBoard(
         var xp = xplane();
         var msfs = MsfsRunning?.Invoke() ?? false;
         return new StatusSnapshot(
-            Overall(xp, live, msfs),
+            Overall(xp, live, msfs, AnyClientIsTheApp),
             Version,
             _started,
             now,
@@ -102,10 +108,10 @@ public sealed class StatusBoard(
         typeof(StatusBoard).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev";
 
     /// <summary>The headline: what works, or the first thing the user has to start.</summary>
-    public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions, bool msfsRunning = false)
+    public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions, bool msfsRunning = false, bool anyName = true)
     {
         var names = sessions.Select(s => s.ClientName).ToList();
-        var seen = KnownClients.Open(names) > 0;
+        var seen = KnownClients.Open(names, anyName) > 0;
         if (msfsRunning && !seen)
         {
             return new(StatusLevel.Problem, "Microsoft Flight Simulator is running. Close it so the ATC app can connect to X-Plane.");
@@ -116,7 +122,7 @@ public sealed class StatusBoard(
             (false, false) => new(StatusLevel.Waiting, "Waiting for X-Plane. Start X-Plane 12 and load a flight."),
             (false, true) => new(StatusLevel.Problem, "The ATC app is connected but X-Plane is not. Check X-Plane is running with its Web API on."),
             (true, false) => new(StatusLevel.Waiting, "X-Plane connected. Start the ATC app."),
-            (true, true) when !AppConnected(names) =>
+            (true, true) when !AppConnected(names, anyName) =>
                 new(StatusLevel.Waiting, "X-Plane connected. The ATC app is still connecting."),
             _ => new(StatusLevel.Ok, "Ready. The ATC app is talking to X-Plane."),
         };

@@ -449,8 +449,8 @@ namespace ClearanceLink.Host
 
         /// <summary>
         /// Saves <paramref name="app"/> as the ATC app (null: none). ClearanceLink's config files go from the app chosen
-        /// before (a user's own are put back) and, with always on, are written for the new one. The settings are changed
-        /// but not saved; returns a problem to show, or null.
+        /// before (a user's own are put back) and, with always on, are written for the new one (automatic writes them when
+        /// serve starts). The settings are changed but not saved; returns a problem to show, or null.
         /// </summary>
         public static string? ChangeApp(AppSettings settings, AtcApp? app)
         {
@@ -458,7 +458,7 @@ namespace ClearanceLink.Host
             {
                 try
                 {
-                    new AppRedirect(old).SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                    new AppRedirect(old).SwitchOff().ToList().ForEach(l => PacketConsole.Info($"app: {l}"));
                 }
                 catch (RedirectFailedException ex)
                 {
@@ -467,7 +467,7 @@ namespace ClearanceLink.Host
             }
 
             settings.AppExe = app?.Exe;
-            return app is null ? null : ApplyConnection(settings, app);
+            return app is null || settings.Connection != ConnectionMode.AlwaysOn ? null : ApplyConnection(settings, app);
         }
 
         private static int SupportCommand()
@@ -705,9 +705,10 @@ namespace ClearanceLink.Host
                 Stub = stubLine.StartsWith("stub: ", StringComparison.Ordinal) ? stubLine["stub: ".Length..] : stubLine,
                 Recording = Path.GetFullPath(recorder.Path),
                 Traffic = () => traffic.Objects,
+                AnyClientIsTheApp = listener is not MultiListener && listener.Endpoint.Kind == EndpointKind.Tcp,
             };
             board.Plugin = () => plugin?.Status;
-            var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowAppAsync(stub, server, msfs, ct);
+            var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowAppAsync(stub, server, msfs, board.AnyClientIsTheApp, ct);
             var xplaneRoot = FindXPlane(options)?.Root;
             var plans = new FlightPlans(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot, path => plugin?.LoadFms(path) == true);
             if (plugin is not null)
@@ -739,6 +740,11 @@ namespace ClearanceLink.Host
             // The ATC app lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none
             // (ADR-0014). Only while no real MSFS runs, so an MSFS 2024 being installed never adopts ClearanceLink's file.
             var communityModels = OperatingSystem.IsWindows() ? CommunityTrafficModels.Default : null;
+            if (communityModels?.RemoveOldLink() is { } oldLink)
+            {
+                PacketConsole.Info(oldLink);
+            }
+
             var modelsLock = new Lock();
             var pointed = false;
             var closing = false;
@@ -867,7 +873,7 @@ namespace ClearanceLink.Host
         }
 
         /// <summary>Runs the MSFS stand-in only while the ATC app is not connected (<see cref="StubLauncher.FollowApp"/>).</summary>
-        private static async Task FollowAppAsync(StubLauncher stub, XPlaneSimServer server, MsfsGate msfs, CancellationToken ct)
+        private static async Task FollowAppAsync(StubLauncher stub, XPlaneSimServer server, MsfsGate msfs, bool anyName, CancellationToken ct)
         {
             try
             {
@@ -875,7 +881,7 @@ namespace ClearanceLink.Host
                 {
                     await Task.Delay(TimeSpan.FromSeconds(1), ct);
                     var names = server.Sessions.Select(s => s.ClientName).ToList();
-                    var connected = StatusBoard.AppConnected(names);
+                    var connected = StatusBoard.AppConnected(names, anyName);
                     if (stub.FollowApp(connected, msfs.IsRunning, DateTimeOffset.UtcNow) is { } line)
                     {
                         PacketConsole.Info(line);

@@ -1,5 +1,5 @@
 ClearanceLink - an experimental SimConnect to X-Plane 12 bridge
-==============================================================
+===============================================================
 
 Free and experimental, by Nodeblue, with no warranty: a development proof of concept. It is not made,
 supported or endorsed by any developer whose app uses SimConnect, nor by Microsoft or Laminar Research.

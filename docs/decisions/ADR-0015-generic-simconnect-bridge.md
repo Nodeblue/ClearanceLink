@@ -21,10 +21,12 @@ development proof of concept, and the user says which app to point at it.
     support zip's `app/` folder) and its saved settings are Unity PlayerPrefs under `HKCU\Software\<company>\<product>`
     (the SimBrief pilot ID).
 - Settings carry over: a user of an earlier version who had set the app's folder by hand gets the .exe found in that
-  folder. Everyone else picks it once.
+  folder, and an install an earlier version found by itself is looked for once in the same old places, so upgraded
+  users don't pick again. New users pick it once.
 - The client connection names recorded from one app stay in the code as recorded wire facts, so the MSFS stand-in
   still closes at the right time for that app (ADR-0010). Any other client counts as connected as soon as it opens a
-  connection.
+  connection, but only while serve listens on the app's own TCP port (the redirect); on the fallback, which also
+  answers MSFS's default pipe, other MSFS add-ons connect too, so only the recorded names count there.
 - Neutral names everywhere a user looks: screens (ATC APP, CONNECTIONS, START ATC APP, APP: X-PLANE TILL EXIT...),
   commands (`app on|off|status`, `app-guard`, `--app`, `--app-log`), log prefixes (`app:`, `traffic-models:`) and docs.
 

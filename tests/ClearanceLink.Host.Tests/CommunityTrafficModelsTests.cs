@@ -264,4 +264,20 @@ public sealed class CommunityTrafficModelsTests : IDisposable
         Fsltl(Path.Combine(packages, "Community", "fsltl-traffic-base"));
         Assert.Equal(CommunityTrafficModels.Outcome.Found, Models.Check(null));
     }
+
+    [Fact]
+    public void The_link_an_earlier_version_left_under_its_old_folder_name_is_removed_and_fsltl_kept()
+    {
+        var fsltl = Fsltl(Path.Combine(_root, "MSFS", "Community", "fsltl-traffic-base"));
+        var old = Path.Combine(_root, "ClearanceLink", Support.OldNames.TrafficLinkFolder);
+        Directory.CreateDirectory(Path.Combine(old, "Community"));
+        Directory.CreateSymbolicLink(Path.Combine(old, "Community", "fsltl-traffic-base"), fsltl);
+
+        Assert.NotNull(Models.RemoveOldLink());
+
+        Assert.False(Directory.Exists(old));
+        Assert.True(File.Exists(Path.Combine(fsltl, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg")));
+        Assert.Null(Models.RemoveOldLink());
+    }
+
 }

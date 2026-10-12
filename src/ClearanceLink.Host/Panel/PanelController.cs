@@ -124,8 +124,8 @@ public sealed class PanelController : IAsyncDisposable
             Serving: snapshot is not null,
             XPlaneConnected: snapshot?.XPlane.Connected ?? false,
             XPlaneVersion: snapshot?.XPlane.Version,
-            Connections: KnownClients.Open(names),
-            AppConnected: StatusBoard.AppConnected(names),
+            Connections: KnownClients.Open(names, _board?.AnyClientIsTheApp ?? true),
+            AppConnected: StatusBoard.AppConnected(names, _board?.AnyClientIsTheApp ?? true),
             LastAirport: airport?.Icao,
             LastAirportSource: airport?.Source,
             MsfsRunning: snapshot?.MsfsRunning ?? false,
@@ -292,7 +292,7 @@ public sealed class PanelController : IAsyncDisposable
         settings.Save(AppFolders.Default.Settings);
         RefreshFolders();
         _foldersChanged = true;
-        return which == CduKey.ChooseApp ? "ATC APP SAVED" : "X-PLANE FOLDER SAVED";
+        return which == CduKey.ChooseApp ? AppSaved : "X-PLANE FOLDER SAVED";
     }
 
     private async Task<string> SetConnectionAsync(ConnectionMode mode)
@@ -327,6 +327,27 @@ public sealed class PanelController : IAsyncDisposable
         await RestartAsync().ConfigureAwait(false);
         return appWasConnected ? "NOW RESTART THE ATC APP" : mode == ConnectionMode.Automatic ? "AUTOMATIC SELECTED" : "ALWAYS ON SELECTED";
     }
+
+    /// <summary>The ATC app's .exe chosen in the window: saved, and serve restarted so it answers the new app, unless an app is connected now.</summary>
+    public async Task<string> SetAppAsync(string exe)
+    {
+        var result = SetFolder(CduKey.ChooseApp, exe);
+        if (result != AppSaved)
+        {
+            return result;
+        }
+
+        if (State().AppSeen)
+        {
+            return "SAVED: RESTART TO USE";
+        }
+
+        _foldersChanged = false;
+        await RestartAsync().ConfigureAwait(false);
+        return result;
+    }
+
+    private const string AppSaved = "ATC APP SAVED";
 
     private string StartApp()
     {

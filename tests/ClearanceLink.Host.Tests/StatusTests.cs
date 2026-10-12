@@ -54,6 +54,17 @@ public sealed class StatusTests : IDisposable
         Assert.Equal(connected, StatusBoard.AppConnected(names));
     }
 
+    [Fact]
+    public void On_msfss_default_connection_other_add_ons_are_not_the_app()
+    {
+        // There any MSFS add-on connects (SPAD.neXt), so only recorded names count and the stand-in stays.
+        Assert.False(StatusBoard.AppConnected(["SPAD.neXt"], anyName: false));
+        Assert.Equal(0, Open(["SPAD.neXt", "Some Other ATC"], anyName: false));
+        Assert.True(StatusBoard.AppConnected([HelperAirports, AircraftAndRadios], anyName: false));
+        var xp = new XPlaneStatus(true, null, "http://127.0.0.1:8086/");
+        Assert.Contains("Start the ATC app", StatusBoard.Overall(xp, [OpenSession(1, "SPAD.neXt")], anyName: false).Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(HelperAirports, true)]
     [InlineData(AircraftAndRadios, true)]

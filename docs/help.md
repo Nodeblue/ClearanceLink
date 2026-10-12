@@ -51,8 +51,8 @@ to go on, **BACK** to go back, or **SKIP** on the first page to skip them (SETUP
 1. **Welcome.** What ClearanceLink is.
 2. **Folders.** Press **CHOOSE** beside **ATC APP** and pick your ATC app's `.exe`. ClearanceLink doesn't look for
    it by itself. It finds X-Plane by itself; if that line says **NOT FOUND**, press **CHOOSE** and pick the folder
-   that holds `X-Plane.exe`. Nothing in the X-Plane folder is changed. Coming from an earlier ClearanceLink where you
-   had set the app's folder by hand? The app is carried over; otherwise you pick it once.
+   that holds `X-Plane.exe`. Nothing in the X-Plane folder is changed. Coming from an earlier ClearanceLink? The app
+   you used is carried over; otherwise you pick it once.
 3. **The ATC app's traffic.** The ATC app creates and flies its own traffic. ClearanceLink's X-Plane plugin draws it in
    X-Plane. Close X-Plane, then press **INSTALL**. Traffic is optional: skip it and ATC still works.
 4. **Aircraft models.** The plugin needs aircraft models to draw the traffic with. See

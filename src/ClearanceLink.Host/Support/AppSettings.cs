@@ -20,9 +20,12 @@ public sealed class AppSettings
     /// <summary>The .exe of the SimConnect app the user chose to bridge (the ATC app); null until chosen.</summary>
     public string? AppExe { get; set; }
 
-    /// <summary>The app's folder as saved by versions up to 0.7.6; read once to find <see cref="AppExe"/>, never written.</summary>
+    /// <summary>The app's folder as saved by versions up to 0.7.6; kept until <see cref="AppExe"/> is found from it.</summary>
     [JsonPropertyName(OldNames.AppFolderSetting)]
     public string? OldAppFolder { get; set; }
+
+    /// <summary>0 for a file from 0.7.6 or earlier, which chose no app; 1 from 0.7.7, which saves the app the user chose.</summary>
+    public int Format { get; set; }
 
     /// <summary>X-Plane's folder when the user chose it; null to find it automatically.</summary>
     public string? XPlaneFolder { get; set; }
@@ -78,13 +81,7 @@ public sealed class AppSettings
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(text, Json) ?? new AppSettings();
-            if (settings.OldAppFolder is { } old)
-            {
-                // An upgrade from 0.7.6 or earlier: the folder becomes the app's .exe, and is dropped on the next save.
-                settings.AppExe ??= AtcApp.FindExeIn(old);
-                settings.OldAppFolder = null;
-            }
-
+            settings.CarryOverApp(OldNames.AppFolders);
             return settings;
         }
         catch (JsonException)
@@ -102,9 +99,32 @@ public sealed class AppSettings
         }
     }
 
+    /// <summary>
+    /// An upgrade from 0.7.6 or earlier, which found the app by its folder: the folder set then becomes the app's .exe,
+    /// else, for a user who had set ClearanceLink up, the folder it was found in on its own (<paramref name="oldPlaces"/>).
+    /// A folder set then is kept until its .exe is found (a drive not connected yet).
+    /// </summary>
+    public void CarryOverApp(Func<IEnumerable<string?>> oldPlaces)
+    {
+        if (AppExe is null && OldAppFolder is { } old)
+        {
+            AppExe = AtcApp.FindExeIn(old);
+        }
+        else if (AppExe is null && Format == 0 && GettingStartedDone)
+        {
+            AppExe = oldPlaces().Select(AtcApp.FindExeIn).FirstOrDefault(e => e is not null);
+        }
+
+        if (AppExe is not null)
+        {
+            OldAppFolder = null;
+        }
+    }
+
     /// <summary>Writes through a temporary file so a crash never leaves half a settings file.</summary>
     public void Save(string file)
     {
+        Format = 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
         var temp = file + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(this, Json));
