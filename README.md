@@ -1,7 +1,7 @@
 # ClearanceLink
 
-**Connect [BeyondATC](https://www.beyondatc.net/) to X-Plane 12.** BeyondATC is made for Microsoft Flight Simulator.
-ClearanceLink stands in for MSFS and answers from X-Plane, so you get BeyondATC's clearances, taxi routes, SIDs, STARs,
+**Connect a popular ATC add-on and extends beyond MSFS to X-Plane 12.**
+ClearanceLink stands in for MSFS and answers from X-Plane, so you get ATC clearances, taxi routes, SIDs, STARs,
 approaches, handoffs and traffic in X-Plane 12.
 
 > Free, experimental hobby project by Nodeblue, with no warranty. Not affiliated with, endorsed by or supported by
