@@ -3,8 +3,8 @@ using ClearanceLink.Protocol.Facilities;
 namespace ClearanceLink.Protocol.Tests;
 
 /// <summary>
-/// Decodes MSFS 2024's recorded airport answers to BATC and re-encodes them: the encoder must reproduce every
-/// packet byte for byte (recordings/samples/batc-1.8.21-facilities.jsonl).
+/// Decodes MSFS 2024's recorded airport answers to the ATC app and re-encodes them: the encoder must reproduce every
+/// packet byte for byte (recordings/samples/atc-app-1.8.21-facilities.jsonl).
 /// </summary>
 public sealed class FacilityRoundTripTests
 {
@@ -13,7 +13,7 @@ public sealed class FacilityRoundTripTests
     [Theory]
     [InlineData(444u, 318)]
     [InlineData(333u, 255)]
-    public void Batc_definitions_use_only_known_fields(uint defineId, int entries)
+    public void The_apps_definitions_use_only_known_fields(uint defineId, int entries)
     {
         var names = FacilityFixture.DefinitionNames(defineId);
         var definition = FacilityDefinition.FromNames(names);

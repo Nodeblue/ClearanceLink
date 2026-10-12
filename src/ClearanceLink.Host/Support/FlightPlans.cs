@@ -38,7 +38,7 @@ public sealed class FlightPlans(Func<AppSettings> settings, Func<string?> xplane
     {
         if (SimbriefPlan.PilotId(settings()) is not { } id)
         {
-            return "NO SIMBRIEF ID IN BEYONDATC";
+            return "NO SIMBRIEF PILOT ID";
         }
 
         Update(v => v with { Requesting = true });

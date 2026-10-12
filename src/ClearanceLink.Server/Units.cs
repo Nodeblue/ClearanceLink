@@ -99,7 +99,7 @@ public static class Units
             return value != 0 ? 1 : 0;
         }
 
-        // An empty name means "the default units" (BATC asks for COM VOLUME and WING SPAN that way), so is not reported.
+        // An empty name means "the default units" (the ATC app asks for COM VOLUME and WING SPAN that way), so is not reported.
         if (f.Length > 0 && t.Length > 0 && !(Plain.Contains(f) && Plain.Contains(t)))
         {
             passedThrough?.Invoke(from, to);

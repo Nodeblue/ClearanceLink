@@ -84,10 +84,10 @@ public static partial class MsfsCodes
         name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.ToUpperInvariant() is "AWIS" or "AWOS" or "ASOS" or "AWS");
 
     /// <summary>
-    /// FREQUENCY NAME the way MSFS fills it, which BATC uses as the controller's callsign: the ICAO for ATIS, the
+    /// FREQUENCY NAME the way MSFS fills it, which the ATC app uses as the controller's callsign: the ICAO for ATIS, the
     /// sector for ground ("North", "Domestic"), and the city in capitals for the rest ("BRISBANE" for delivery, tower,
     /// approach and departure at YBBN). X-Plane's names are service labels ("ACD", "SMC North", "TWR EAST"), which
-    /// BATC read out as "Acd Delivery" (2026-10-01).
+    /// The ATC app read out as "Acd Delivery" (2026-10-01).
     /// </summary>
     public static string FrequencyName(Frequency frequency, Airport airport)
     {

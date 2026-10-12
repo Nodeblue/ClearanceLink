@@ -1,4 +1,4 @@
-# ClearanceLink X-Plane plugin: draws BeyondATC's AI traffic with XPMP2 and CSL models.
+# ClearanceLink X-Plane plugin: draws the ATC app's AI traffic with XPMP2 and CSL models.
 # Windows (the release target): cmake -S plugin -B build/plugin -A x64 && cmake --build build/plugin --config Release
 # Linux (compile check): cmake -S plugin -B build/plugin && cmake --build build/plugin
 # Output: build/plugin/ClearanceLink/64/<win|lin|mac>.xpl plus ClearanceLink/Resources (XPMP2's support files).

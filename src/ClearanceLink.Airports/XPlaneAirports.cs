@@ -52,7 +52,7 @@ public sealed class XPlaneAirports(XPlaneInstall install, Action<string> log, st
 
     /// <summary>
     /// Custom scenery often lists fewer frequencies than the Gateway airport (Orbx YBBN has no approach or departure),
-    /// and BATC hands off by frequency type, so kinds the chosen airport lacks are taken from lower-priority copies.
+    /// and the ATC app hands off by frequency type, so kinds the chosen airport lacks are taken from lower-priority copies.
     /// </summary>
     public static string BorrowFrequencies(Airport airport, IEnumerable<Airport> others)
     {

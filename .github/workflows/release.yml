@@ -83,7 +83,7 @@ jobs:
           $zip = (Get-Item publish/*.zip).FullName
           $hash = (Get-Item publish/*.sha256.txt).FullName
           $notes = @"
-          **Experimental.** $env:APP is an independent project, not made, supported or endorsed by BeyondATC or Laminar Research.
+          **Experimental.** $env:APP is an independent development proof of concept: a SimConnect to X-Plane 12 bridge. It is not made, supported or endorsed by any developer whose app uses SimConnect, nor by Microsoft or Laminar Research.
 
           **New here?** Download the zip below and follow [Install and update](https://github.com/${{ github.repository }}/blob/$tag/docs/install.md). Windows may warn that the app is from an unknown publisher; the guide shows what to click.
 

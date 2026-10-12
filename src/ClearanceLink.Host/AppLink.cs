@@ -3,13 +3,13 @@ using ClearanceLink.Host.Support;
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// Connection automatic: BeyondATC is pointed at ClearanceLink's TCP port only while ClearanceLink runs and MSFS is
+/// Connection automatic: the ATC app is pointed at ClearanceLink's TCP port only while ClearanceLink runs and MSFS is
 /// closed, so MSFS's default SimConnect pipe stays free and other MSFS add-ons (SPAD.neXt, SayIntentions) never see
-/// a half-there MSFS (ADR-0012). The two SimConnect.cfg files are written when serve starts or MSFS closes, and
-/// removed when MSFS starts or ClearanceLink stops. A guard process (<c>batc-guard</c>) removes them if ClearanceLink
+/// a half-there MSFS (ADR-0012). Its SimConnect.cfg files are written when serve starts or MSFS closes, and
+/// removed when MSFS starts or ClearanceLink stops. A guard process (<c>app-guard</c>) removes them if ClearanceLink
 /// ends without doing so (a crash, or killed).
 /// </summary>
-public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? startGuard = null)
+public sealed class AppLink(AppRedirect redirect, Action<string> log, Action? startGuard = null)
 {
     private readonly Lock _gate = new();
     private bool _guardStarted;
@@ -20,13 +20,13 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
     /// <summary>Why the files could not be written or removed the last time; null when that worked.</summary>
     public string? Problem { get; private set; }
 
-    public BatcRedirect Redirect => redirect;
+    public AppRedirect Redirect => redirect;
 
     /// <summary>
-    /// True when serve should use the redirect: BeyondATC's folder is known and both its folders can be written.
+    /// True when serve should use the redirect: the app is chosen and its folders can be written.
     /// Otherwise serve falls back to answering on MSFS's default pipe.
     /// </summary>
-    public static bool Usable(BatcRedirect redirect) => redirect.CanWrite();
+    public static bool Usable(AppRedirect redirect) => redirect.CanWrite();
 
     /// <summary>Follows MSFS (<see cref="Transport.MsfsGate.Changed"/>): files off while it runs, on while it is closed.</summary>
     public void Follow(bool msfsRunning)
@@ -35,7 +35,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
         {
             if (msfsRunning)
             {
-                Apply(redirect.SwitchOff, "batc: MSFS is running; BeyondATC pointed back at MSFS");
+                Apply(redirect.SwitchOff, "app: MSFS is running; the ATC app pointed back at MSFS");
                 return;
             }
 
@@ -45,13 +45,13 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
                 startGuard();
             }
 
-            Apply(redirect.SwitchOn, "batc: BeyondATC pointed at ClearanceLink until it closes");
+            Apply(redirect.SwitchOn, "app: the ATC app pointed at ClearanceLink until it closes");
         }
     }
 
     /// <summary>
-    /// Connection always on: puts BeyondATC's two files back when they are missing or no longer point at ClearanceLink.
-    /// A BeyondATC update can replace its folder and take them with it (issue #35); serve calls this when it starts
+    /// Connection always on: puts the app's files back when they are missing or no longer point at ClearanceLink.
+    /// An app update can replace its folder and take them with it (issue #35); serve calls this when it starts
     /// and every few seconds after (<see cref="KeepOnEvery"/>).
     /// </summary>
     public void KeepOn()
@@ -64,7 +64,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
                 return;
             }
 
-            Apply(redirect.SwitchOn, "batc: always on; BeyondATC's config files were missing, written again", logOnce: true);
+            Apply(redirect.SwitchOn, "app: always on; the ATC app's config files were missing, written again", logOnce: true);
         }
     }
 
@@ -81,7 +81,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
         }
     }
 
-    /// <summary>Serve is stopping: BeyondATC goes back to MSFS, unless the user has just chosen always on.</summary>
+    /// <summary>Serve is stopping: the app goes back to MSFS, unless the user has just chosen always on.</summary>
     public void Release(ConnectionMode now)
     {
         lock (_gate)
@@ -91,7 +91,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
             _keepOn = null;
             if (now == ConnectionMode.Automatic)
             {
-                Apply(redirect.SwitchOff, "batc: ClearanceLink closing; BeyondATC pointed back at MSFS");
+                Apply(redirect.SwitchOff, "app: ClearanceLink closing; the ATC app pointed back at MSFS");
             }
         }
     }
@@ -118,7 +118,7 @@ public sealed class BatcLink(BatcRedirect redirect, Action<string> log, Action? 
             // Always on retries every few seconds: the same problem is logged once.
             if (!logOnce || Problem != ex.Message)
             {
-                log($"batc: {ex.Message}");
+                log($"app: {ex.Message}");
             }
 
             Problem = ex.Message;

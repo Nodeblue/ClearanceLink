@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace ClearanceLink.Protocol;
 
-/// <summary>Which way a packet travels. Client = BeyondATC (or any SimConnect client); server = the simulator side.</summary>
+/// <summary>Which way a packet travels. Client = the ATC app (or any SimConnect client); server = the simulator side.</summary>
 public enum Direction
 {
     ClientToServer,

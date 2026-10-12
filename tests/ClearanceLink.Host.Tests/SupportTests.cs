@@ -18,14 +18,14 @@ public sealed class SupportTests : IDisposable
     {
         var old = Path.Combine(_root, "XPConnect");
         Directory.CreateDirectory(Path.Combine(old, "logs"));
-        new AppSettings { BatcFolder = @"D:\Games\BeyondATC" }.Save(Path.Combine(old, "settings.json"));
+        new AppSettings { AppExe = @"D:\Games\Tower\Tower.exe" }.Save(Path.Combine(old, "settings.json"));
 
         var folders = AppFolders.Open(_root);
 
         Assert.Equal(Path.Combine(_root, "ClearanceLink"), folders.Root);
         Assert.False(Directory.Exists(old));
         Assert.True(Directory.Exists(folders.Logs));
-        Assert.Equal(@"D:\Games\BeyondATC", AppSettings.Load(folders.Settings).BatcFolder);
+        Assert.Equal(@"D:\Games\Tower\Tower.exe", AppSettings.Load(folders.Settings).AppExe);
 
         Directory.CreateDirectory(old);
         Assert.Equal(folders.Root, AppFolders.Open(_root).Root);
@@ -58,12 +58,12 @@ public sealed class SupportTests : IDisposable
         Assert.True(defaults.SessionLog);
         Assert.Equal(7, defaults.KeepDays);
         Assert.False(defaults.GettingStartedDone);
-        Assert.Null(defaults.BatcFolder);
+        Assert.Null(defaults.AppExe);
 
-        new AppSettings { BatcFolder = @"D:\Games\BeyondATC", SessionLog = false, KeepDays = 3, GettingStartedDone = true }.Save(file);
+        new AppSettings { AppExe = @"D:\Games\Tower\Tower.exe", SessionLog = false, KeepDays = 3, GettingStartedDone = true }.Save(file);
         var loaded = AppSettings.Load(file);
 
-        Assert.Equal(@"D:\Games\BeyondATC", loaded.BatcFolder);
+        Assert.Equal(@"D:\Games\Tower\Tower.exe", loaded.AppExe);
         Assert.Null(loaded.XPlaneFolder);
         Assert.False(loaded.SessionLog);
         Assert.Equal(3, loaded.KeepDays);
@@ -146,7 +146,7 @@ public sealed class SupportTests : IDisposable
     }
 
     [Fact]
-    public void Support_zip_holds_logs_recording_batc_and_xplane_files_with_the_user_blanked()
+    public void Support_zip_holds_logs_recording_the_app_and_xplane_files_with_the_user_blanked()
     {
         var folders = new AppFolders(Path.Combine(_root, "app"));
         new AppSettings { XPlaneFolder = @"C:\Users\Ben\X-Plane 12" }.Save(folders.Settings);
@@ -164,20 +164,21 @@ public sealed class SupportTests : IDisposable
         File.WriteAllText(Path.Combine(folders.Recordings, "new-serve.jsonl"), "{\"name\":\"Open\"}");
         File.WriteAllText(Path.Combine(folders.Recordings, "new-serve.md"), "# summary");
 
-        var batc = Path.Combine(_root, "BeyondATC");
-        Directory.CreateDirectory(Path.Combine(batc, "BeyondATC_Data", "StreamingAssets"));
-        File.WriteAllText(Path.Combine(batc, "BeyondATC.exe"), "");
-        new BatcRedirect(batc).SwitchOn();
-        var batcLogs = Path.Combine(_root, "LocalLow");
-        Directory.CreateDirectory(batcLogs);
-        File.WriteAllText(Path.Combine(batcLogs, "Player.log"), "Detected Microsoft Flight Simulator 2024 is in use");
+        var folder = Path.Combine(_root, "Tower");
+        Directory.CreateDirectory(Path.Combine(folder, "Tower_Data", "StreamingAssets"));
+        File.WriteAllText(Path.Combine(folder, "Tower.exe"), "");
+        var app = AtcApp.From(Path.Combine(folder, "Tower.exe"))!;
+        new AppRedirect(app).SwitchOn();
+        var appLogs = Path.Combine(_root, "LocalLow");
+        Directory.CreateDirectory(appLogs);
+        File.WriteAllText(Path.Combine(appLogs, "Player.log"), "Detected Microsoft Flight Simulator 2024 is in use");
 
         var xplane = Path.Combine(_root, "X-Plane 12");
         Directory.CreateDirectory(xplane);
         File.WriteAllText(Path.Combine(xplane, "Log.txt"), new string('x', 100) + "\nLoaded: Ben's Phenom\n");
 
         var zipPath = SupportBundle.Create(
-            new SupportSources("1.2.3", folders, batc, xplane, batcLogs, new Redactor(@"C:\Users\Ben", "Ben")),
+            new SupportSources("1.2.3", folders, app, xplane, appLogs, new Redactor(@"C:\Users\Ben", "Ben")),
             new DateTime(2026, 10, 2, 9, 30, 0));
 
         Assert.Equal("ClearanceLink-support-20261002-093000.zip", Path.GetFileName(zipPath));
@@ -190,9 +191,9 @@ public sealed class SupportTests : IDisposable
         Assert.Contains("recording/new-serve.jsonl", names);
         Assert.Contains("recording/new-serve.md", names);
         Assert.DoesNotContain("recording/old-serve.jsonl", names);
-        Assert.Contains("beyondatc/Player.log", names);
-        Assert.Contains("beyondatc/SimConnect.cfg", names);
-        Assert.Contains("beyondatc/StreamingAssets-SimConnect.cfg", names);
+        Assert.Contains("app/Player.log", names);
+        Assert.Contains("app/SimConnect.cfg", names);
+        Assert.Contains("app/StreamingAssets-SimConnect.cfg", names);
         Assert.Contains("xplane/Log.txt", names);
 
         var all = string.Join("\n", zip.Entries.Select(Read));

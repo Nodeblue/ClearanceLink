@@ -17,7 +17,7 @@ public sealed record PushView(
     bool? BetterPushback = null,
     bool Automatic = false)
 {
-    /// <summary>What START PUSH would do: the pilot's choice, else BATC's clearance.</summary>
+    /// <summary>What START PUSH would do: the pilot's choice, else the ATC app's clearance.</summary>
     public PushChoice? Selected => Choice ?? (Clearance is null ? null : PushChoice.Face);
 
     public bool Running => Stage is not (null or PushStage.Done or PushStage.Failed);
@@ -27,7 +27,7 @@ public sealed record PushView(
 }
 
 /// <summary>
-/// The PUSH page's pushback: picks up BeyondATC's pushback approvals from its log, plans the push from the aircraft's
+/// The PUSH page's pushback: picks up the ATC app's pushback approvals from its log, plans the push from the aircraft's
 /// position and the airport's taxiways, and when the pilot presses START PUSH drives Better Pushback through
 /// <see cref="PushDriver"/>. Nothing moves until the pilot presses the key (ADR-0013).
 /// </summary>
@@ -35,7 +35,7 @@ public sealed class Pushbacks(
     IXPlaneData xplane,
     Func<IReadOnlyList<string>> airports,
     Func<string, Airport?> loadAirport,
-    BatcLogFollower? batcLog,
+    ClearanceLogFollower? appLog,
     Action<string> log,
     TimeProvider? time = null,
     TimeSpan? detectAfter = null)
@@ -51,7 +51,7 @@ public sealed class Pushbacks(
     /// <summary>Gear positions along the aircraft (metres from the CG), for its wheelbase; Better Pushback reads them too.</summary>
     private static readonly string[] TireZ = [.. Enumerable.Range(0, 10).Select(i => $"sim/flightmodel/parts/tire_z_no_deflection[{i}]")];
 
-    /// <summary>How long a clearance stays on the page; BATC repeats it if the pilot asks again.</summary>
+    /// <summary>How long a clearance stays on the page; the ATC app repeats it if the pilot asks again.</summary>
     private static readonly TimeSpan ClearanceKept = TimeSpan.FromMinutes(20);
 
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(250);
@@ -93,7 +93,7 @@ public sealed class Pushbacks(
     }
 
     /// <summary>
-    /// Start as soon as BeyondATC's approval arrives (the way BeyondATC drives GSX in MSFS), when Better Pushback is
+    /// Start as soon as the ATC app's approval arrives (the way the ATC app drives GSX in MSFS), when Better Pushback is
     /// there and no push is running. Off: wait for START PUSH.
     /// </summary>
     public bool Automatic
@@ -229,7 +229,7 @@ public sealed class Pushbacks(
 
             _view = _view with { XPlane = xplane.IsConnected, BrakeSet = inputs?.ParkingBrake >= 0.9, BetterPushback = found };
 
-            // ON CLEARANCE: BeyondATC's approval calls the tug, as it calls GSX in MSFS, once Better Pushback is known
+            // ON CLEARANCE: The ATC app's approval calls the tug, as it calls GSX in MSFS, once Better Pushback is known
             // to be there. Without it the page says BETTER PUSHBACK MISSING and nothing is sent.
             // A clearance not acted on soon (X-Plane was away) is stale: the pilot calls the tug by hand if still wanted.
             if (_autoPending && (!_view.Automatic || _view.Clearance is null || _view.Running || found is false
@@ -241,7 +241,7 @@ public sealed class Pushbacks(
             {
                 _autoPending = false;
                 _startRequested = true;
-                log("pushback: automatic start on BATC's clearance");
+                log("pushback: automatic start on the ATC app's clearance");
             }
         }
 
@@ -446,19 +446,19 @@ public sealed class Pushbacks(
     private void PollClearance()
     {
         var now = _time.GetUtcNow();
-        if (batcLog is null || now - _lastLogPoll < TimeSpan.FromSeconds(1))
+        if (appLog is null || now - _lastLogPoll < TimeSpan.FromSeconds(1))
         {
             return;
         }
 
         _lastLogPoll = now;
-        var found = batcLog.Poll();
+        var found = appLog.Poll();
         lock (_gate)
         {
             if (found.Count > 0 && !_view.Running)
             {
                 var clearance = found[^1];
-                log($"pushback: BATC cleared pushback{(clearance.FaceWord is { } w ? $", face {w}" : "")}: {clearance.Text}");
+                log($"pushback: the ATC app cleared pushback{(clearance.FaceWord is { } w ? $", face {w}" : "")}: {clearance.Text}");
                 _view = _view with { Clearance = clearance, Choice = null, Stage = _view.Stage is PushStage.Done or PushStage.Failed ? null : _view.Stage };
                 _autoPending = _view.Automatic;
                 _autoPendingAt = now;
@@ -495,7 +495,7 @@ public sealed class Pushbacks(
         return new PushInputs(lat, lon, hdg, gs, brake, started >= 0.5, connected >= 0.5);
     }
 
-    /// <summary>Taxiways of the airport BATC asked for that the aircraft is at (within 10 km of its reference point).</summary>
+    /// <summary>Taxiways of the airport the ATC app asked for that the aircraft is at (within 10 km of its reference point).</summary>
     private IReadOnlyList<TaxiwaySegment> TaxiwaysAt(Pose pose)
     {
         foreach (var icao in airports())

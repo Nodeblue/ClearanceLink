@@ -7,7 +7,7 @@ public sealed class TrafficBridgeTests
 {
     private static readonly TrafficModels Models = TrafficModels.Load(RepoFile("mapping", "traffic-models.yaml"));
 
-    // Titles BATC created in recording 20260930-174605 (recordings/samples/batc-1.8.21-traffic.jsonl).
+    // Titles the ATC app created in recording 20260930-174605 (recordings/samples/atc-app-1.8.21-traffic.jsonl).
     [Theory]
     [InlineData("FSLTL_B738_Qantas", "B738", "QFA")]
     [InlineData("FSLTL_B738_Virgin Australia", "B738", "VOZ")]
@@ -224,7 +224,7 @@ public sealed class TrafficBridgeTests
     }
 
     [Fact]
-    public void Wings_are_level_on_the_ground_whatever_bank_batc_writes()
+    public void Wings_are_level_on_the_ground_whatever_bank_the_app_writes()
     {
         var time = new ManualTime();
         var registry = new TrafficRegistry(time);
@@ -248,7 +248,7 @@ public sealed class TrafficBridgeTests
     }
 
     [Fact]
-    public void Gear_is_down_on_the_ground_whatever_batc_wrote()
+    public void Gear_is_down_on_the_ground_whatever_the_app_wrote()
     {
         var time = new ManualTime();
         var registry = new TrafficRegistry(time);

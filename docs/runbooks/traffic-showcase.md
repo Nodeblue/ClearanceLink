@@ -1,4 +1,4 @@
-# Traffic showcase: check CSL models without BeyondATC
+# Traffic showcase: check CSL models without the ATC app
 
 `clearancelink showcase` draws a fixed scene through the X-Plane plugin so models, liveries, wheels, propellers and
 steering can be checked in one place, the same way every time.

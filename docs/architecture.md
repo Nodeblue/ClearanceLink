@@ -1,11 +1,14 @@
 # Architecture
 
 ```
-BATC (Unity) --SimConnect TCP (1.8.22+: from BeyondATC.exe; before: also via simconnect_ws.exe)--> ClearanceLink --Web API--> X-Plane 12
-                                                                          |
-                                                                          +--files--> apt.dat, CIFP (Phase 2)
-                                                                          +--plugin--> AI traffic (Phase 4)
+ATC app (Unity) --SimConnect TCP--> ClearanceLink --Web API--> X-Plane 12
+                                        |
+                                        +--files--> apt.dat, CIFP (Phase 2)
+                                        +--plugin--> AI traffic (Phase 4)
 ```
+
+The ATC app is the one the user chose (its .exe). It connects from the .exe itself; older versions of the app also
+connected through a helper program.
 
 ## Components (planned; the ones marked * exist today)
 | Component | Role |

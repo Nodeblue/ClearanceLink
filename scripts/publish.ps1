@@ -48,7 +48,7 @@ foreach ($id in $notices.Keys) {
 }
 
 # The X-Plane traffic plugin needs CMake and the MSVC C++ tools. GitHub Actions (release workflow) has both;
-# without them the zip is built without the plugin and BeyondATC's traffic is not drawn.
+# without them the zip is built without the plugin and the ATC app's traffic is not drawn.
 if ((Get-Command cmake -ErrorAction SilentlyContinue) -and -not $env:CLEARANCELINK_SKIP_PLUGIN) {
     cmake -S plugin -B build/plugin -A x64
     if ($LASTEXITCODE) { exit $LASTEXITCODE }

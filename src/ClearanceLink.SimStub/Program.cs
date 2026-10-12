@@ -1,4 +1,4 @@
-// Does nothing except exist: BeyondATC checks for a running process named FlightSimulator2024 before it starts
+// Does nothing except exist: The ATC app checks for a running process named FlightSimulator2024 before it starts
 // its SimConnect helper. ClearanceLink starts it with --parent <pid> and it exits when ClearanceLink does, however
 // ClearanceLink ends (closing its window kills it before it can stop the stub). Run alone, stop it with Ctrl+C.
 using System.Diagnostics;

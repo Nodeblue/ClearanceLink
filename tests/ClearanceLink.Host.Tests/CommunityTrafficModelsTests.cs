@@ -2,15 +2,15 @@ using ClearanceLink.Fsltl;
 
 namespace ClearanceLink.Host.Tests;
 
-public sealed class BatcTrafficModelsTests : IDisposable
+public sealed class CommunityTrafficModelsTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("clearancelink-batc-models").FullName;
+    private readonly string _root = Directory.CreateTempSubdirectory("clearancelink-traffic-models").FullName;
 
     private string Store => Path.Combine(_root, "Local", "Packages", "Microsoft.Limitless_8wekyb3d8bbwe", "LocalCache", "UserCfg.opt");
 
     private string Steam => Path.Combine(_root, "Roaming", "Microsoft Flight Simulator 2024", "UserCfg.opt");
 
-    private BatcTrafficModels Models => new(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"));
+    private CommunityTrafficModels Models => new(Store, Steam, Path.Combine(_root, "ClearanceLink", "traffic packages"));
 
     public void Dispose()
     {
@@ -33,8 +33,8 @@ public sealed class BatcTrafficModelsTests : IDisposable
         return folder;
     }
 
-    /// <summary>BeyondATC's own lookup (TrafficModelManager.FindCommunity then GetFiles): Store UserCfg.opt, else Steam; then each aircraft.cfg under a Community folder whose name contains fsltl-traffic-base.</summary>
-    private List<string> WhatBatcFinds()
+    /// <summary>the ATC app's own lookup (TrafficModelManager.FindCommunity then GetFiles): Store UserCfg.opt, else Steam; then each aircraft.cfg under a Community folder whose name contains fsltl-traffic-base.</summary>
+    private List<string> WhatTheAppFinds()
     {
         var cfg = File.Exists(Store) ? Store : File.Exists(Steam) ? Steam : null;
         if (cfg is null || FsltlLocator.InstalledPackagesPath(File.ReadAllText(cfg)) is not { } packages)
@@ -58,43 +58,43 @@ public sealed class BatcTrafficModelsTests : IDisposable
     }
 
     [Fact]
-    public void A_next_boot_packages_folder_is_not_where_beyondatc_looks()
+    public void A_next_boot_packages_folder_is_not_where_the_app_looks()
     {
-        // Issue #29: MSFS 2024 (Steam) with FSLTL under InstalledPackagesPathNextBoot, written before the line BeyondATC reads.
+        // Issue #29: MSFS 2024 (Steam) with FSLTL under InstalledPackagesPathNextBoot, written before the line the ATC app reads.
         var roaming = Path.Combine(_root, "Roaming", "Microsoft Flight Simulator 2024", "Packages");
         var moved = Path.Combine(_root, "D", "MSFS2024 Packages");
         var fsltl = Fsltl(Path.Combine(moved, "Community", "fsltl-traffic-base"));
         Directory.CreateDirectory(Path.GetDirectoryName(Steam)!);
         File.WriteAllText(Steam, $"Version 1\r\nInstalledPackagesPathNextBoot \"{moved}\"\r\nInstalledPackagesPath \"{roaming}\"\r\n");
 
-        Assert.Empty(WhatBatcFinds());
+        Assert.Empty(WhatTheAppFinds());
         Assert.Equal((Path.Combine(roaming, "Community"), Path.Combine(moved, "Community")), Models.Where());
-        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, Models.Check(fsltl));
+        Assert.Equal(CommunityTrafficModels.Outcome.NotInMsfs2024, Models.Check(fsltl));
         var result = Models.Provide(fsltl);
-        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, result.Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.NotInMsfs2024, result.Outcome);
         Assert.Contains(Path.Combine(roaming, "Community"), result.Line, StringComparison.Ordinal);
         Assert.Contains("InstalledPackagesPathNextBoot", result.Line, StringComparison.Ordinal);
         Assert.Contains("which has traffic models", result.Line, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Without_msfs_2024_beyondatc_is_pointed_at_a_chosen_fsltl_folder_until_close()
+    public void Without_msfs_2024_the_app_is_pointed_at_a_chosen_fsltl_folder_until_close()
     {
         var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
-        Assert.Empty(WhatBatcFinds());
+        Assert.Empty(WhatTheAppFinds());
 
         var result = Models.Provide(fsltl);
 
-        Assert.Equal(BatcTrafficModels.Outcome.Pointed, result.Outcome);
-        Assert.Single(WhatBatcFinds());
+        Assert.Equal(CommunityTrafficModels.Outcome.Pointed, result.Outcome);
+        Assert.Single(WhatTheAppFinds());
         Assert.False(FsltlLocator.MsfsInstalled([Store, Steam]));
         Assert.Null(FsltlLocator.Find(userCfgs: [Store, Steam]));
 
         Assert.NotNull(Models.Remove());
 
-        Assert.Empty(WhatBatcFinds());
+        Assert.Empty(WhatTheAppFinds());
         Assert.False(Directory.Exists(Path.GetDirectoryName(Steam)));
-        Assert.False(Directory.Exists(Path.Combine(_root, "ClearanceLink", "BeyondATC packages")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "ClearanceLink", "traffic packages")));
         Assert.True(File.Exists(Path.Combine(fsltl, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg")));
     }
 
@@ -104,10 +104,10 @@ public sealed class BatcTrafficModelsTests : IDisposable
         var packages = Path.Combine(_root, "MSFS2020", "Packages");
         Fsltl(Path.Combine(packages, "Community", "fsltl-traffic-base"));
 
-        Assert.Equal(BatcTrafficModels.Outcome.Pointed, Models.Provide(Path.Combine(packages, "Community", "fsltl-traffic-base")).Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Pointed, Models.Provide(Path.Combine(packages, "Community", "fsltl-traffic-base")).Outcome);
 
         Assert.Contains($"\"{packages}\"", File.ReadAllText(Steam));
-        Assert.Single(WhatBatcFinds());
+        Assert.Single(WhatTheAppFinds());
         Assert.False(Directory.Exists(Path.Combine(_root, "ClearanceLink")));
     }
 
@@ -118,10 +118,10 @@ public sealed class BatcTrafficModelsTests : IDisposable
         var now = Fsltl(Path.Combine(_root, "New", "fsltl-traffic-base"));
         File.WriteAllText(Path.Combine(now, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg"), "new");
 
-        Assert.Equal(BatcTrafficModels.Outcome.Pointed, Models.Provide(now).Outcome);
-        Assert.Equal(BatcTrafficModels.Outcome.Pointed, Models.Provide(now).Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Pointed, Models.Provide(now).Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Pointed, Models.Provide(now).Outcome);
 
-        Assert.Equal("new", File.ReadAllText(Assert.Single(WhatBatcFinds())));
+        Assert.Equal("new", File.ReadAllText(Assert.Single(WhatTheAppFinds())));
         Assert.True(Directory.Exists(Path.Combine(_root, "Old", "fsltl-traffic-base", "SimObjects")));
     }
 
@@ -135,7 +135,7 @@ public sealed class BatcTrafficModelsTests : IDisposable
 
         var result = Models.Provide(Path.Combine(packages, "Community", "fsltl-traffic-base"));
 
-        Assert.Equal(BatcTrafficModels.Outcome.Found, result.Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Found, result.Outcome);
         Assert.False(File.Exists(Steam));
         Assert.Null(Models.Remove());
         Assert.Equal(before, File.ReadAllText(Store));
@@ -151,20 +151,20 @@ public sealed class BatcTrafficModelsTests : IDisposable
 
         var result = Models.Provide(fsltl);
 
-        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, result.Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.NotInMsfs2024, result.Outcome);
         Assert.Contains("only in MSFS 2024", result.Line);
         Assert.Null(Models.Remove());
         Assert.Contains(packages, File.ReadAllText(Steam));
     }
 
     [Fact]
-    public void Aig_models_count_as_traffic_models_like_beyondatc_does()
+    public void Aig_models_count_as_traffic_models_like_the_app_does()
     {
         var community = Path.Combine(_root, "Community");
         Directory.CreateDirectory(Path.Combine(community, "aig-aitraffic-oci-beta"));
 
-        Assert.True(BatcTrafficModels.HasTrafficModels(community));
-        Assert.False(BatcTrafficModels.HasTrafficModels(Path.Combine(_root, "missing")));
+        Assert.True(CommunityTrafficModels.HasTrafficModels(community));
+        Assert.False(CommunityTrafficModels.HasTrafficModels(Path.Combine(_root, "missing")));
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public sealed class BatcTrafficModelsTests : IDisposable
 
         var result = Models.Provide(null);
 
-        Assert.Equal(BatcTrafficModels.Outcome.NoFsltl, result.Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.NoFsltl, result.Outcome);
         Assert.False(File.Exists(Steam));
     }
 
@@ -182,24 +182,24 @@ public sealed class BatcTrafficModelsTests : IDisposable
     public void A_stand_in_from_another_running_clearancelink_is_left_to_it()
     {
         var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
-        var other = new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 1111, isAlive: _ => true);
-        var me = new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 2222, isAlive: _ => true);
-        Assert.Equal(BatcTrafficModels.Outcome.Pointed, other.Provide(fsltl).Outcome);
+        var other = new CommunityTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "traffic packages"), ownerPid: 1111, isAlive: _ => true);
+        var me = new CommunityTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "traffic packages"), ownerPid: 2222, isAlive: _ => true);
+        Assert.Equal(CommunityTrafficModels.Outcome.Pointed, other.Provide(fsltl).Outcome);
 
-        Assert.Equal(BatcTrafficModels.Outcome.PointedByAnother, me.Provide(fsltl).Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.PointedByAnother, me.Provide(fsltl).Outcome);
         Assert.Null(me.Remove());
-        Assert.Single(WhatBatcFinds());
+        Assert.Single(WhatTheAppFinds());
 
         Assert.NotNull(other.Remove());
-        Assert.Empty(WhatBatcFinds());
+        Assert.Empty(WhatTheAppFinds());
     }
 
     [Fact]
     public void A_stand_in_whose_clearancelink_has_gone_is_removed()
     {
         var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
-        new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 1111).Provide(fsltl);
-        var guard = new BatcTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "BeyondATC packages"), ownerPid: 2222, isAlive: _ => false);
+        new CommunityTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "traffic packages"), ownerPid: 1111).Provide(fsltl);
+        var guard = new CommunityTrafficModels(Store, Steam, Path.Combine(_root, "ClearanceLink", "traffic packages"), ownerPid: 2222, isAlive: _ => false);
 
         Assert.NotNull(guard.Remove());
         Assert.False(File.Exists(Steam));
@@ -213,7 +213,7 @@ public sealed class BatcTrafficModelsTests : IDisposable
         Fsltl(Path.Combine(packages, "Community", "fsltl-traffic-base"));
         WriteUserCfg(Store, packages);
 
-        Assert.Equal(BatcTrafficModels.Outcome.Found, Models.Provide(null).Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Found, Models.Provide(null).Outcome);
         Assert.False(File.Exists(Steam));
         Assert.True(File.Exists(Store));
     }
@@ -235,33 +235,33 @@ public sealed class BatcTrafficModelsTests : IDisposable
     {
         var result = Models.Provide(Fsltl(Path.Combine(_root, "50%off", "fsltl-traffic-base")));
 
-        Assert.Equal(BatcTrafficModels.Outcome.Failed, result.Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Failed, result.Outcome);
         Assert.False(File.Exists(Steam));
     }
 
     [Fact]
     public void A_real_folder_where_the_link_goes_is_never_emptied()
     {
-        var real = Fsltl(Path.Combine(_root, "ClearanceLink", "BeyondATC packages", "Community", "fsltl-traffic-base"));
+        var real = Fsltl(Path.Combine(_root, "ClearanceLink", "traffic packages", "Community", "fsltl-traffic-base"));
 
-        Assert.Equal(BatcTrafficModels.Outcome.Failed, Models.Provide(Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"))).Outcome);
+        Assert.Equal(CommunityTrafficModels.Outcome.Failed, Models.Provide(Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"))).Outcome);
 
         Assert.True(File.Exists(Path.Combine(real, "SimObjects", "Airplanes", "FSLTL_A320_SAS", "aircraft.cfg")));
     }
 
     [Fact]
-    public void Check_predicts_what_beyondatc_finds_without_writing()
+    public void Check_predicts_what_the_app_finds_without_writing()
     {
-        Assert.Equal(BatcTrafficModels.Outcome.NoFsltl, Models.Check(null));
+        Assert.Equal(CommunityTrafficModels.Outcome.NoFsltl, Models.Check(null));
         var fsltl = Fsltl(Path.Combine(_root, "Downloads", "fsltl-traffic-base"));
-        Assert.Equal(BatcTrafficModels.Outcome.Pointed, Models.Check(fsltl));
+        Assert.Equal(CommunityTrafficModels.Outcome.Pointed, Models.Check(fsltl));
         Assert.False(File.Exists(Steam));
 
         var packages = Path.Combine(_root, "MSFS2024", "Packages");
         Directory.CreateDirectory(Path.Combine(packages, "Community"));
         WriteUserCfg(Store, packages);
-        Assert.Equal(BatcTrafficModels.Outcome.NotInMsfs2024, Models.Check(fsltl));
+        Assert.Equal(CommunityTrafficModels.Outcome.NotInMsfs2024, Models.Check(fsltl));
         Fsltl(Path.Combine(packages, "Community", "fsltl-traffic-base"));
-        Assert.Equal(BatcTrafficModels.Outcome.Found, Models.Check(null));
+        Assert.Equal(CommunityTrafficModels.Outcome.Found, Models.Check(null));
     }
 }

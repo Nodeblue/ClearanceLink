@@ -5,7 +5,7 @@ using ClearanceLink.Recorder;
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// Pass-through recorder: sits between a SimConnect client (BATC) and the real simulator, forwards every packet
+/// Pass-through recorder: sits between a SimConnect client (the ATC app) and the real simulator, forwards every packet
 /// unchanged and records both directions.
 /// </summary>
 public sealed class RecordingProxy(IListener listener, Endpoint upstream, JsonlRecorder recorder)

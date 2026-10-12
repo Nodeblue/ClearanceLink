@@ -4,7 +4,7 @@ namespace ClearanceLink.Host;
 
 /// <summary>
 /// User-aircraft state served by the fake simulator: a fixed snapshot of a Cirrus SF50 parked at YBBN, taken from
-/// the first SimObjectData replies in the 2026-09-30 pass-through recording (docs/research/batc-call-inventory.md).
+/// the first SimObjectData replies in the 2026-09-30 pass-through recording (docs/research/atc-app-call-inventory.md).
 /// Clock SimVars follow the real clock, and the COM set events change the active frequencies.
 /// </summary>
 public sealed class FakeSimState

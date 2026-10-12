@@ -176,7 +176,7 @@ public sealed class XPlaneWebApiClient : IXPlaneData, IDisposable
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 // Any failure (also one we did not expect, such as an answer without a field we read) is a
-                // disconnect followed by a reconnect; the loop must never end while the server runs, or BATC would be
+                // disconnect followed by a reconnect; the loop must never end while the server runs, or the ATC app would be
                 // served the last values forever.
                 if (_connected)
                 {

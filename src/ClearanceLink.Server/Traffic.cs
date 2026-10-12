@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 
 namespace ClearanceLink.Server;
 
-/// <summary>What a client created: an aircraft (BATC's traffic) or another simulated object (pushback tugs).</summary>
+/// <summary>What a client created: an aircraft (the ATC app's traffic) or another simulated object (pushback tugs).</summary>
 public enum TrafficKind
 {
     Aircraft,
@@ -17,7 +17,7 @@ public interface IGroundElevation
 }
 
 /// <summary>
-/// One object a SimConnect client created with an AICreate* call and then flies itself. BATC releases each one from
+/// One object a SimConnect client created with an AICreate* call and then flies itself. The ATC app releases each one from
 /// sim AI control and writes its position, attitude and animation state many times a second with
 /// SetDataOnSimObject (recording 20260930-174605: 64 objects, about 20 updates per second each).
 /// </summary>
@@ -35,7 +35,7 @@ public sealed class TrafficObject(uint objectId, int connection, TrafficKind kin
 
     public TrafficKind Kind { get; } = kind;
 
-    /// <summary>The MSFS model title BATC chose, e.g. "FSLTL_B738_Qantas".</summary>
+    /// <summary>The MSFS model title the ATC app chose, e.g. "FSLTL_B738_Qantas".</summary>
     public string Title { get; } = title;
 
     public string Livery { get; } = livery;
@@ -149,7 +149,7 @@ public sealed class TrafficObject(uint objectId, int connection, TrafficKind kin
 }
 
 /// <summary>
-/// All AI objects clients have created, shared by every connection (BATC creates them on its BeyondATC.exe
+/// All AI objects clients have created, shared by every connection (the ATC app creates them on its the app's .exe
 /// connection). The status page and the X-Plane traffic plugin read it. Thread-safe.
 /// </summary>
 public sealed class TrafficRegistry(TimeProvider? time = null)

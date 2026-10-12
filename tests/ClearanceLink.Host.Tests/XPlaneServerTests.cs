@@ -46,7 +46,7 @@ public sealed class XPlaneServerTests : IDisposable
         var run = server.RunAsync(cts.Token);
 
         await using var client = await Transports.ConnectAsync(listener.Endpoint, cts.Token);
-        await PacketFramer.WriteAsync(client, TestPackets.Open("BATCDLLSimConnection"), cts.Token);
+        await PacketFramer.WriteAsync(client, TestPackets.Open(ClearanceLink.Host.Status.KnownClients.AircraftAndRadios), cts.Token);
         await PacketFramer.WriteAsync(client, TestPackets.AddToDataDefinition(17, "PLANE LATITUDE", "degrees"), cts.Token);
         await PacketFramer.WriteAsync(client, TestPackets.AddToDataDefinition(17, "COM ACTIVE FREQUENCY:1", "Mhz"), cts.Token);
         await PacketFramer.WriteAsync(client, TestPackets.RequestDataOnSimObject(1004, 17, period: 1), cts.Token);

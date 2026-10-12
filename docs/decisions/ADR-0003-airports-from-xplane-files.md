@@ -3,13 +3,13 @@
 Date: 2026-09-30. Status: accepted.
 
 ## Context
-BATC asks for every airport it needs (departure, destination, and every few seconds a surrounding airport) with
+The ATC app asks for every airport it needs (departure, destination, and every few seconds a surrounding airport) with
 `RequestFacilityData`, and expects MSFS's answer: runways, parking, a taxi network, frequencies and procedures
 (`docs/protocol/facility-data.md`). Phase 1 replayed MSFS's answers from a recording, which only covers airports
 flown in MSFS and shows MSFS's scenery rather than what the pilot sees in X-Plane.
 
 ## Decision
-Build the answer when BATC asks, from the X-Plane installation the pilot is flying:
+Build the answer when the ATC app asks, from the X-Plane installation the pilot is flying:
 - `apt.dat` in X-Plane's own scenery priority (`Custom Scenery/scenery_packs.ini`, then Global Airports), so gates
   and taxiways match the loaded scenery (for example Orbx YBBN rather than the Gateway YBBN).
 - Procedures from `CIFP/<ICAO>.dat`, fix positions from `earth_fix.dat`/`earth_nav.dat`, each from `Custom Data`
@@ -29,6 +29,6 @@ is built once and cached.
 
 ## Consequences
 - Generated taxi networks are much sparser than MSFS's and carry no taxiway names at airports X-Plane has no
-  network for; BATC's taxi instructions there are simple.
-- Enum and unit conventions are reverse-engineered from MSFS's answers; mistakes show up as odd BATC behaviour and
+  network for; the ATC app's taxi instructions there are simple.
+- Enum and unit conventions are reverse-engineered from MSFS's answers; mistakes show up as odd ATC app behaviour and
   are fixed in `ClearanceLink.Airports` with a test.

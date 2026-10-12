@@ -17,8 +17,12 @@ public sealed class AppSettings
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.KebabCaseLower) },
     };
 
-    /// <summary>BeyondATC's folder when the user chose it; null to find it automatically.</summary>
-    public string? BatcFolder { get; set; }
+    /// <summary>The .exe of the SimConnect app the user chose to bridge (the ATC app); null until chosen.</summary>
+    public string? AppExe { get; set; }
+
+    /// <summary>The app's folder as saved by versions up to 0.7.6; read once to find <see cref="AppExe"/>, never written.</summary>
+    [JsonPropertyName(OldNames.AppFolderSetting)]
+    public string? OldAppFolder { get; set; }
 
     /// <summary>X-Plane's folder when the user chose it; null to find it automatically.</summary>
     public string? XPlaneFolder { get; set; }
@@ -26,7 +30,7 @@ public sealed class AppSettings
     /// <summary>FSLTL's fsltl-traffic-base folder when the user chose it; null to find it through MSFS's settings.</summary>
     public string? FsltlFolder { get; set; }
 
-    /// <summary>How BeyondATC reaches ClearanceLink: the default MSFS connection (nothing changed in BeyondATC) or its config files.</summary>
+    /// <summary>How the ATC app reaches ClearanceLink: the default MSFS connection (nothing changed in the app) or its config files.</summary>
     public ConnectionMode Connection { get; set; } = ConnectionMode.Automatic;
 
     /// <summary>Write each session's log to a file (on by default) so it can go in a support file.</summary>
@@ -42,12 +46,12 @@ public sealed class AppSettings
     public bool CheckForUpdates { get; set; } = true;
 
     /// <summary>
-    /// Call Better Pushback's tug as soon as BeyondATC approves the pushback, as BeyondATC does with GSX in MSFS
+    /// Call Better Pushback's tug as soon as the ATC app approves the pushback, as the app does with GSX in MSFS
     /// (ADR-0013). Off: the PUSH page waits for START PUSH.
     /// </summary>
     public bool PushAutomatic { get; set; } = true;
 
-    /// <summary>SimBrief pilot ID (or username) when the user set one; null to use BeyondATC's.</summary>
+    /// <summary>SimBrief pilot ID (or username) when the user set one; null to use the ATC app's.</summary>
     public string? SimbriefId { get; set; }
 
     /// <summary>
@@ -73,7 +77,15 @@ public sealed class AppSettings
 
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(text, Json) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(text, Json) ?? new AppSettings();
+            if (settings.OldAppFolder is { } old)
+            {
+                // An upgrade from 0.7.6 or earlier: the folder becomes the app's .exe, and is dropped on the next save.
+                settings.AppExe ??= AtcApp.FindExeIn(old);
+                settings.OldAppFolder = null;
+            }
+
+            return settings;
         }
         catch (JsonException)
         {
@@ -103,11 +115,11 @@ public sealed class AppSettings
 public enum ConnectionMode
 {
     /// <summary>
-    /// BeyondATC's SimConnect.cfg files point at ClearanceLink only while it runs and MSFS is closed (ADR-0012); MSFS's
-    /// default connection while MSFS is closed when BeyondATC's folder can't be written.
+    /// The ATC app's SimConnect.cfg files point at ClearanceLink only while it runs and MSFS is closed (ADR-0012); MSFS's
+    /// default connection while MSFS is closed when no app is chosen or its folder can't be written.
     /// </summary>
     Automatic,
 
-    /// <summary>BeyondATC's SimConnect.cfg files point at ClearanceLink, so it reaches X-Plane even while MSFS is open.</summary>
+    /// <summary>The ATC app's SimConnect.cfg files point at ClearanceLink, so it reaches X-Plane even while MSFS is open.</summary>
     AlwaysOn,
 }

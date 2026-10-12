@@ -1,7 +1,7 @@
-# BATC traffic model title -> ICAO aircraft type and airline, read by ClearanceLink.Host (TrafficModels).
+# ATC app traffic model title -> ICAO aircraft type and airline, read by ClearanceLink.Host (TrafficModels).
 # The X-Plane plugin (docs/protocol/plugin.md) hands both to XPMP2, which picks the closest CSL model and livery it has.
 #
-# BATC's titles come from MSFS's model list (mapping/liveries.json), e.g.
+# The app's titles come from MSFS's model list (mapping/liveries.json), e.g.
 #   FSLTL_B738_Qantas, FSLTL_FAIB_A21N_JST-Jetstar Airways, FSLTL_TFS_A332_QFA-Qantas, FSLTL_B738F_ZZZZ,
 #   Asobo PassiveAircraft King Air 350i
 # FSLTL titles are read as FSLTL_[prefix_]<type>[F]_<airline>: the airline is the 3-letter code before "-" when there

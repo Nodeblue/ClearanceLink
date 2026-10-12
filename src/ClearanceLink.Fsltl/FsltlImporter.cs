@@ -58,14 +58,14 @@ public sealed record PackageManifest(string FsltlVersion, int ImporterVersion, i
 
 public sealed record ImportResult(int Liveries, int Models, int Textures, int Skipped, List<string> Problems);
 
-/// <summary>One catalogue entry: how ClearanceLink finds the CSL livery for a title BeyondATC asks for.</summary>
+/// <summary>One catalogue entry: how ClearanceLink finds the CSL livery for a title the ATC app asks for.</summary>
 /// <param name="Model">The converted model the livery is drawn with (several liveries share one).</param>
 public sealed record CatalogueEntry(string Title, string Key, string IcaoType, string IcaoAirline, string Model = "");
 
 /// <summary>
 /// Converts the user's own FSLTL install into an X-Plane CSL package that XPMP2 (the ClearanceLink plugin) loads:
 /// one .obj per model and texture, one DDS per livery texture, an xsb_aircraft.txt with one entry per livery,
-/// and fsltl-catalogue.json mapping BeyondATC's titles to livery keys. Nothing is written outside <see cref="ImportOptions.Output"/>.
+/// and fsltl-catalogue.json mapping the ATC app's titles to livery keys. Nothing is written outside <see cref="ImportOptions.Output"/>.
 /// </summary>
 public static class FsltlImporter
 {

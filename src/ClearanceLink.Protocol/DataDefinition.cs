@@ -9,7 +9,7 @@ public sealed record Datum(string Name, string Units, uint DataType);
 /// <summary>
 /// The list of SimVars a client registered under one define id, and the packed block the server sends back for it.
 /// Entries are packed in the order they were added, with no padding (checked against the recorded MSFS 2024 replies
-/// for BATC's defines 300 and 17, see docs/protocol/simconnect.md).
+/// for the ATC app's defines 300 and 17, see docs/protocol/simconnect.md).
 /// </summary>
 public sealed class DataDefinition
 {

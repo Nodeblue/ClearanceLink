@@ -10,15 +10,15 @@ public sealed class PushbackTests
 {
     private static readonly DateTimeOffset At = new(2026, 10, 5, 5, 38, 0, TimeSpan.Zero);
 
-    // Lines as BATC 1.8.21 wrote them in Player.log on Ben's PC (2026-10-05), callsigns changed.
+    // Lines as the app's 1.8.21 wrote them in Player.log on Ben's PC (2026-10-05), callsigns changed.
     [Theory]
     [InlineData("[Instruction] N123AB, Brisbane Ground, pushback and engine start approved. Face east.", 90.0, "EAST")]
     [InlineData("[Instruction] Pushback approved, Face east, N123AB.", 90.0, "EAST")]
     [InlineData("[Instruction] VHABC, Brisbane Ground, pushback and engine start approved. Face northeast.", 45.0, "NORTHEAST")]
     [InlineData("[Instruction] VHABC, pushback approved, facing south west.", 225.0, "SOUTHWEST")]
-    public void Reads_the_direction_from_batcs_pushback_approval(string line, double bearing, string word)
+    public void Reads_the_direction_from_the_apps_pushback_approval(string line, double bearing, string word)
     {
-        var clearance = BatcClearance.Parse(line, At);
+        var clearance = ClearanceLog.Parse(line, At);
         Assert.NotNull(clearance);
         Assert.Equal(bearing, clearance.FaceBearing);
         Assert.Equal(word, clearance.FaceWord);
@@ -27,7 +27,7 @@ public sealed class PushbackTests
     [Fact]
     public void An_approval_without_a_direction_still_counts()
     {
-        var clearance = BatcClearance.Parse("[Instruction] N123AB, Brisbane Ground, push back approved.", At);
+        var clearance = ClearanceLog.Parse("[Instruction] N123AB, Brisbane Ground, push back approved.", At);
         Assert.NotNull(clearance);
         Assert.Null(clearance.FaceBearing);
     }
@@ -39,7 +39,7 @@ public sealed class PushbackTests
     [InlineData("[GSX] Pushback selection timed out.")]
     [InlineData("[Instruction] N123AB, pushback not approved, hold position.")]
     [InlineData("[Instruction] N123AB, pushback is not yet approved, expect a short delay.")]
-    public void Other_lines_are_not_approvals(string line) => Assert.Null(BatcClearance.Parse(line, At));
+    public void Other_lines_are_not_approvals(string line) => Assert.Null(ClearanceLog.Parse(line, At));
 
     [Fact]
     public void Follower_reads_only_new_lines_and_starts_over_with_a_new_log()
@@ -48,7 +48,7 @@ public sealed class PushbackTests
         try
         {
             File.WriteAllText(path, "[Instruction] N123AB, pushback approved. Face west.\n");
-            var follower = new BatcLogFollower(path);
+            var follower = new ClearanceLogFollower(path);
             Assert.Empty(follower.Poll()); // what was there before is history
 
             File.AppendAllText(path, "[Comms] Set Frequency Com1: 124050000\n[Instruction] N123AB, pushback approved. Fa");
@@ -288,9 +288,9 @@ public sealed class PushbackTests
     }
 
     private static readonly PanelState Flying = new(
-        Version: "0.7.0", Serving: true, XPlaneConnected: true, XPlaneVersion: "12.4.3", BatcHelper: true, BatcApp: true, OtherAddOns: 0,
-        LastAirport: "YBBN", LastAirportSource: "Orbx YBBN", MsfsRunning: false, Connection: ConnectionMode.Automatic, BatcRedirected: true,
-        SessionLog: true, SessionLogBytes: 1, KeepDays: 7, Uptime: TimeSpan.FromMinutes(10), BatcFolder: @"C:\BeyondATC", XPlaneFolder: @"C:\X-Plane 12");
+        Version: "0.7.0", Serving: true, XPlaneConnected: true, XPlaneVersion: "12.4.3", Connections: 2, AppConnected: true,
+        LastAirport: "YBBN", LastAirportSource: "Orbx YBBN", MsfsRunning: false, Connection: ConnectionMode.Automatic, AppRedirected: true,
+        SessionLog: true, SessionLogBytes: 1, KeepDays: 7, Uptime: TimeSpan.FromMinutes(10), AppExe: @"C:\Tower\Tower.exe", XPlaneFolder: @"C:\X-Plane 12");
 
     [Fact]
     public void Push_page_shows_the_clearance_the_plan_and_start()
@@ -353,7 +353,7 @@ public sealed class PushbackTests
             xplane["bp/started"] = 0;
         }
 
-        var pushbacks = new Pushbacks(xplane, () => [], _ => null, batcLog: null, log: _ => { }, detectAfter: TimeSpan.FromMilliseconds(300));
+        var pushbacks = new Pushbacks(xplane, () => [], _ => null, appLog: null, log: _ => { }, detectAfter: TimeSpan.FromMilliseconds(300));
         Assert.Equal("", pushbacks.Choose(PushChoice.Straight));
         using var cts = new CancellationTokenSource();
         var run = pushbacks.RunAsync(cts.Token);
@@ -391,7 +391,7 @@ public sealed class PushbackTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task On_clearance_calls_the_tug_when_batc_approves(bool automatic)
+    public async Task On_clearance_calls_the_tug_when_the_app_approves(bool automatic)
     {
         var path = Path.Combine(Path.GetTempPath(), $"clearancelink-player-{Guid.NewGuid():N}.log");
         File.WriteAllText(path, "[Comms] start\n");
@@ -404,7 +404,7 @@ public sealed class PushbackTests
             ["sim/cockpit2/controls/parking_brake_ratio"] = 1,
             ["bp/started"] = 0,
         };
-        var pushbacks = new Pushbacks(xplane, () => [], _ => null, new BatcLogFollower(path), _ => { }) { Automatic = automatic };
+        var pushbacks = new Pushbacks(xplane, () => [], _ => null, new ClearanceLogFollower(path), _ => { }) { Automatic = automatic };
         using var cts = new CancellationTokenSource();
         var run = pushbacks.RunAsync(cts.Token);
         try
@@ -501,7 +501,7 @@ public sealed class PushbackTests
         try
         {
             File.WriteAllText(path, new string('x', 500) + "\n");
-            var follower = new BatcLogFollower(path);
+            var follower = new ClearanceLogFollower(path);
             Assert.Empty(follower.Poll());
 
             // "Brisbane Ground – " with an en dash (3 UTF-8 bytes) written in two pieces.

@@ -9,7 +9,7 @@ public sealed record ShowcaseAircraft(string Group, string IcaoType, string? Ica
 public readonly record struct GroundPoint(double Latitude, double Longitude, double Heading);
 
 /// <summary>
-/// A repeatable traffic check without BeyondATC (clearancelink showcase): a line-up of aircraft from small to heavy, nose to
+/// A repeatable traffic check without the ATC app (clearancelink showcase): a line-up of aircraft from small to heavy, nose to
 /// tail along a runway in size groups, and aircraft taxiing round and round a taxiway, so models, liveries, wheels,
 /// propellers and steering can be looked at in one place. Pure geometry here; <see cref="Cli"/> sends it to the plugin.
 /// </summary>

@@ -4,7 +4,7 @@ Date: 2026-10-04. Status: accepted.
 
 ## Context
 The project started as XPConnect. Before the first public release Ben chose a name that says what it does for
-simmers: **ClearanceLink - Connect BeyondATC to X-Plane 12**, by Nodeblue. He chose to rename everything at once
+simmers: **ClearanceLink - Connect an ATC app to X-Plane 12** (from 0.7.7: an experimental SimConnect to X-Plane 12 bridge, ADR-0015), by Nodeblue. He chose to rename everything at once
 (user-facing text, files, projects and namespaces), not only what users see, so the code and the app never
 disagree.
 
@@ -13,7 +13,7 @@ disagree.
   `ClearanceLink.*` projects and namespaces, the X-Plane plugin (folder `Resources\plugins\ClearanceLink`, signature
   `com.nodeblue.clearancelink`, version 0.5.0), environment variables (`CLEARANCELINK_*`) and converted FSLTL models
   (`Custom Data\CSL\ClearanceLink-FSLTL`).
-- Unchanged: the stand-in `FlightSimulator2024.exe` (BeyondATC looks for that name), the plugin's UDP protocol and
+- Unchanged: the stand-in `FlightSimulator2024.exe` (the ATC app looks for that name), the plugin's UDP protocol and
   ports, and the GitHub repository address, which Ben renamed to Nodeblue/ClearanceLink the same day (GitHub redirects the old one).
 - An upgrade keeps everything. The old names are listed once in `OldNames`:
   - `%LOCALAPPDATA%\XPConnect` (settings, logs) is moved to `%LOCALAPPDATA%\ClearanceLink` on first start; if an old

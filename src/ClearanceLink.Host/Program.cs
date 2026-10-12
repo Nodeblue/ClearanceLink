@@ -36,7 +36,7 @@ namespace ClearanceLink.Host
     public static class Cli
     {
         private const string Usage = """
-            ClearanceLink - BeyondATC to X-Plane 12 bridge
+            ClearanceLink - experimental SimConnect to X-Plane 12 bridge
 
             Usage:
               clearancelink
@@ -44,28 +44,29 @@ namespace ClearanceLink.Host
               clearancelink panel
                   Open the ClearanceLink window on any system.
               clearancelink start
-                  The same in this console window instead: check BeyondATC's set-up, then serve.
-              clearancelink settings [connection automatic|always-on] [batc-folder <dir>|auto] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
+                  The same in this console window instead: check the ATC app's set-up, then serve.
+              clearancelink settings [connection automatic|always-on] [app <app's .exe>|none] [xplane-folder <dir>|auto] [session-log on|off] [keep-days <n>]
                     [update-check on|off]
                   Show or change saved settings (%LOCALAPPDATA%\ClearanceLink\settings.json). connection automatic (default):
-                  BeyondATC's SimConnect.cfg files point at ClearanceLink's TCP port only while serve runs and MSFS is closed
-                  (MSFS's default connection if BeyondATC's folder can't be written); always-on: the files stay in place. Folders set here are used
-                  whenever --batc or --xplane-root is not given; "auto" goes back to finding them automatically.
+                  the ATC app's SimConnect.cfg files point at ClearanceLink's TCP port only while serve runs and MSFS is closed
+                  (MSFS's default connection if the app's folder can't be written); always-on: the files stay in place. app is
+                  the .exe of the SimConnect app to bridge (the ATC app). The app and folder set here are used whenever --app or
+                  --xplane-root is not given; "auto" finds X-Plane automatically again.
               clearancelink support
-                  Make a zip of the recent session logs, newest recording, settings, BeyondATC's Player.log and the end
+                  Make a zip of the recent session logs, newest recording, settings, the ATC app's Player.log and the end
                   of X-Plane's Log.txt (user name blanked out) to send for troubleshooting, and show it in Explorer.
               clearancelink simbrief [--xplane-root <dir>]
                   Save your latest SimBrief plan into X-Plane's Output\FMS plans (e.g. YBBNYSSY.fms) to load in the FMS.
-                  The pilot ID comes from BeyondATC's SimBrief link, or settings simbrief-id. The window's FPLN page does
+                  The pilot ID comes from settings simbrief-id, or the ATC app's SimBrief link. The window's FPLN page does
                   the same and can also load it into X-Plane's FMS.
               clearancelink update
                   Ask GitHub whether a newer ClearanceLink release exists and print where to download it. The window does
                   this on its own at start-up (ABOUT page) unless update-check is off. Nothing is downloaded.
               clearancelink plugin install|remove|status [--xplane-root <dir>]
-                  Install the bundled X-Plane plugin that draws BATC's traffic (X-Plane must be closed), or remove it.
+                  Install the bundled X-Plane plugin that draws the ATC app's traffic (X-Plane must be closed), or remove it.
               clearancelink showcase [--airport YBBN] [--runway <end, e.g. 01R>] [--taxiway <name>] [--per-group 9] [--taxiers 8]
                     [--gap 25] [--speed 15] [--variants-runway <end>|none] [--xplane-root <dir>]
-                  Traffic check without BeyondATC (close ClearanceLink first; X-Plane running with the plugin): lines up
+                  Traffic check without the ATC app (close ClearanceLink first; X-Plane running with the plugin): lines up
                   aircraft from small to heavy nose to tail on a runway, grouped by size, and keeps some taxiing up and
                   down a taxiway. With imported FSLTL liveries, also lines up one aircraft per model not shown (engine
                   variants, freighters, other makers) on the parallel runway. Ctrl+C removes them.
@@ -74,25 +75,25 @@ namespace ClearanceLink.Host
                   Convert your own FSLTL install (MSFS Community folder) into an X-Plane CSL package for the traffic
                   plugin, in <X-Plane>/Custom Data/CSL/ClearanceLink-FSLTL. Only reads FSLTL. --size caps textures (default
                   2048); --only imports liveries whose title or folder contains the text. Restart X-Plane afterwards.
-              clearancelink batc on|off|status [--batc <BeyondATC folder>] [--port <n>]
-                  Point BeyondATC at ClearanceLink (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
-              clearancelink batc-guard --parent <pid>
-                  Started by serve: once process <pid> ends, point BeyondATC back at MSFS (connection automatic).
+              clearancelink app on|off|status [--app <app's .exe>] [--port <n>]
+                  Point the ATC app at ClearanceLink (on) or back at MSFS (off) with SimConnect.cfg files in its folder.
+              clearancelink app-guard --parent <pid>
+                  Started by serve: once process <pid> ends, point the ATC app back at MSFS (connection automatic).
               clearancelink serve [--listen <endpoint>] [--xplane <url>] [--mapping <dir>] [--xplane-root <dir>]
                     [--facilities <recording.jsonl>] [--stub <path> | --no-stub] [--no-traffic] [--status-port <port> | --no-status] [--open-status]
-                    [--out <file.jsonl>] [--throttle-ms <ms>] [--batc-log <Player.log> | --no-batc-log] [--quiet]
-                  Stand in for MSFS 2024 and answer BATC from X-Plane. Without --listen: tcp:5112, with BeyondATC pointed
+                    [--out <file.jsonl>] [--throttle-ms <ms>] [--app <app's .exe>] [--app-log <Player.log> | --no-app-log] [--quiet]
+                  Stand in for MSFS 2024 and answer the ATC app from X-Plane. Without --listen: tcp:5112, with the app pointed
                   at it while serve runs and MSFS is closed (connection automatic; MSFS's default pipe plus tcp:5112 when
-                  BeyondATC's folder can't be written), or tcp:5112 only (always-on). Defaults:
+                  the app's folder can't be written), or tcp:5112 only (always-on). Defaults:
                   --xplane http://127.0.0.1:8086, --mapping ./mapping.
                   Airports come from the X-Plane folder (--xplane-root, else the one X-Plane's installer lists);
                   --facilities replays recorded MSFS airport answers first. Starts the FlightSimulator2024 stub
-                  process BATC checks for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status; --open-status opens it in the browser.
-                  Pushback approvals are read from BeyondATC's Player.log (--batc-log, else its usual place) for the PUSH page.
+                  process some apps check for, unless --no-stub. Status page on http://localhost:5577/ unless --no-status; --open-status opens it in the browser.
+                  Pushback approvals are read from the ATC app's Player.log (--app-log, else the one its .exe names) for the PUSH page.
               clearancelink xplane-check [--xplane <url>] [--mapping <dir>] [--seconds <n>]
-                  Connect to X-Plane, read every mapped dataref and print what BATC would be sent. Checks the mapping.
+                  Connect to X-Plane, read every mapped dataref and print what the ATC app would be sent. Checks the mapping.
               clearancelink record --forward <endpoint> [--listen <endpoint>] [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
-                  Pass-through: BATC connects to --listen, packets go to the real sim at --forward. Records both ways.
+                  Pass-through: the app connects to --listen, packets go to the real sim at --forward. Records both ways.
               clearancelink fake [--listen <endpoint>] [--identity msfs2024|msfs2020] [--facilities <recording.jsonl>]
                     [--out <file.jsonl>] [--throttle-ms <ms>] [--quiet]
                   Pretend to be MSFS: answer the handshake and user-aircraft data requests, record every request.
@@ -113,7 +114,7 @@ namespace ClearanceLink.Host
         {
             if (args.Length == 0 || args is ["start"])
             {
-                // Set BATC up if needed, then serve with the defaults in this console.
+                // Set the ATC app up if needed, then serve with the defaults in this console.
                 return await StartAsync();
             }
 
@@ -141,8 +142,8 @@ namespace ClearanceLink.Host
                     "summarize" => Summarize(options),
                     "facility-dump" => DumpFacility(options),
                     "airport" => BuildAirport(options),
-                    "batc" => Batc(options),
-                    "batc-guard" => BatcGuard(options),
+                    "app" => AppCommand(options),
+                    "app-guard" => AppGuard(options),
                     "settings" => SettingsCommand(options),
                     "support" => SupportCommand(),
                     "update" => await UpdateCommandAsync(),
@@ -191,12 +192,12 @@ namespace ClearanceLink.Host
             var throttleMs = int.Parse(options.Get("throttle-ms") ?? "1000", System.Globalization.CultureInfo.InvariantCulture);
             var throttle = new RecordThrottle(TimeSpan.FromMilliseconds(throttleMs));
             using var msfs = new MsfsGate(MsfsGate.RealMsfsRunning, PacketConsole.Info);
-            BatcLink? link = null;
+            AppLink? link = null;
             using (var recorder = new JsonlRecorder(outPath, throttle: throttle))
             {
                 recorder.Recorded += inventory.Add;
                 await using var listener = mode == "serve" && options.Get("listen") is null
-                    ? DefaultServeListener(msfs, out link)
+                    ? DefaultServeListener(options, msfs, out link)
                     : Transports.Listen(listen);
                 PacketConsole.Info($"Recording to {Path.GetFullPath(outPath)} (Ctrl+C to stop)");
                 try
@@ -224,7 +225,7 @@ namespace ClearanceLink.Host
                 }
                 finally
                 {
-                    // BeyondATC goes back to MSFS as ClearanceLink closes (the guard covers a crash).
+                    // The ATC app goes back to MSFS as ClearanceLink closes (the guard covers a crash).
                     link?.Release(AppSettings.Load(AppFolders.Default.Settings).Connection);
                 }
             }
@@ -257,17 +258,9 @@ namespace ClearanceLink.Host
                 + (oversize > 0 ? $"; removed {oversize} oldest recordings to stay under {SessionLog.MaxRecordingBytes / (1024 * 1024 * 1024)} GB" : ""));
         }
 
-        /// <summary>--batc when given, else the folder saved in settings when it still holds BeyondATC, else found automatically.</summary>
-        internal static string? BatcFolder(Options options)
-        {
-            if (options.Get("batc") is { } given)
-            {
-                return BatcRedirect.FindInstallFolder(given);
-            }
-
-            var saved = AppSettings.Load(AppFolders.Default.Settings).BatcFolder;
-            return (saved is null ? null : BatcRedirect.FindInstallFolder(saved)) ?? BatcRedirect.FindInstallFolder();
-        }
+        /// <summary>The ATC app: --app when given, else the .exe saved in settings while it is still there. Never searched for.</summary>
+        internal static AtcApp? ChosenApp(Options options) =>
+            AtcApp.From(options.Get("app") ?? AppSettings.Load(AppFolders.Default.Settings).AppExe);
 
         /// <summary>--fsltl when given, else the folder saved in settings when it is still FSLTL, else found through MSFS's settings.</summary>
         internal static string? FsltlFolder(Options options)
@@ -340,13 +333,18 @@ namespace ClearanceLink.Host
                 var auto = value.Equals("auto", StringComparison.OrdinalIgnoreCase);
                 switch (key)
                 {
-                    case "batc-folder":
-                        if (!auto && BatcRedirect.FindInstallFolder(value) is null)
+                    case "app":
+                        var none = value.Equals("none", StringComparison.OrdinalIgnoreCase);
+                        if (!none && AtcApp.From(value) is null)
                         {
-                            return Fail($"BeyondATC.exe not found in {value}");
+                            return Fail($"{value} is not an .exe (give the full path to the app's .exe)");
                         }
 
-                        settings.BatcFolder = auto ? null : BatcRedirect.FindInstallFolder(value);
+                        if (ChangeApp(settings, none ? null : AtcApp.From(value)) is { } changeProblem)
+                        {
+                            return Fail(changeProblem);
+                        }
+
                         break;
                     case "xplane-folder":
                         if (!auto && XPlaneInstall.Find(value) is null)
@@ -363,7 +361,7 @@ namespace ClearanceLink.Host
                             "always-on" => ConnectionMode.AlwaysOn,
                             _ => throw new ArgumentException("connection takes automatic or always-on"),
                         };
-                        if (ApplyConnection(settings, BatcFolder(options)) is { } problem)
+                        if (ApplyConnection(settings, ChosenApp(options)) is { } problem)
                         {
                             return Fail(problem);
                         }
@@ -397,7 +395,7 @@ namespace ClearanceLink.Host
                             : throw new ArgumentException("keep-days takes a whole number of days, 1 or more");
                         break;
                     default:
-                        return Fail($"Unknown setting '{key}'. Use connection, batc-folder, xplane-folder, session-log, keep-days, update-check or simbrief-id.");
+                        return Fail($"Unknown setting '{key}'. Use connection, app, xplane-folder, session-log, keep-days, update-check or simbrief-id.");
                 }
             }
 
@@ -406,36 +404,37 @@ namespace ClearanceLink.Host
                 settings.Save(file);
             }
 
-            var none = new Options();
+            var noOptions = new Options();
+            var app = ChosenApp(noOptions);
             Console.WriteLine($"Settings: {file}");
-            Console.WriteLine($"  BeyondATC folder  {BatcFolder(none) ?? "not found"}{(settings.BatcFolder is null ? " (found automatically)" : "")}");
-            Console.WriteLine($"  X-Plane folder    {FindXPlane(none)?.Root ?? "not found"}{(settings.XPlaneFolder is null ? " (found automatically)" : "")}");
-            Console.WriteLine($"  Connection        {(settings.Connection == ConnectionMode.Automatic ? "automatic (BeyondATC points at ClearanceLink while it runs; close MSFS before flying X-Plane)" : "always on (BeyondATC's config files point at ClearanceLink)")}");
+            Console.WriteLine($"  ATC app           {app?.Exe ?? (settings.AppExe is null ? "not chosen (settings app \"<app's .exe>\")" : $"{settings.AppExe} (not found)")}");
+            Console.WriteLine($"  X-Plane folder    {FindXPlane(noOptions)?.Root ?? "not found"}{(settings.XPlaneFolder is null ? " (found automatically)" : "")}");
+            Console.WriteLine($"  Connection        {(settings.Connection == ConnectionMode.Automatic ? "automatic (the ATC app points at ClearanceLink while it runs; close MSFS before flying X-Plane)" : "always on (the ATC app's config files point at ClearanceLink)")}");
             Console.WriteLine($"  Session log       {(settings.SessionLog ? "on" : "off")} ({AppFolders.Default.Logs})");
             Console.WriteLine($"  Keep logs for     {settings.KeepDays} days");
             Console.WriteLine($"  Update check      {(settings.CheckForUpdates ? "on (asks GitHub for a newer release at start-up)" : "off")}");
-            var pilot = settings.SimbriefId ?? (SimbriefPlan.PilotIdFromBatc() is null ? "not found" : "BeyondATC's");
+            var pilot = settings.SimbriefId ?? (SimbriefPlan.PilotIdFromApp(app) is null ? "not found" : "the ATC app's");
             Console.WriteLine($"  SimBrief pilot ID {pilot}");
             return 0;
         }
 
-        /// <summary>The problem <see cref="ApplyConnection"/> returns when BeyondATC's folder is unknown.</summary>
-        public const string BatcNotFoundProblem = "BeyondATC not found; set its folder first: settings batc-folder \"<BeyondATC folder>\"";
+        /// <summary>The problem <see cref="ApplyConnection"/> returns when no ATC app is chosen.</summary>
+        public const string AppNotChosenProblem = "No ATC app chosen; choose it first: settings app \"<app's .exe>\"";
 
         /// <summary>
-        /// Always on writes BeyondATC's two config files; automatic removes ClearanceLink's (a user's own are put back).
-        /// Returns a problem to show, or null: <see cref="BatcNotFoundProblem"/> when BeyondATC's folder is unknown,
-        /// otherwise a message starting "could not " when a file in BeyondATC's folder cannot be written or removed
-        /// (read-only or protected folder). Never throws for that.
+        /// Always on writes the ATC app's config files; automatic removes ClearanceLink's (a user's own are put back).
+        /// Returns a problem to show, or null: <see cref="AppNotChosenProblem"/> when no app is chosen, otherwise a
+        /// message starting "could not " when a file in the app's folder cannot be written or removed (read-only or
+        /// protected folder). Never throws for that.
         /// </summary>
-        public static string? ApplyConnection(AppSettings settings, string? batcFolder)
+        public static string? ApplyConnection(AppSettings settings, AtcApp? app)
         {
-            if (batcFolder is null)
+            if (app is null)
             {
-                return settings.Connection == ConnectionMode.AlwaysOn ? BatcNotFoundProblem : null;
+                return settings.Connection == ConnectionMode.AlwaysOn ? AppNotChosenProblem : null;
             }
 
-            var redirect = new BatcRedirect(batcFolder);
+            var redirect = new AppRedirect(app);
             try
             {
                 var done = settings.Connection == ConnectionMode.AlwaysOn ? redirect.SwitchOn() : redirect.SwitchOff();
@@ -446,6 +445,29 @@ namespace ClearanceLink.Host
             {
                 return ex.Message;
             }
+        }
+
+        /// <summary>
+        /// Saves <paramref name="app"/> as the ATC app (null: none). ClearanceLink's config files go from the app chosen
+        /// before (a user's own are put back) and, with always on, are written for the new one. The settings are changed
+        /// but not saved; returns a problem to show, or null.
+        /// </summary>
+        public static string? ChangeApp(AppSettings settings, AtcApp? app)
+        {
+            if (AtcApp.From(settings.AppExe) is { } old && !string.Equals(old.Exe, app?.Exe, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    new AppRedirect(old).SwitchOff().ToList().ForEach(l => Console.WriteLine("  " + l));
+                }
+                catch (RedirectFailedException ex)
+                {
+                    return ex.Message;
+                }
+            }
+
+            settings.AppExe = app?.Exe;
+            return app is null ? null : ApplyConnection(settings, app);
         }
 
         private static int SupportCommand()
@@ -461,8 +483,8 @@ namespace ClearanceLink.Host
         internal static string CreateSupportFile()
         {
             var none = new Options();
-            var sources = new SupportSources(Version, AppFolders.Default, BatcFolder(none), FindXPlane(none)?.Root,
-                SupportSources.DefaultBatcLogFolder, Redactor.ForCurrentUser());
+            var app = ChosenApp(none);
+            var sources = new SupportSources(Version, AppFolders.Default, app, FindXPlane(none)?.Root, app?.LogFolder, Redactor.ForCurrentUser());
             return SupportBundle.Create(sources, DateTime.Now);
         }
 
@@ -486,23 +508,24 @@ namespace ClearanceLink.Host
         }
 
         /// <summary>
-        /// Where serve listens when --listen is not given. Automatic: ClearanceLink's TCP port, with BeyondATC pointed at
-        /// it only while ClearanceLink runs and MSFS is closed (<paramref name="link"/>, ADR-0012); when BeyondATC's folder
-        /// is unknown or can't be written, MSFS's default pipe while MSFS is closed plus the TCP port, as before. Always
-        /// on: the TCP port only, with BeyondATC's files put back if they go missing (<see cref="BatcLink.KeepOn"/>).
+        /// Where serve listens when --listen is not given. Automatic: ClearanceLink's TCP port, with the ATC app pointed at
+        /// it only while ClearanceLink runs and MSFS is closed (<paramref name="link"/>, ADR-0012); when no app is chosen or
+        /// its folder can't be written, MSFS's default pipe while MSFS is closed plus the TCP port, as before. Always on:
+        /// the TCP port only, with the app's files put back if they go missing (<see cref="AppLink.KeepOn"/>).
         /// </summary>
-        private static IListener DefaultServeListener(MsfsGate msfs, out BatcLink? link)
+        private static IListener DefaultServeListener(Options options, MsfsGate msfs, out AppLink? link)
         {
             link = null;
-            var tcp = Endpoint.Parse($"tcp:{BatcRedirect.DefaultPort}");
+            var tcp = Endpoint.Parse($"tcp:{AppRedirect.DefaultPort}");
+            var app = ChosenApp(options);
             if (AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn)
             {
                 var listener = Transports.Listen(tcp);
 
-                // Always on: the files are written when chosen, but a BeyondATC update can remove them (issue #35).
-                if (BatcFolder(new Options()) is { } batc)
+                // Always on: the files are written when chosen, but an app update can remove them (issue #35).
+                if (app is not null)
                 {
-                    link = new BatcLink(new BatcRedirect(batc), PacketConsole.Info);
+                    link = new AppLink(new AppRedirect(app), PacketConsole.Info);
                     link.KeepOnEvery(TimeSpan.FromSeconds(10), () => AppSettings.Load(AppFolders.Default.Settings).Connection == ConnectionMode.AlwaysOn);
                 }
 
@@ -519,23 +542,23 @@ namespace ClearanceLink.Host
                 PacketConsole.Info($"listen: {tcp} not available ({ex.Message}); default connection only");
             }
 
-            if (port is not null && BatcFolder(new Options()) is { } folder)
+            if (port is not null && app is not null)
             {
-                var redirect = new BatcRedirect(folder);
-                if (BatcLink.Usable(redirect))
+                var redirect = new AppRedirect(app);
+                if (AppLink.Usable(redirect))
                 {
-                    var made = new BatcLink(redirect, PacketConsole.Info, StartBatcGuard);
+                    var made = new AppLink(redirect, PacketConsole.Info, () => StartAppGuard(app));
                     msfs.Changed += made.Follow;
                     link = made;
-                    PacketConsole.Info($"batc: answering on {tcp} only; MSFS's default connection is left to MSFS");
+                    PacketConsole.Info($"app: answering {app.Exe} on {tcp} only; MSFS's default connection is left to MSFS");
                     return port;
                 }
 
-                PacketConsole.Info($"batc: can't write to {folder} (run as administrator to fix); answering on MSFS's default connection instead");
+                PacketConsole.Info($"app: can't write to {app.Folder} (run as administrator to fix); answering on MSFS's default connection instead");
             }
             else if (port is not null)
             {
-                PacketConsole.Info("batc: BeyondATC's folder not found; answering on MSFS's default connection instead");
+                PacketConsole.Info("app: no ATC app chosen; answering on MSFS's default connection instead");
             }
 
             var listeners = new List<IListener> { new GatedPipeListener(Endpoint.Parse("pipe"), msfs) };
@@ -547,46 +570,51 @@ namespace ClearanceLink.Host
             return new MultiListener(listeners, PacketConsole.Info);
         }
 
-        private static int _batcGuardStarted;
+        private static int _appGuardStarted;
 
         /// <summary>
-        /// Starts <c>ClearanceLink batc-guard --parent &lt;this process&gt;</c>, which points BeyondATC back at MSFS if this
-        /// ClearanceLink ends without doing so. Windows only (where BeyondATC runs).
+        /// Starts <c>ClearanceLink app-guard --parent &lt;this process&gt;</c>, which points the ATC app back at MSFS if
+        /// this ClearanceLink ends without doing so. Windows only (where MSFS and its apps run).
         /// </summary>
-        private static void StartBatcGuard()
+        private static void StartAppGuard(AtcApp? app)
         {
             // One guard per process: the window restarts serve when settings change.
-            if (!OperatingSystem.IsWindows() || Environment.ProcessPath is not { } exe || Interlocked.Exchange(ref _batcGuardStarted, 1) == 1)
+            if (!OperatingSystem.IsWindows() || Environment.ProcessPath is not { } exe || Interlocked.Exchange(ref _appGuardStarted, 1) == 1)
             {
                 return;
             }
 
             try
             {
-                using var guard = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe,
-                    ["batc-guard", "--parent", Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)])
+                List<string> args = ["app-guard", "--parent", Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+                if (app is not null)
+                {
+                    args.AddRange(["--app", app.Exe]);
+                }
+
+                using var guard = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, args)
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 });
-                PacketConsole.Info($"batc: guard started (pid {guard?.Id}); it points BeyondATC back at MSFS if ClearanceLink stops unexpectedly");
+                PacketConsole.Info($"app: guard started (pid {guard?.Id}); it points the ATC app back at MSFS if ClearanceLink stops unexpectedly");
             }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
             {
-                PacketConsole.Info($"batc: guard not started ({ex.Message}); after a crash, start and close ClearanceLink once");
+                PacketConsole.Info($"app: guard not started ({ex.Message}); after a crash, start and close ClearanceLink once");
             }
         }
 
         /// <summary>
-        /// batc-guard: waits for the ClearanceLink that started it, then removes BeyondATC's SimConnect.cfg files unless
-        /// always on was chosen or another ClearanceLink is serving (<see cref="BatcLink.GuardShouldRelease"/>), and the
-        /// UserCfg.opt written for BeyondATC's traffic models unless another ClearanceLink is serving.
+        /// app-guard: waits for the ClearanceLink that started it, then removes the ATC app's SimConnect.cfg files unless
+        /// always on was chosen or another ClearanceLink is serving (<see cref="AppLink.GuardShouldRelease"/>), and the
+        /// UserCfg.opt written for the app's traffic models unless another ClearanceLink is serving.
         /// </summary>
-        private static int BatcGuard(Options options)
+        private static int AppGuard(Options options)
         {
             if (!int.TryParse(options.Get("parent"), System.Globalization.CultureInfo.InvariantCulture, out var pid))
             {
-                return Fail("batc-guard needs --parent <pid>");
+                return Fail("app-guard needs --parent <pid>");
             }
 
             try
@@ -599,22 +627,22 @@ namespace ClearanceLink.Host
                 // Already gone.
             }
 
-            var portInUse = PortInUse(BatcRedirect.DefaultPort);
+            var portInUse = PortInUse(AppRedirect.DefaultPort);
             if (!portInUse)
             {
-                // ClearanceLink's UserCfg.opt for BeyondATC's traffic models goes in either connection mode.
-                BatcTrafficModels.Default.Remove();
+                // ClearanceLink's UserCfg.opt for the app's traffic models goes in either connection mode.
+                CommunityTrafficModels.Default.Remove();
             }
 
             var connection = AppSettings.Load(AppFolders.Default.Settings).Connection;
-            if (!BatcLink.GuardShouldRelease(connection, portInUse) || BatcFolder(new Options()) is not { } folder)
+            if (!AppLink.GuardShouldRelease(connection, portInUse) || ChosenApp(options) is not { } app)
             {
                 return 0;
             }
 
             try
             {
-                new BatcRedirect(folder).SwitchOff();
+                new AppRedirect(app).SwitchOff();
             }
             catch (RedirectFailedException)
             {
@@ -667,7 +695,7 @@ namespace ClearanceLink.Host
             var xplaneTask = xplane.RunAsync(ct);
             await using var plugin = StartPluginLink();
 
-            // BATC's traffic goes to the X-Plane plugin, and the plugin's terrain answers BATC's ground questions.
+            // The app's traffic goes to the X-Plane plugin, and the plugin's terrain answers the app's ground questions.
             var bridge = plugin is null || liveries is null ? null : new TrafficBridge(traffic, plugin, LoadTrafficModels(options), ground, PacketConsole.Info);
             var bridgeTask = bridge?.RunAsync(ct) ?? Task.CompletedTask;
             var server = new XPlaneSimServer(listener, ServerIdentity.Msfs2024, recorder, new SimVarResolver(mappings, xplane), xplane, facilities, traffic, (IGroundElevation?)bridge ?? ground, liveries);
@@ -679,7 +707,7 @@ namespace ClearanceLink.Host
                 Traffic = () => traffic.Objects,
             };
             board.Plugin = () => plugin?.Status;
-            var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowBatcAsync(stub, server, msfs, ct);
+            var stubTask = options.Has("no-stub") ? Task.CompletedTask : FollowAppAsync(stub, server, msfs, ct);
             var xplaneRoot = FindXPlane(options)?.Root;
             var plans = new FlightPlans(() => AppSettings.Load(AppFolders.Default.Settings), () => xplaneRoot, path => plugin?.LoadFms(path) == true);
             if (plugin is not null)
@@ -689,12 +717,12 @@ namespace ClearanceLink.Host
 
             board.FlightPlans = plans;
 
-            // The PUSH page: BATC's pushback approvals (from its log) carried out by Better Pushback (ADR-0013).
+            // The PUSH page: the ATC app's pushback approvals (from its log) carried out by Better Pushback (ADR-0013).
             var pushbacks = new Pushbacks(
                 xplane,
                 () => server.Sessions.SelectMany(s => s.Stats.Airports).OrderByDescending(a => a.At).Select(a => a.Icao).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 icao => xplaneAirports?.Airport(icao),
-                options.Has("no-batc-log") ? null : new BatcLogFollower(options.Get("batc-log") ?? BatcClearance.DefaultLog),
+                options.Has("no-app-log") || (options.Get("app-log") ?? ChosenApp(options)?.PlayerLog) is not { } appLog ? null : new ClearanceLogFollower(appLog),
                 PacketConsole.Info)
             {
                 Automatic = AppSettings.Load(AppFolders.Default.Settings).PushAutomatic,
@@ -708,15 +736,15 @@ namespace ClearanceLink.Host
                 OpenInBrowser(status.Url);
             }
 
-            // BeyondATC lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none
+            // The ATC app lists traffic models only from MSFS 2024's Community folder; point it at FSLTL when there is none
             // (ADR-0014). Only while no real MSFS runs, so an MSFS 2024 being installed never adopts ClearanceLink's file.
-            var batcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default : null;
+            var communityModels = OperatingSystem.IsWindows() ? CommunityTrafficModels.Default : null;
             var modelsLock = new Lock();
             var pointed = false;
             var closing = false;
             void FollowModels(bool msfsRunning)
             {
-                if (batcModels is null)
+                if (communityModels is null)
                 {
                     return;
                 }
@@ -730,7 +758,7 @@ namespace ClearanceLink.Host
 
                     if (msfsRunning)
                     {
-                        if (pointed && batcModels.Remove() is { } removed)
+                        if (pointed && communityModels.Remove() is { } removed)
                         {
                             PacketConsole.Info($"{removed} (MSFS is running)");
                         }
@@ -747,21 +775,21 @@ namespace ClearanceLink.Host
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
                         // MSFS rewriting its UserCfg.opt as it is read: the next change or check tries again.
-                        PacketConsole.Info($"batc-models: FSLTL folder check failed ({ex.Message})");
+                        PacketConsole.Info($"traffic-models: FSLTL folder check failed ({ex.Message})");
                         return;
                     }
 
-                    var models = batcModels.Provide(fsltl);
+                    var models = communityModels.Provide(fsltl);
                     PacketConsole.Info(models.Line);
-                    pointed = models.Outcome == BatcTrafficModels.Outcome.Pointed;
+                    pointed = models.Outcome == CommunityTrafficModels.Outcome.Pointed;
                     if (pointed)
                     {
-                        StartBatcGuard();
+                        StartAppGuard(ChosenApp(options));
                     }
                 }
             }
 
-            // An FSLTL folder chosen on TRAFFIC while serve runs is shown to BeyondATC too (no restart, BATC wouldn't reconnect).
+            // An FSLTL folder chosen on TRAFFIC while serve runs is shown to the ATC app too (no restart, the app wouldn't reconnect).
             async Task WatchFsltlFolderAsync()
             {
                 string? last = null;
@@ -778,7 +806,7 @@ namespace ClearanceLink.Host
 
                 try
                 {
-                    while (batcModels is not null)
+                    while (communityModels is not null)
                     {
                         await Task.Delay(TimeSpan.FromSeconds(5), ct);
                         try
@@ -795,7 +823,7 @@ namespace ClearanceLink.Host
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                         {
                             // MSFS rewriting its UserCfg.opt as it is read: try again in 5 s.
-                            PacketConsole.Info($"batc-models: FSLTL folder check failed ({ex.Message})");
+                            PacketConsole.Info($"traffic-models: FSLTL folder check failed ({ex.Message})");
                         }
                     }
                 }
@@ -821,7 +849,7 @@ namespace ClearanceLink.Host
                     closing = true;
 
                     // Only the file this ClearanceLink wrote: another one still serving keeps its own.
-                    if (pointed && batcModels?.Remove() is { } removed)
+                    if (pointed && communityModels?.Remove() is { } removed)
                     {
                         PacketConsole.Info(removed);
                     }
@@ -838,8 +866,8 @@ namespace ClearanceLink.Host
             }
         }
 
-        /// <summary>Runs the MSFS stand-in only while BeyondATC is not connected (<see cref="StubLauncher.FollowBatc"/>).</summary>
-        private static async Task FollowBatcAsync(StubLauncher stub, XPlaneSimServer server, MsfsGate msfs, CancellationToken ct)
+        /// <summary>Runs the MSFS stand-in only while the ATC app is not connected (<see cref="StubLauncher.FollowApp"/>).</summary>
+        private static async Task FollowAppAsync(StubLauncher stub, XPlaneSimServer server, MsfsGate msfs, CancellationToken ct)
         {
             try
             {
@@ -847,8 +875,8 @@ namespace ClearanceLink.Host
                 {
                     await Task.Delay(TimeSpan.FromSeconds(1), ct);
                     var names = server.Sessions.Select(s => s.ClientName).ToList();
-                    var batc = StatusBoard.BatcConnected(names);
-                    if (stub.FollowBatc(batc, msfs.IsRunning, DateTimeOffset.UtcNow) is { } line)
+                    var connected = StatusBoard.AppConnected(names);
+                    if (stub.FollowApp(connected, msfs.IsRunning, DateTimeOffset.UtcNow) is { } line)
                     {
                         PacketConsole.Info(line);
                     }
@@ -882,7 +910,7 @@ namespace ClearanceLink.Host
                 return 1;
             }
 
-            Console.WriteLine($"X-Plane {xplane.XPlaneVersion}. SimVar values as BATC would get them (units of the mapping source):");
+            Console.WriteLine($"X-Plane {xplane.XPlaneVersion}. SimVar values as the ATC app would get them (units of the mapping source):");
             foreach (var probe in probes)
             {
                 var map = mappings.FindSimVar(probe, out _)!;
@@ -901,9 +929,9 @@ namespace ClearanceLink.Host
 
         private static async Task<int> SimbriefCommandAsync(Options options)
         {
-            if (SimbriefPlan.PilotId(AppSettings.Load(AppFolders.Default.Settings)) is not { } id)
+            if (SimbriefPlan.PilotId(AppSettings.Load(AppFolders.Default.Settings), ChosenApp(options)) is not { } id)
             {
-                Console.WriteLine("No SimBrief pilot ID: link SimBrief in BeyondATC, or run: settings simbrief-id <your SimBrief pilot ID>");
+                Console.WriteLine("No SimBrief pilot ID: run settings simbrief-id <your SimBrief pilot ID>");
                 return 1;
             }
 
@@ -936,18 +964,18 @@ namespace ClearanceLink.Host
 
         private static async Task<int> StartAsync()
         {
-            Console.WriteLine($"ClearanceLink {Version} - BeyondATC for X-Plane 12");
+            Console.WriteLine($"ClearanceLink {Version} - experimental SimConnect to X-Plane 12 bridge");
             Console.WriteLine();
-            if (BatcFolder(new Options()) is not { } folder)
+            if (ChosenApp(new Options()) is not { } app)
             {
-                Console.WriteLine("BeyondATC was not found (looked for BeyondATC.exe in its install folder and in C:\\BeyondATC).");
-                Console.WriteLine("If it is installed somewhere else, run once:  ClearanceLink settings batc-folder \"<BeyondATC folder>\"");
+                Console.WriteLine("No ATC app chosen. Choose the .exe of the app to bridge, then start again:");
+                Console.WriteLine("  ClearanceLink settings app \"<full path to the app's .exe>\"");
                 Console.WriteLine();
             }
             else
             {
                 var settings = AppSettings.Load(AppFolders.Default.Settings);
-                var redirect = new BatcRedirect(folder);
+                var redirect = new AppRedirect(app);
                 if (settings.Connection == ConnectionMode.AlwaysOn && !redirect.IsOn)
                 {
                     try
@@ -965,13 +993,13 @@ namespace ClearanceLink.Host
 
             if (MsfsGate.RealMsfsRunning())
             {
-                Console.WriteLine("Microsoft Flight Simulator is running. Close it so BeyondATC can connect to X-Plane.");
+                Console.WriteLine("Microsoft Flight Simulator is running. Close it so the ATC app can connect to X-Plane.");
                 Console.WriteLine();
             }
 
             OfferPluginInstall(new Options());
 
-            Console.WriteLine("Start X-Plane 12 and load your aircraft, then start BeyondATC. Leave this window open while you fly;");
+            Console.WriteLine("Start X-Plane 12 and load your aircraft, then start the ATC app. Leave this window open while you fly;");
             Console.WriteLine("close it (or press Ctrl+C) when you are done. The status page opens in your browser.");
             Console.WriteLine();
             return await RunServerAsync("serve", Options.Parse(["--quiet", "--open-status"]));
@@ -1021,7 +1049,7 @@ namespace ClearanceLink.Host
             }
 
             Console.WriteLine(state == PluginInstall.State.NotInstalled
-                ? $"Install the ClearanceLink plugin into X-Plane ({xplane.Root}) so BeyondATC's traffic appears? [Y/n]"
+                ? $"Install the ClearanceLink plugin into X-Plane ({xplane.Root}) so the ATC app's traffic appears? [Y/n]"
                 : "A newer ClearanceLink plugin is included. Update the one in X-Plane? [Y/n]");
             var answer = Console.IsInputRedirected ? "y" : Console.ReadLine();
             if (answer is not null && answer.Trim().Length > 0 && !answer.Trim().StartsWith('y') && !answer.Trim().StartsWith('Y'))
@@ -1299,22 +1327,21 @@ namespace ClearanceLink.Host
         /// <summary>recordings/local in a source checkout; otherwise %LOCALAPPDATA%\ClearanceLink\recordings.</summary>
         private static string RecordingsFolder() =>
             Directory.Exists("recordings") ? Path.Combine("recordings", "local") : AppFolders.Default.Recordings;
-        private static int Batc(Options options)
+        private static int AppCommand(Options options)
         {
             var action = options.Positional.FirstOrDefault() ?? "status";
-            var folder = BatcFolder(options);
-            if (folder is null)
+            if (ChosenApp(options) is not { } app)
             {
-                return Fail(options.Get("batc") is { } given
-                    ? $"BeyondATC.exe not found in {given}"
-                    : "BeyondATC not found; pass --batc \"<BeyondATC folder>\"");
+                return Fail(options.Get("app") is { } given
+                    ? $"{given} is not an .exe (give the full path to the app's .exe)"
+                    : "No ATC app chosen; pass --app \"<app's .exe>\" or run: settings app \"<app's .exe>\"");
             }
 
-            var port = int.Parse(options.Get("port") ?? BatcRedirect.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
-            var redirect = new BatcRedirect(folder, port);
+            var port = int.Parse(options.Get("port") ?? AppRedirect.DefaultPort.ToString(System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
+            var redirect = new AppRedirect(app, port);
             try
             {
-                return BatcAction(action, folder, redirect);
+                return AppAction(action, app, redirect);
             }
             catch (RedirectFailedException ex)
             {
@@ -1322,41 +1349,41 @@ namespace ClearanceLink.Host
             }
         }
 
-        private static int BatcAction(string action, string folder, BatcRedirect redirect)
+        private static int AppAction(string action, AtcApp app, AppRedirect redirect)
         {
             switch (action)
             {
                 case "on":
                     redirect.SwitchOn().ToList().ForEach(Console.WriteLine);
-                    Console.WriteLine("BeyondATC now connects to ClearanceLink (X-Plane). Run ClearanceLink before starting BeyondATC.");
+                    Console.WriteLine($"{app.Name} now connects to ClearanceLink (X-Plane). Run ClearanceLink before starting it.");
                     return 0;
                 case "off":
                     redirect.SwitchOff().ToList().ForEach(Console.WriteLine);
-                    Console.WriteLine("BeyondATC now connects to MSFS again.");
+                    Console.WriteLine($"{app.Name} now connects to MSFS again.");
                     return 0;
                 case "status":
-                    Console.WriteLine($"BeyondATC: {folder}");
+                    Console.WriteLine($"ATC app: {app.Exe}");
                     foreach (var file in redirect.Files)
                     {
                         Console.WriteLine($"  {redirect.StateOf(file),-9} {file}");
                     }
 
-                    Console.WriteLine(redirect.IsOn ? "Set up for X-Plane (ClearanceLink)." : "Set up for MSFS (or partly set up; run 'batc on' or 'batc off').");
+                    Console.WriteLine(redirect.IsOn ? "Set up for X-Plane (ClearanceLink)." : "Set up for MSFS (or partly set up; run 'app on' or 'app off').");
                     return 0;
                 default:
-                    return Fail($"Unknown batc action '{action}'. Use on, off or status.");
+                    return Fail($"Unknown app action '{action}'. Use on, off or status.");
             }
         }
 
         /// <summary>
         /// The model list sent for EnumerateSimObjectsAndLiveries: mapping/liveries.json, the titles and liveries MSFS
-        /// listed in the 2026-09-30 recording. BATC picks its traffic models from it. Null (no traffic) with --no-traffic.
+        /// listed in the 2026-09-30 recording. The ATC app picks its traffic models from it. Null (no traffic) with --no-traffic.
         /// </summary>
         private static IReadOnlyList<(string Title, string Livery)>? LoadLiveries(Options options)
         {
             if (options.Has("no-traffic"))
             {
-                PacketConsole.Info("Traffic: off (--no-traffic); BeyondATC will not create AI aircraft");
+                PacketConsole.Info("Traffic: off (--no-traffic); the ATC app will not create AI aircraft");
                 return null;
             }
 
@@ -1364,15 +1391,15 @@ namespace ClearanceLink.Host
             var path = dir is null ? null : Path.Combine(dir, "liveries.json");
             if (path is null || !File.Exists(path))
             {
-                PacketConsole.Info("Traffic: mapping/liveries.json not found; BeyondATC will not create AI aircraft");
+                PacketConsole.Info("Traffic: mapping/liveries.json not found; the ATC app will not create AI aircraft");
                 return null;
             }
 
             var list = System.Text.Json.JsonSerializer.Deserialize<string[][]>(File.ReadAllText(path)) ?? [];
-            PacketConsole.Info($"Traffic: {list.Length} models offered to BeyondATC from {Path.GetFullPath(path)}");
+            PacketConsole.Info($"Traffic: {list.Length} models offered to the ATC app from {Path.GetFullPath(path)}");
             return [.. list.Where(e => e.Length >= 1).Select(e => (e[0], e.Length > 1 ? e[1] : ""))];
         }
-        /// <summary>mapping/traffic-models.yaml: how BATC's model titles become ICAO types and airlines for the plugin.</summary>
+        /// <summary>mapping/traffic-models.yaml: how the app's model titles become ICAO types and airlines for the plugin.</summary>
         private static TrafficModels LoadTrafficModels(Options options)
         {
             var dir = options.Get("mapping") ?? FindMappingDirectory();
@@ -1456,7 +1483,7 @@ namespace ClearanceLink.Host
             }
             else
             {
-                PacketConsole.Info("Airports: X-Plane folder not found (pass --xplane-root); airports BATC asks for will be unknown");
+                PacketConsole.Info("Airports: X-Plane folder not found (pass --xplane-root); airports the ATC app asks for will be unknown");
             }
 
             return sources.Count == 0 ? null : new FacilitySourceChain([.. sources]);
@@ -1547,7 +1574,7 @@ namespace ClearanceLink.Host
                 }
 
                 var key = arg[2..];
-                options._named[key] = key is "quiet" or "no-stub" or "no-batc-log" or "no-status" or "open-status" or "force" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
+                options._named[key] = key is "quiet" or "no-stub" or "no-app-log" or "no-status" or "open-status" or "force" ? null : e.MoveNext() ? e.Current : throw new FormatException($"{arg} needs a value");
             }
 
             return options;

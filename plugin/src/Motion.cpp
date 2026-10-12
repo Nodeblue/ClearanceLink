@@ -13,9 +13,9 @@ constexpr double MinMoveMeters = 0.01;
 // paused, and it should then catch up quickly rather than crawl.
 constexpr float MinInterval = 0.02f;
 constexpr float MaxInterval = 0.5f;
-// Further apart than this is a jump (a new position from BATC), drawn at once.
+// Further apart than this is a jump (a new position from the app), drawn at once.
 constexpr double MaxBlendMeters = 1000;
-// So is a move faster than twice its speed plus this (metres a second): BATC placing a parked aircraft at its gate
+// So is a move faster than twice its speed plus this (metres a second): the app placing a parked aircraft at its gate
 // moved it 100 m and more, which the blend slid across and the move-on then overshot, back and forth
 // (YBBN, 2026-10-03). Speeds are measured over at least a tenth of a second (two updates can land in one frame).
 constexpr double JumpMarginMps = 15;
@@ -140,7 +140,7 @@ void Track::Update(const Pos& pos, float now) {
         // Two updates read in one frame (after an X-Plane stutter) are still about ClearanceLink's 0.1 s apart.
         const float interval = std::max(since, MinSpeedInterval);
         fromTime_ = now - interval;
-        // Not at gsKt: BATC's speed for a stopped aircraft is not always 0, which slid parked aircraft forward and
+        // Not at gsKt: the app's speed for a stopped aircraft is not always 0, which slid parked aircraft forward and
         // back again with each update (VH-XZA at YBBN, 2026-10-03).
         const bool moving = since <= MaxMovingInterval && meters > MinMoveMeters;
         latPerSecond_ = moving ? (pos.lat - to_.lat) / interval : 0;

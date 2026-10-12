@@ -4,7 +4,7 @@ Date: 2026-10-02. Status: accepted.
 
 ## Context
 Until now, double-clicking ClearanceLink.exe opened a console that scrolled log lines, and batch files switched
-BeyondATC's set-up. Ben wants something a non-technical simmer finds friendly and appealing: an FMS/CDU-style
+the ATC app's set-up. Ben wants something a non-technical simmer finds friendly and appealing: an FMS/CDU-style
 screen (24 columns, line select keys, cyan labels, white data) that works with mouse and keys. The web status page
 stays as the detailed view. He picked an app window over a console TUI (2026-10-02): a console's look depends on
 each user's font and settings, it breaks on resize, and Quick Edit mode can freeze it.

@@ -7,7 +7,7 @@ public static class TestPackets
 {
     public const uint SunRise = 6;
 
-    public static Packet Open(string appName = "BeyondATC", uint sendId = 1) =>
+    public static Packet Open(string appName = "TestApp", uint sendId = 1) =>
         PacketBuilder.Client(0x01, SunRise, sendId)
             .Str(appName, 256).U32(0).U8(0).Str("RS", 3)
             .U32(12).U32(2).U32(282174).U32(999)

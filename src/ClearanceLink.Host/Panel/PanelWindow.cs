@@ -195,7 +195,9 @@ public sealed class PanelWindow : Window
             case CduKey.GoPush:
                 ShowPage(PanelPage.Push);
                 return;
-            case CduKey.ChooseBatcFolder:
+            case CduKey.ChooseApp:
+                await ChooseAppAsync();
+                return;
             case CduKey.ChooseXPlaneFolder:
             case CduKey.ChooseFsltlFolder:
                 await ChooseFolderAsync(key);
@@ -247,7 +249,6 @@ public sealed class PanelWindow : Window
         {
             Title = key switch
             {
-                CduKey.ChooseBatcFolder => "Choose the BeyondATC folder (the one with BeyondATC.exe)",
                 CduKey.ChooseFsltlFolder => "Choose FSLTL's fsltl-traffic-base folder (in MSFS's Community folder)",
                 _ => "Choose the X-Plane 12 folder",
             },
@@ -263,6 +264,25 @@ public sealed class PanelWindow : Window
             }
 
             Flash(result);
+        }
+    }
+
+    private async Task ChooseAppAsync()
+    {
+        if (_controller is null)
+        {
+            return;
+        }
+
+        var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Choose the ATC app to bridge (its .exe)",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Programs (*.exe)") { Patterns = ["*.exe"] }],
+        });
+        if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)
+        {
+            Flash(_controller.SetFolder(CduKey.ChooseApp, path));
         }
     }
 

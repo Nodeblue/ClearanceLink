@@ -27,19 +27,18 @@ public sealed class PanelTests
         Serving: true,
         XPlaneConnected: true,
         XPlaneVersion: "12.4.3",
-        BatcHelper: true,
-        BatcApp: true,
-        OtherAddOns: 1,
+        Connections: 3,
+        AppConnected: true,
         LastAirport: "YBBN",
         LastAirportSource: "Orbx YBBN",
         MsfsRunning: false,
         Connection: ConnectionMode.Automatic,
-        BatcRedirected: false,
+        AppRedirected: false,
         SessionLog: true,
         SessionLogBytes: 2_500_000,
         KeepDays: 7,
         Uptime: TimeSpan.FromMinutes(72),
-        BatcFolder: @"C:\BeyondATC",
+        AppExe: @"C:\Tower\Tower.exe",
         XPlaneFolder: @"C:\X-Plane 12");
 
     public static TheoryData<PanelPage> AllPages => new(Enum.GetValues<PanelPage>());
@@ -48,11 +47,11 @@ public sealed class PanelTests
     [MemberData(nameof(AllPages))]
     public void Every_line_fits_the_24_column_screen(PanelPage page)
     {
-        var long_ = Ready with { BatcFolder = @"D:\Games\Flight Sim Add-ons\BeyondATC Install", LastAirportSource = "Global Airports (X-Plane 12 default scenery)" };
+        var long_ = Ready with { AppExe = @"D:\Games\Flight Sim Add-ons\Tower Install\Tower.exe", LastAirportSource = "Global Airports (X-Plane 12 default scenery)" };
         var update = Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://github.com/Nodeblue/ClearanceLink/releases/tag/v10.12.13") };
         var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base", FsltlLiveries = 3112, XPlaneRunning = true };
         var converting = fsltl with { FsltlConverting = true, FsltlProgress = new Fsltl.ImportProgress(Fsltl.ImportStage.Textures, 12345, 99999) };
-        foreach (var state in new[] { Ready, long_, Ready with { BatcFolder = null, Serving = false }, update, fsltl with { FsltlOutOfDate = true }, converting, Ready with { MsfsInstalled = false } })
+        foreach (var state in new[] { Ready, long_, Ready with { AppExe = null, Serving = false }, update, fsltl with { FsltlOutOfDate = true }, converting, Ready with { MsfsInstalled = false } })
         {
             var built = CduPages.Build(page, state);
             Assert.True(built.Title.Length <= CduPages.Width, built.Title);
@@ -71,15 +70,15 @@ public sealed class PanelTests
     public void A_new_release_takes_turns_with_the_next_step_before_a_flight_only()
     {
         var update = new UpdateInfo("0.6.0", "https://github.com/Nodeblue/ClearanceLink/releases/tag/v0.6.0");
-        var waiting = Ready with { BatcHelper = false, BatcApp = false, Update = update };
+        var waiting = Ready with { Connections = 0, AppConnected = false, Update = update };
         var turn = TimeSpan.FromSeconds(CduPages.UpdateTurnSeconds);
 
-        Assert.Equal("START BEYONDATC", CduPages.Advice(waiting with { Uptime = turn * 2 }).Text);
+        Assert.Equal("START ATC APP", CduPages.Advice(waiting with { Uptime = turn * 2 }).Text);
         var notice = CduPages.Advice(waiting with { Uptime = turn * 3 });
         Assert.Equal("NEW VERSION 0.6.0", notice.Text);
         Assert.Equal(CduColor.Magenta, notice.Color);
 
-        // Never over something to fix, and not once BeyondATC is connected (green).
+        // Never over something to fix, and not once the ATC app is connected (green).
         Assert.Equal("CLOSE MSFS TO CONNECT", CduPages.Advice(waiting with { MsfsRunning = true, Uptime = turn * 3 }).Text);
         Assert.Equal("READY FOR CLEARANCE", CduPages.Advice(Ready with { Update = update, Uptime = turn * 3 }).Text);
         // Fits the screen with the longest version the tests use elsewhere.
@@ -87,18 +86,22 @@ public sealed class PanelTests
     }
 
     [Theory]
-    [InlineData(false, true, false, false, false, "STARTING...")]
-    [InlineData(true, true, false, false, false, "CLOSE MSFS TO CONNECT")]
-    [InlineData(true, false, false, false, false, "START X-PLANE 12")]
-    [InlineData(true, false, true, false, false, "START BEYONDATC")]
-    [InlineData(true, false, true, true, false, "BEYONDATC CONNECTING")]
-    [InlineData(true, false, false, true, true, "X-PLANE NOT CONNECTED")]
-    [InlineData(true, true, true, true, true, "READY FOR CLEARANCE")]
-    [InlineData(true, false, true, false, false, "BEYONDATC CONNECTING", true)]
-    [InlineData(true, false, false, false, false, "X-PLANE NOT CONNECTED", true)]
-    public void Scratchpad_says_what_to_do_next(bool serving, bool msfs, bool xplane, bool helper, bool app, string expected, bool trafficSync = false)
+    [InlineData(false, true, false, 0, false, "STARTING...")]
+    [InlineData(true, true, false, 0, false, "CLOSE MSFS TO CONNECT")]
+    [InlineData(true, false, false, 0, false, "START X-PLANE 12")]
+    [InlineData(true, false, true, 0, false, "START ATC APP")]
+    [InlineData(true, false, true, 1, false, "ATC APP CONNECTING")]
+    [InlineData(true, false, false, 2, true, "X-PLANE NOT CONNECTED")]
+    [InlineData(true, true, true, 2, true, "READY FOR CLEARANCE")]
+    [InlineData(true, false, false, 1, false, "X-PLANE NOT CONNECTED")]
+    [InlineData(true, false, true, 0, false, CduPages.ChooseApp, true)]
+    public void Scratchpad_says_what_to_do_next(bool serving, bool msfs, bool xplane, int connections, bool connected, string expected, bool noApp = false)
     {
-        var state = Ready with { Serving = serving, MsfsRunning = msfs, XPlaneConnected = xplane, BatcHelper = helper, BatcApp = app, BatcTrafficSync = trafficSync };
+        var state = Ready with { Serving = serving, MsfsRunning = msfs, XPlaneConnected = xplane, Connections = connections, AppConnected = connected };
+        if (noApp)
+        {
+            state = state with { AppExe = null };
+        }
 
         Assert.Equal(expected, CduPages.Advice(state).Text);
     }
@@ -151,17 +154,18 @@ public sealed class PanelTests
         Assert.All(tips, c => Assert.Equal(12, c.Width)); // only the 12 px marks carry a tip
     }
     [Fact]
-    public void Setup_says_where_BeyondATC_goes()
+    public void Setup_says_where_the_app_goes()
     {
         string Help(PanelState state) => CduPages.Build(PanelPage.Setup, state).Scratchpad.Text;
 
-        Assert.Equal(CduPages.BatcUntilClose, Help(Ready with { BatcRedirected = true }));
-        Assert.True(CduPages.BatcUntilClose.Length <= CduPages.Width);
-        Assert.Equal("CLOSE MSFS BEFORE FLYING", Help(Ready with { BatcRedirected = true, MsfsRunning = true }));
+        Assert.Equal(CduPages.AppUntilClose, Help(Ready with { AppRedirected = true }));
+        Assert.True(CduPages.AppUntilClose.Length <= CduPages.Width);
+        Assert.Equal("CLOSE MSFS BEFORE FLYING", Help(Ready with { AppRedirected = true, MsfsRunning = true }));
         Assert.Equal("", Help(Ready));
-        Assert.Equal("BATC SET TO X-PLANE", Help(Ready with { Connection = ConnectionMode.AlwaysOn, BatcRedirected = true }));
-        Assert.Equal(CduPages.BatcNotSet, Help(Ready with { Connection = ConnectionMode.AlwaysOn, BatcRedirected = false }));
-        Assert.True(CduPages.BatcNotSet.Length <= CduPages.Width);
+        Assert.Equal("APP SET TO X-PLANE", Help(Ready with { Connection = ConnectionMode.AlwaysOn, AppRedirected = true }));
+        Assert.Equal("CHOOSE THE ATC APP", Help(Ready with { AppExe = null, Connection = ConnectionMode.AlwaysOn }));
+        Assert.Equal(CduPages.AppNotSet, Help(Ready with { Connection = ConnectionMode.AlwaysOn, AppRedirected = false }));
+        Assert.True(CduPages.AppNotSet.Length <= CduPages.Width);
     }
 
     [Fact]
@@ -192,7 +196,8 @@ public sealed class PanelTests
         }
 
         var welcome = CduPages.Build(PanelPage.Welcome, Ready);
-        Assert.Contains(welcome.Message!, m => m.Text.Contains("Not affiliated with or endorsed by BeyondATC.", StringComparison.Ordinal));
+        Assert.Contains(welcome.Message!, m => m.Text.Contains("proof of concept", StringComparison.Ordinal));
+        Assert.Contains(welcome.Message!, m => m.Text.Contains("Not supported or endorsed by any developer whose app uses SimConnect", StringComparison.Ordinal));
         Assert.Contains(welcome.Message!, m => m.Text.Contains("no warranty", StringComparison.Ordinal));
 
         // Advice is text, not rows that look selectable: the X-Plane settings page has keys only for paging.
@@ -200,14 +205,14 @@ public sealed class PanelTests
         Assert.All(xplane.Rows.Take(5), r => Assert.Equal(CduRow.Empty, r));
         Assert.Contains(xplane.Message!, m => m.Text.Contains("Sound: Radios to 0", StringComparison.Ordinal) && m.Text.Contains("Draw parked aircraft off", StringComparison.Ordinal));
 
-        // BeyondATC flies the user's latest SimBrief plan from where they are parked, so that comes first.
+        // The ATC app flies the user's latest SimBrief plan from where they are parked, so that comes first.
         var done = CduPages.Build(PanelPage.StartDone, Ready);
         Assert.Contains(done.Message!, m => m.Text.Contains("1. Plan it in SimBrief", StringComparison.Ordinal) && m.Text.Contains("SimBrief departure", StringComparison.Ordinal));
 
         // ABOUT is a message too; only the keys are rows.
         var about = CduPages.Build(PanelPage.About, Ready);
         Assert.All(about.Rows.Take(5), r => Assert.Equal(CduRow.Empty, r));
-        Assert.Contains(about.Message!, m => m.Text.Contains("Not affiliated with BeyondATC.", StringComparison.Ordinal));
+        Assert.Contains(about.Message!, m => m.Text.Contains("Not supported or endorsed by any SimConnect app's developer.", StringComparison.Ordinal));
         Assert.Contains(CduPages.Build(PanelPage.Status, Ready).Rows, r => r.LabelLeft == "ATC AIRPORT" && r.LabelRight == "SCENERY");
 
         var missing = CduPages.Build(PanelPage.StartFolders, Ready with { XPlaneFolder = null });
@@ -222,7 +227,7 @@ public sealed class PanelTests
         var fsltl = Ready with { FsltlFolder = @"C:\MSFS\Community\fsltl-traffic-base" };
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl).Rows, r => r.Left.Text == "FOUND IN MSFS" && r.KeyRight == CduKey.ConvertFsltl);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "UPDATE>");
-        // Converted earlier but the folder isn't known now (no MSFS): CHOOSE, so BeyondATC can be shown it (ADR-0014).
+        // Converted earlier but the folder isn't known now (no MSFS): CHOOSE, so the ATC app can be shown it (ADR-0014).
         Assert.Contains(CduPages.Build(PanelPage.StartModels, Ready with { FsltlLiveries = 812 }).Rows, r => r.Left.Text == "812 LIVERIES" && r.Right.Text == "CHOOSE>" && r.KeyRight == CduKey.ChooseFsltlFolder);
         Assert.Contains(CduPages.Build(PanelPage.StartModels, fsltl with { FsltlConverting = true }).Rows, r => r.Left.Text == "CONVERTING..." && r.KeyRight == CduKey.None);
         Assert.Equal(CduKey.FinishGettingStarted, CduPages.Build(PanelPage.StartDone, Ready).Rows[5].KeyRight);
@@ -232,7 +237,7 @@ public sealed class PanelTests
     [MemberData(nameof(AllPages))]
     public void Messages_fit_above_the_first_row_with_content(PanelPage page)
     {
-        foreach (var state in new[] { Ready, Ready with { BatcFolder = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }, Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://example.invalid/") }, Ready with { MsfsInstalled = false } })
+        foreach (var state in new[] { Ready, Ready with { AppExe = null }, Ready with { TrafficAddOn = PluginInstall.State.NotInstalled }, Ready with { Update = new UpdateInfo("10.12.13-beta.4", "https://example.invalid/") }, Ready with { MsfsInstalled = false } })
         {
             var built = CduPages.Build(page, state);
             if (built.Message is null)
@@ -324,10 +329,10 @@ public sealed class PanelTests
     [Fact]
     public void Long_folders_keep_the_drive_and_the_last_folder()
     {
-        Assert.Equal(@"C:\BeyondATC", CduPages.ShortPath(@"C:\BeyondATC\", 18));
-        Assert.Equal(@"D:\...\BeyondATC", CduPages.ShortPath(@"D:\Games\Flight Sim Add-ons\BeyondATC", 18));
+        Assert.Equal(@"C:\Tower", CduPages.ShortPath(@"C:\Tower\", 18));
+        Assert.Equal(@"D:\...\Tower", CduPages.ShortPath(@"D:\Games\Flight Sim Add-ons\Tower", 18));
         // As many of the last folders as fit; a bare Community says nothing, so it goes first.
-        Assert.Equal(@"D:\...\Sims\BeyondATC", CduPages.ShortPath(@"D:\Games\Flight Sim Add-ons\Sims\BeyondATC", 24));
+        Assert.Equal(@"D:\...\Sims\Tower", CduPages.ShortPath(@"D:\Games\Flight Sim Add-ons\Sims\Tower", 24));
         Assert.Equal(@"D:\MSFS2024 Packages", CduPages.ShortPath(@"D:\MSFS2024 Packages\Community", 24));
         Assert.Equal(@"E:\...\MSFS\Community", CduPages.ShortPath(@"E:\Games\Microsoft\MSFS\Community", 24));
         Assert.Equal(@"C:\...\MSFS stuff", CduPages.ShortPath(@"C:\Users\Ben\Documents\MSFS stuff\Community", 24));
@@ -357,18 +362,18 @@ public sealed class PanelTests
     }
 
     [Fact]
-    public void Beyondatc_finding_no_fsltl_is_an_amber_warning_on_traffic_setup_and_status()
+    public void The_app_finding_no_fsltl_is_an_amber_warning_on_traffic_setup_and_status()
     {
-        // BeyondATC creates no traffic at all without FSLTL (ADR-0014): say so where traffic is set up and shown.
-        var none = Ready with { TrafficAddOn = PluginInstall.State.Installed, BatcModels = BatcTrafficModels.Outcome.NoFsltl };
-        var warning = Assert.Single(CduPages.Build(PanelPage.Traffic, none).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        // The ATC app creates no traffic at all without FSLTL (ADR-0014): say so where traffic is set up and shown.
+        var none = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficModels = CommunityTrafficModels.Outcome.NoFsltl };
+        var warning = Assert.Single(CduPages.Build(PanelPage.Traffic, none).Rows, r => r.LabelLeft == "ATC APP TRAFFIC");
         Assert.Equal(("NO FSLTL", CduColor.Amber, "CHECK>", CduKey.GoFsltl), (warning.Left.Text, warning.Left.Color, warning.Right.Text, warning.KeyRight));
         Assert.False(string.IsNullOrEmpty(warning.Help));
 
         // Issue #29: FSLTL converted but not in MSFS 2024's Community folder says where it's missing, not "NO FSLTL".
-        var notIn2024 = Assert.Single(CduPages.Build(PanelPage.Traffic, none with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        var notIn2024 = Assert.Single(CduPages.Build(PanelPage.Traffic, none with { TrafficModels = CommunityTrafficModels.Outcome.NotInMsfs2024 }).Rows, r => r.LabelLeft == "ATC APP TRAFFIC");
         Assert.Equal(("NOT IN MSFS 2024", CduColor.Amber), (notIn2024.Left.Text, notIn2024.Left.Color));
-        var sees = Assert.Single(CduPages.Build(PanelPage.Traffic, none with { BatcModels = BatcTrafficModels.Outcome.Pointed }).Rows, r => r.LabelLeft == "BEYONDATC TRAFFIC");
+        var sees = Assert.Single(CduPages.Build(PanelPage.Traffic, none with { TrafficModels = CommunityTrafficModels.Outcome.Pointed }).Rows, r => r.LabelLeft == "ATC APP TRAFFIC");
         Assert.Equal(("SEES FSLTL", CduColor.Green), (sees.Left.Text, sees.Left.Color));
 
         var status = CduPages.Build(PanelPage.Status, none).Rows[4];
@@ -380,7 +385,7 @@ public sealed class PanelTests
     public void Fsltl_check_says_what_the_folder_holds_and_what_to_do()
     {
         var folder = @"C:\MSFS\Community\fsltl-traffic-base";
-        var good = Ready with { FsltlFolder = folder, FsltlLiveries = 3350, BatcModels = BatcTrafficModels.Outcome.Found, FsltlHealth = new(3350, 98, 0, "1.5.0") };
+        var good = Ready with { FsltlFolder = folder, FsltlLiveries = 3350, TrafficModels = CommunityTrafficModels.Outcome.Found, FsltlHealth = new(3350, 98, 0, "1.5.0") };
         var page = CduPages.Build(PanelPage.Fsltl, good);
         Assert.Equal("FSLTL CHECK", page.Title);
         Assert.Equal(("3350", "98"), (page.Rows[1].Left.Text, page.Rows[1].Right.Text));
@@ -413,18 +418,18 @@ public sealed class PanelTests
         // Not an FSLTL package at all.
         Assert.Equal("NOT AN FSLTL FOLDER", CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = new(0, 0, 0, null) }).Scratchpad.Text);
 
-        // Converted fine, but MSFS 2024 is here without FSLTL in the Community folder BeyondATC reads (issue #29).
-        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024, BatcCommunity = @"C:\Users\Pilot\AppData\Roaming\Microsoft Flight Simulator 2024\Packages\Community" });
-        Assert.Equal(("BEYONDATC LOOKS IN", "MSFS 2024 COMMUNITY", CduColor.Amber), (page.Rows[3].LabelLeft, page.Rows[3].Left.Text, page.Rows[3].Left.Color));
+        // Converted fine, but MSFS 2024 is here without FSLTL in the Community folder the ATC app reads (issue #29).
+        page = CduPages.Build(PanelPage.Fsltl, good with { TrafficModels = CommunityTrafficModels.Outcome.NotInMsfs2024, AppCommunity = @"C:\Users\Pilot\AppData\Roaming\Microsoft Flight Simulator 2024\Packages\Community" });
+        Assert.Equal(("APP LOOKS IN", "MSFS 2024 COMMUNITY", CduColor.Amber), (page.Rows[3].LabelLeft, page.Rows[3].Left.Text, page.Rows[3].Left.Color));
         Assert.Contains(@"Roaming\Microsoft Flight Simulator 2024\Packages\Community", page.Rows[3].Help);
         Assert.Equal(("WON'T SEE IT", "NOT IN 2024"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
         Assert.Equal("COPY FSLTL TO LOOKS IN", page.Scratchpad.Text);
-        // MSFS 2024's settings name only a NextBoot folder: BeyondATC reads none.
-        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 });
+        // MSFS 2024's settings name only a NextBoot folder: The ATC app reads none.
+        page = CduPages.Build(PanelPage.Fsltl, good with { TrafficModels = CommunityTrafficModels.Outcome.NotInMsfs2024 });
         Assert.Equal(("NOT SET IN MSFS 2024", CduColor.Amber), (page.Rows[3].Left.Text, page.Rows[3].Left.Color));
 
-        // No MSFS 2024: ClearanceLink points BeyondATC at FSLTL while it's open.
-        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.Pointed });
+        // No MSFS 2024: ClearanceLink points the ATC app at FSLTL while it's open.
+        page = CduPages.Build(PanelPage.Fsltl, good with { TrafficModels = CommunityTrafficModels.Outcome.Pointed });
         Assert.Equal(("SEES IT", "WHILE OPEN"), (page.Rows[2].Left.Text, page.Rows[2].Right.Text));
 
         // Found but not converted yet; no folder at all.
@@ -433,9 +438,9 @@ public sealed class PanelTests
         Assert.Equal("READY TO CONVERT", page.Scratchpad.Text);
         page = CduPages.Build(PanelPage.Fsltl, Ready with { MsfsInstalled = false });
         Assert.Equal(("NOT FOUND", "CHOOSE YOUR FSLTL FOLDER"), (page.Rows[0].Left.Text, page.Scratchpad.Text));
-        // With MSFS, FSLTL is installed through it; with MSFS 2024, it must go there for BeyondATC.
+        // With MSFS, FSLTL is installed through it; with MSFS 2024, it must go there for the ATC app.
         Assert.Equal("GET FSLTL OR CHOOSE IT", CduPages.Build(PanelPage.Fsltl, Ready).Scratchpad.Text);
-        Assert.Equal("GET FSLTL FOR MSFS 2024", CduPages.Build(PanelPage.Fsltl, Ready with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }).Scratchpad.Text);
+        Assert.Equal("GET FSLTL FOR MSFS 2024", CduPages.Build(PanelPage.Fsltl, Ready with { TrafficModels = CommunityTrafficModels.Outcome.NotInMsfs2024 }).Scratchpad.Text);
         Assert.Equal((CduKey.OpenModelsHelp, CduKey.ChooseFsltlFolder), (page.Rows[0].KeyRight, page.Rows[5].KeyRight));
 
         // Just after CHOOSE, the old folder's results aren't shown.
@@ -444,8 +449,8 @@ public sealed class PanelTests
 
         // A folder that can't be read (a drive not connected), and a UserCfg.opt that can't be read.
         Assert.Equal("CAN'T READ THIS FOLDER", CduPages.Build(PanelPage.Fsltl, good with { FsltlHealth = null }).Scratchpad.Text);
-        page = CduPages.Build(PanelPage.Fsltl, good with { BatcModels = BatcTrafficModels.Outcome.Failed });
-        Assert.Equal(("CAN'T TELL", "BEYONDATC CHECK FAILED"), (page.Rows[2].Left.Text, page.Scratchpad.Text));
+        page = CduPages.Build(PanelPage.Fsltl, good with { TrafficModels = CommunityTrafficModels.Outcome.Failed });
+        Assert.Equal(("CAN'T TELL", "ATC APP CHECK FAILED"), (page.Rows[2].Left.Text, page.Scratchpad.Text));
 
         // A conversion started here that failed later, or needs a restart, says so here as well as on TRAFFIC.
         page = CduPages.Build(PanelPage.Fsltl, good with { FsltlMessage = "CONVERT FAILED: SEE LOG" });
@@ -464,7 +469,7 @@ public sealed class PanelTests
 
         // Every bottom line fits.
         foreach (var state in new[] { good, noModels, someMissing, Ready, Ready with { MsfsInstalled = false }, good with { FsltlHealth = new(0, 0, 0, null) },
-            good with { FsltlHealth = new(9999, 92, 999, null) }, good with { BatcModels = BatcTrafficModels.Outcome.NotInMsfs2024 }, good with { FsltlLiveries = 0, XPlaneRunning = true } })
+            good with { FsltlHealth = new(9999, 92, 999, null) }, good with { TrafficModels = CommunityTrafficModels.Outcome.NotInMsfs2024 }, good with { FsltlLiveries = 0, XPlaneRunning = true } })
         {
             Assert.True(CduPages.Build(PanelPage.Fsltl, state).Scratchpad.Text.Length <= CduPages.Width, state.ToString());
         }
@@ -487,7 +492,7 @@ public sealed class PanelTests
     [Fact]
     public void Status_says_no_models_when_the_plugin_runs_without_a_csl_package()
     {
-        // BATC flies its traffic and the plugin runs, but there is nothing to draw it with: say so, and the key opens
+        // The ATC app flies its traffic and the plugin runs, but there is nothing to draw it with: say so, and the key opens
         // the aircraft models page. "0 AIRCRAFT" in green would read as all well.
         var noModels = Ready with { TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 0, PluginModels = 0 };
         var row = CduPages.Build(PanelPage.Status, noModels).Rows[4];
@@ -529,7 +534,7 @@ public sealed class PanelTests
         var firstRun = Ready with
         {
             TrafficAddOn = PluginInstall.State.NotInstalled, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community\fsltl-traffic-base",
-            FsltlHealth = new(3350, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community",
+            FsltlHealth = new(3350, 98, 0, "1.5.0"), TrafficModels = CommunityTrafficModels.Outcome.Found, AppCommunity = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community",
         };
         var window = new PanelWindow(() => firstRun);
         window.Show();
@@ -561,13 +566,13 @@ public sealed class PanelTests
         var flying = Ready with
         {
             TrafficAddOn = PluginInstall.State.Installed, TrafficAircraft = 23, CslPackages = 13, CslNames = "BLUEBELL", FsltlFolder = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community\fsltl-traffic-base", FsltlLiveries = 3154,
-            FsltlHealth = new(3154, 98, 0, "1.5.0"), BatcModels = BatcTrafficModels.Outcome.Found, BatcCommunity = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community",
+            FsltlHealth = new(3154, 98, 0, "1.5.0"), TrafficModels = CommunityTrafficModels.Outcome.Found, AppCommunity = @"C:\Users\Pilot\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community",
             FlightPlan = new FlightPlanView(plan, sent.AddMinutes(-2), SavedAs: plan.FileName, SentAt: sent),
         };
         var cleared = new PushView(new PushClearance(sent.AddMinutes(4), 90, "EAST", "pushback approved. Face east."), Preview: new PushPlan(21, 90, 39, "B"), XPlane: true, BetterPushback: true, Automatic: true, Stage: PushStage.WaitingForBrake, BrakeSet: true);
         window.Close();
         window = new PanelWindow(() => flying);
-        // The PUSH page with BeyondATC's clearance; the other pages without, so STATUS shows READY FOR CLEARANCE.
+        // The PUSH page with the ATC app's clearance; the other pages without, so STATUS shows READY FOR CLEARANCE.
         window.Show();
         foreach (var page in new[] { PanelPage.Status, PanelPage.FlightPlan, PanelPage.Push, PanelPage.Setup, PanelPage.Traffic, PanelPage.Fsltl, PanelPage.StartModels })
         {
@@ -601,22 +606,22 @@ public sealed class PanelTests
     public void Status_mentions_out_of_date_models_in_turn_only_when_nothing_is_more_urgent()
     {
         var turn = TimeSpan.FromSeconds(CduPages.UpdateTurnSeconds);
-        var waiting = Converted with { BatcHelper = false, BatcApp = false, FsltlOutOfDate = true };
+        var waiting = Converted with { Connections = 0, AppConnected = false, FsltlOutOfDate = true };
 
-        Assert.Equal("START BEYONDATC", CduPages.Advice(waiting with { Uptime = turn * 2 }).Text);
+        Assert.Equal("START ATC APP", CduPages.Advice(waiting with { Uptime = turn * 2 }).Text);
         var notice = CduPages.Advice(waiting with { Uptime = turn * 3 });
         Assert.Equal(("FSLTL MODELS OUT OF DATE", CduColor.Amber), (notice.Text, notice.Color));
         Assert.True(notice.Text.Length <= CduPages.Width);
 
         // With a new release too, the three take turns.
         var update = new UpdateInfo("0.6.0", "https://example.invalid/");
-        Assert.Equal(["START BEYONDATC", "NEW VERSION 0.6.0", "FSLTL MODELS OUT OF DATE"],
+        Assert.Equal(["START ATC APP", "NEW VERSION 0.6.0", "FSLTL MODELS OUT OF DATE"],
             Enumerable.Range(0, 3).Select(i => CduPages.Advice(waiting with { Update = update, Uptime = turn * i }).Text));
 
         // Not over something to fix, not in flight, not while converting.
         Assert.Equal("CLOSE MSFS TO CONNECT", CduPages.Advice(waiting with { MsfsRunning = true, Uptime = turn * 3 }).Text);
         Assert.Equal("READY FOR CLEARANCE", CduPages.Advice(Converted with { FsltlOutOfDate = true, Uptime = turn * 3 }).Text);
-        Assert.Equal("START BEYONDATC", CduPages.Advice(waiting with { FsltlConverting = true, Uptime = turn * 3 }).Text);
+        Assert.Equal("START ATC APP", CduPages.Advice(waiting with { FsltlConverting = true, Uptime = turn * 3 }).Text);
     }
 
     [Fact]

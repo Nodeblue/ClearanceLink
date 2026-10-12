@@ -2,10 +2,10 @@ using ClearanceLink.Airports;
 
 namespace ClearanceLink.Host.Pushback;
 
-/// <summary>What the pilot asked for on the PUSH page, or what BeyondATC's clearance said.</summary>
+/// <summary>What the pilot asked for on the PUSH page, or what the ATC app's clearance said.</summary>
 public enum PushChoice
 {
-    /// <summary>Nose ends up facing the cleared compass direction (BATC's "face east").</summary>
+    /// <summary>Nose ends up facing the cleared compass direction (the ATC app's "face east").</summary>
     Face,
     TailLeft,
     TailRight,
@@ -32,7 +32,7 @@ public sealed record PushPlan(double StraightMeters, double TurnDegrees, double 
 
 /// <summary>
 /// Plans a pushback from the aircraft's pose, the airport's taxiways and the choice. With a taxiway behind the
-/// aircraft the push ends on its centreline, lined up with it, facing the way that best matches the choice (BATC
+/// aircraft the push ends on its centreline, lined up with it, facing the way that best matches the choice (the ATC app
 /// says "face east" for a taxiway running 039/219 too). Without one it pushes back a set distance and turns.
 /// Pure, so it is tested without X-Plane.
 /// </summary>

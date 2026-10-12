@@ -37,7 +37,7 @@ public enum TrafficLights
 public sealed record PluginStatus(string Version, int Aircraft, int Models, IReadOnlyList<string> CslFolders, DateTimeOffset At);
 
 /// <summary>
-/// ClearanceLink's side of the X-Plane plugin link: sends BATC's traffic to the plugin over local UDP and keeps what the
+/// ClearanceLink's side of the X-Plane plugin link: sends the ATC app's traffic to the plugin over local UDP and keeps what the
 /// plugin reports back (its status, terrain height under each aircraft, errors). Thread-safe. Protocol:
 /// docs/protocol/plugin.md.
 /// </summary>

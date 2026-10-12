@@ -9,6 +9,7 @@ using ClearanceLink.Protocol;
 using ClearanceLink.Protocol.Tests;
 using ClearanceLink.Recorder;
 using ClearanceLink.Server;
+using static ClearanceLink.Host.Status.KnownClients;
 
 namespace ClearanceLink.Host.Tests;
 
@@ -20,14 +21,15 @@ public sealed class StatusTests : IDisposable
 
     [Theory]
     [InlineData(false, new string[0], StatusLevel.Waiting, "Waiting for X-Plane")]
-    [InlineData(true, new string[0], StatusLevel.Waiting, "Start BeyondATC")]
-    [InlineData(true, new[] { "BeyondATC" }, StatusLevel.Waiting, "still connecting")]
-    [InlineData(true, new[] { "BeyondATC", "BATCDLLSimConnection" }, StatusLevel.Ok, "Ready")]
-    [InlineData(false, new[] { "BeyondATC", "BATCDLLSimConnection" }, StatusLevel.Problem, "X-Plane is not")]
-    [InlineData(true, new[] { "BATC_Facilities", "BATC_TrafficSync" }, StatusLevel.Waiting, "still connecting")]
-    [InlineData(true, new[] { "BATCDLLSimConnection", "BATC_Facilities", "BATC_TrafficSync" }, StatusLevel.Ok, "Ready")]
-    [InlineData(true, new[] { "BATCDLLSimConnection", "BATC_Facilities" }, StatusLevel.Ok, "Ready")]
-    [InlineData(false, new[] { "BATC_TrafficSync" }, StatusLevel.Problem, "X-Plane is not")]
+    [InlineData(true, new string[0], StatusLevel.Waiting, "Start the ATC app")]
+    [InlineData(true, new[] { HelperAirports }, StatusLevel.Waiting, "still connecting")]
+    [InlineData(true, new[] { HelperAirports, AircraftAndRadios }, StatusLevel.Ok, "Ready")]
+    [InlineData(false, new[] { HelperAirports, AircraftAndRadios }, StatusLevel.Problem, "X-Plane is not")]
+    [InlineData(true, new[] { AirportData, TrafficTiming }, StatusLevel.Waiting, "still connecting")]
+    [InlineData(true, new[] { AircraftAndRadios, AirportData, TrafficTiming }, StatusLevel.Ok, "Ready")]
+    [InlineData(true, new[] { AircraftAndRadios, AirportData }, StatusLevel.Ok, "Ready")]
+    [InlineData(false, new[] { TrafficTiming }, StatusLevel.Problem, "X-Plane is not")]
+    [InlineData(true, new[] { "Some Other ATC" }, StatusLevel.Ok, "Ready")]
     public void Overall_names_the_next_thing_to_start(bool xplaneConnected, string[] clients, StatusLevel level, string message)
     {
         var sessions = clients.Select((name, i) => OpenSession(i + 1, name)).ToList();
@@ -39,32 +41,35 @@ public sealed class StatusTests : IDisposable
     }
 
     [Theory]
-    [InlineData(new[] { "BeyondATC", "BATCDLLSimConnection" }, true)]
-    [InlineData(new[] { "BATCDLLSimConnection", "BATC_Facilities", "BATC_TrafficSync" }, true)]
-    [InlineData(new[] { "BATCDLLSimConnection", "BATC_TrafficSync" }, false)]
-    [InlineData(new[] { "BATC_Facilities", "BATC_TrafficSync" }, false)]
-    [InlineData(new[] { "BATCDLLSimConnection", "FS2024BridgeService" }, false)]
-    public void BeyondATC_is_connected_with_its_app_and_airport_connections_in_any_version(string[] names, bool connected)
+    [InlineData(new[] { HelperAirports, AircraftAndRadios }, true)]
+    [InlineData(new[] { AircraftAndRadios, AirportData, TrafficTiming }, true)]
+    [InlineData(new[] { AircraftAndRadios, TrafficTiming }, false)]
+    [InlineData(new[] { AirportData, TrafficTiming }, false)]
+    [InlineData(new[] { AircraftAndRadios, "FS2024BridgeService" }, false)]
+    [InlineData(new[] { "Some Other ATC" }, true)]
+    [InlineData(new[] { "" }, false)]
+    [InlineData(new string[0], false)]
+    public void The_recorded_app_needs_its_main_and_airport_connections_and_any_other_app_one(string[] names, bool connected)
     {
-        Assert.Equal(connected, StatusBoard.BatcConnected(names));
+        Assert.Equal(connected, StatusBoard.AppConnected(names));
     }
 
     [Theory]
-    [InlineData("BeyondATC", true)]
-    [InlineData("BATCDLLSimConnection", true)]
-    [InlineData("BATC_Facilities", true)]
-    [InlineData("BATC_TrafficSync", true)]
+    [InlineData(HelperAirports, true)]
+    [InlineData(AircraftAndRadios, true)]
+    [InlineData(AirportData, true)]
+    [InlineData(TrafficTiming, true)]
     [InlineData("FS2024BridgeService", false)]
     [InlineData("SPAD.neXt", false)]
-    public void BeyondATC_connections_are_not_counted_as_other_add_ons(string name, bool batc)
+    public void Recorded_connection_names_are_known(string name, bool known)
     {
-        Assert.Equal(batc, StatusBoard.IsBatcClient(name));
+        Assert.Equal(known, IsKnown(name));
     }
 
     [Fact]
-    public async Task BeyondATC_1_8_22_shows_ready_with_its_three_connections()
+    public async Task The_recorded_apps_1_8_22_shows_ready_with_its_three_connections()
     {
-        // BeyondATC 1.8.22 dropped simconnect_ws: BeyondATC.exe opens all three (recorded on Ben's PC, 2026-10-07).
+        // The app's 1.8.22 dropped the app's helper: The app's .exe opens all three (recorded on Ben's PC, 2026-10-07).
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var xp = new InMemoryXPlane();
         using var recorder = new JsonlRecorder(Path.Combine(_dir, "serve.jsonl"));
@@ -74,12 +79,12 @@ public sealed class StatusTests : IDisposable
         var board = new StatusBoard(() => server.Sessions, () => new XPlaneStatus(true, "12.4.3", "http://127.0.0.1:8086/"), listener.Endpoint.ToString());
 
         await using var app = await Transports.ConnectAsync(listener.Endpoint, cts.Token);
-        await PacketFramer.WriteAsync(app, TestPackets.Open("BATCDLLSimConnection"), cts.Token);
+        await PacketFramer.WriteAsync(app, TestPackets.Open(AircraftAndRadios), cts.Token);
         await using var facilities = await Transports.ConnectAsync(listener.Endpoint, cts.Token);
-        await PacketFramer.WriteAsync(facilities, TestPackets.Open("BATC_Facilities"), cts.Token);
+        await PacketFramer.WriteAsync(facilities, TestPackets.Open(AirportData), cts.Token);
         await PacketFramer.WriteAsync(facilities, TestPackets.RequestFacilityData(1, 10, "YSSY"), cts.Token);
         await using var sync = await Transports.ConnectAsync(listener.Endpoint, cts.Token);
-        await PacketFramer.WriteAsync(sync, TestPackets.Open("BATC_TrafficSync"), cts.Token);
+        await PacketFramer.WriteAsync(sync, TestPackets.Open(TrafficTiming), cts.Token);
 
         var snapshot = board.Snapshot();
         while (snapshot is not { Airports.Count: 1, Clients.Count: 3 } || snapshot.Clients.Any(c => c.Name == ""))
@@ -89,7 +94,7 @@ public sealed class StatusTests : IDisposable
         }
 
         Assert.Equal(StatusLevel.Ok, snapshot.Overall.Level);
-        Assert.All(snapshot.Clients, c => Assert.StartsWith("BeyondATC", c.Description, StringComparison.Ordinal));
+        Assert.All(snapshot.Clients, c => Assert.StartsWith("ATC app", c.Description, StringComparison.Ordinal));
         Assert.Equal("YSSY", snapshot.Airports[0].Icao);
 
         await cts.CancelAsync();
@@ -102,7 +107,7 @@ public sealed class StatusTests : IDisposable
         var xp = new XPlaneStatus(true, null, "http://127.0.0.1:8086/");
 
         var blocked = StatusBoard.Overall(xp, [OpenSession(1, "FS2024BridgeService")], msfsRunning: true);
-        var connected = StatusBoard.Overall(xp, [OpenSession(1, "BeyondATC"), OpenSession(2, "BATCDLLSimConnection")], msfsRunning: true);
+        var connected = StatusBoard.Overall(xp, [OpenSession(1, HelperAirports), OpenSession(2, AircraftAndRadios)], msfsRunning: true);
 
         Assert.Equal(StatusLevel.Problem, blocked.Level);
         Assert.Contains("Close it", blocked.Message, StringComparison.Ordinal);
@@ -128,11 +133,11 @@ public sealed class StatusTests : IDisposable
         Assert.True(status.Start(cts.Token));
 
         await using var helper = await Transports.ConnectAsync(listener.Endpoint, cts.Token);
-        await PacketFramer.WriteAsync(helper, TestPackets.Open("BeyondATC"), cts.Token);
+        await PacketFramer.WriteAsync(helper, TestPackets.Open(HelperAirports), cts.Token);
         await PacketFramer.WriteAsync(helper, TestPackets.RequestFacilityData(1, 10, "YSSY"), cts.Token);
         await PacketFramer.WriteAsync(helper, TestPackets.RequestFacilityData(1, 11, "YXXX"), cts.Token);
         await using var app = await Transports.ConnectAsync(listener.Endpoint, cts.Token);
-        await PacketFramer.WriteAsync(app, TestPackets.Open("BATCDLLSimConnection"), cts.Token);
+        await PacketFramer.WriteAsync(app, TestPackets.Open(AircraftAndRadios), cts.Token);
 
         using var http = new HttpClient();
         StatusSnapshot? snapshot = null;
@@ -143,7 +148,7 @@ public sealed class StatusTests : IDisposable
         }
 
         Assert.Equal(StatusLevel.Ok, snapshot.Overall.Level);
-        Assert.Equal(["BeyondATC", "BATCDLLSimConnection"], snapshot.Clients.Select(c => c.Name));
+        Assert.Equal([HelperAirports, AircraftAndRadios], snapshot.Clients.Select(c => c.Name));
         Assert.Equal("YXXX", snapshot.Airports[0].Icao);
         Assert.Null(snapshot.Airports[0].Source);
         Assert.Equal(("YSSY", "test airports"), (snapshot.Airports[1].Icao, snapshot.Airports[1].Source));

@@ -1,4 +1,4 @@
-// One BATC traffic aircraft, drawn by XPMP2 from the latest state ClearanceLink sent.
+// One ATC app traffic aircraft, drawn by XPMP2 from the latest state ClearanceLink sent.
 #pragma once
 
 #include "GroundFit.h"
@@ -81,7 +81,7 @@ private:
     // Nose wheel steering: the drawn heading last frame and the turn rate measured from it, smoothed (deg/s).
     std::optional<float> lastHeading_;
     float yawRate_ = 0;
-    // Height drawn, eased across lift-off and touchdown, and the frame's position to spot BATC placing the aircraft.
+    // Height drawn, eased across lift-off and touchdown, and the frame's position to spot the app placing the aircraft.
     Smoothed height_;
     bool wasOnGround_ = false;
     float lastX_ = 0, lastZ_ = 0;

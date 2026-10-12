@@ -4,8 +4,8 @@ using ClearanceLink.Server;
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// Ground height for BATC's AI traffic: the elevation of the nearest airport ClearanceLink has sent BATC, within a few
-/// kilometres. BATC keeps its traffic on the ground with it, and its traffic is almost always at those airports.
+/// Ground height for the ATC app's AI traffic: the elevation of the nearest airport ClearanceLink has sent the ATC app, within a few
+/// kilometres. The ATC app keeps its traffic on the ground with it, and its traffic is almost always at those airports.
 /// Away from them the session falls back to the ground under the user's aircraft.
 /// </summary>
 public sealed class AirportGround : IGroundElevation

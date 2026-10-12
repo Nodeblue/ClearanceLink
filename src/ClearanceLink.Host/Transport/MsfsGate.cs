@@ -67,8 +67,8 @@ public sealed class MsfsGate(Func<bool> detect, Action<string> log, TimeSpan? po
         }
 
         log(running
-            ? "msfs: Microsoft Flight Simulator is running; BeyondATC can't reach X-Plane until it is closed"
-            : "msfs: not running; BeyondATC can reach X-Plane");
+            ? "msfs: Microsoft Flight Simulator is running; the ATC app can't reach X-Plane until it is closed"
+            : "msfs: not running; the ATC app can reach X-Plane");
         Changed?.Invoke(running);
     }
 

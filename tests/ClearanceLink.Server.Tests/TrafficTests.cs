@@ -5,7 +5,7 @@ using ClearanceLink.Recorder;
 namespace ClearanceLink.Server.Tests;
 
 /// <summary>
-/// Replays the start of BATC's traffic on its BeyondATC.exe connection (recordings/samples/batc-1.8.21-traffic.jsonl:
+/// Replays the start of the ATC app's traffic on its the app's .exe connection (recordings/samples/atc-app-1.8.21-traffic.jsonl:
 /// 46 creations at YBBN in the first 40 seconds, then position writes and ground-height polls for two aircraft) and checks the answers
 /// against what MSFS 2024 sent.
 /// </summary>
@@ -13,12 +13,12 @@ public sealed class TrafficTests
 {
     private const double YbbnElevationMeters = 3.66;
 
-    private static string TrafficSample => Path.Combine(Fixtures.RepoRoot, "recordings", "samples", "batc-1.8.21-traffic.jsonl");
+    private static string TrafficSample => Path.Combine(Fixtures.RepoRoot, "recordings", "samples", "atc-app-1.8.21-traffic.jsonl");
 
     private readonly List<Packet> _sent = [];
 
     [Fact]
-    public async Task Batc_traffic_is_created_moved_and_kept_on_the_ground()
+    public async Task The_apps_traffic_is_created_moved_and_kept_on_the_ground()
     {
         var entries = JsonlRecorder.ReadAll(TrafficSample).ToList();
         var clock = new RecordedClock(entries[0].Time);
@@ -98,7 +98,7 @@ public sealed class TrafficTests
             {
                 // GROUND ALTITUDE, PLANE ALTITUDE (feet), GROUND VELOCITY (knots). Both polled aircraft are arriving,
                 // 5,000 to 22,000 ft up, where MSFS's terrain was 35 to 330 ft and ours falls back to the ground at
-                // YBBN; altitude and speed come from BATC's own writes and match MSFS's answers closely.
+                // YBBN; altitude and speed come from the ATC app's own writes and match MSFS's answers closely.
                 Assert.InRange(BinaryPrimitives.ReadDoubleLittleEndian(data), 0, 400);
                 Assert.InRange(BinaryPrimitives.ReadDoubleLittleEndian(data[8..]), BinaryPrimitives.ReadDoubleLittleEndian(msfs.AsSpan(8)) - 100, BinaryPrimitives.ReadDoubleLittleEndian(msfs.AsSpan(8)) + 100);
                 if (i >= 4)
@@ -110,7 +110,7 @@ public sealed class TrafficTests
     }
 
     [Theory]
-    [InlineData(12.0, true)]   // taxiing A320: BATC writes the CG height, 10-15 ft (live test 2026-10-01)
+    [InlineData(12.0, true)]   // taxiing A320: The ATC app writes the CG height, 10-15 ft (live test 2026-10-01)
     [InlineData(45.0, true)]
     [InlineData(300.0, false)]
     public async Task Ground_mode_height_writes_mark_the_aircraft_on_the_ground(double heightFeet, bool onGround)

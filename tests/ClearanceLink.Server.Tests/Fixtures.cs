@@ -11,16 +11,16 @@ public static class Fixtures
 
     public static string MappingDir => Path.Combine(RepoRoot, "mapping");
 
-    public static string BatcSetup => Path.Combine(RepoRoot, "recordings", "samples", "batc-1.8.21-setup.jsonl");
+    public static string AppSetup => Path.Combine(RepoRoot, "recordings", "samples", "atc-app-1.8.21-setup.jsonl");
 
-    /// <summary>BeyondATC 1.8.22's three connections opening, and BATC_TrafficSync's setup (Ben's PC, 2026-10-07).</summary>
-    public static string Batc1822Setup => Path.Combine(RepoRoot, "recordings", "samples", "batc-1.8.22-setup.jsonl");
+    /// <summary>The app's 1.8.22 opening its three connections, and its traffic-timing connection's setup (Ben's PC, 2026-10-07).</summary>
+    public static string App1822Setup => Path.Combine(RepoRoot, "recordings", "samples", "atc-app-1.8.22-setup.jsonl");
 
     public static MappingSet Mappings() => MappingSet.LoadDirectory(MappingDir);
 
-    /// <summary>The client packets of one connection in the BATC setup recording, in order.</summary>
+    /// <summary>The client packets of one connection in the the ATC app setup recording, in order.</summary>
     public static List<Packet> ClientPackets(int connection, string? recording = null) =>
-        JsonlRecorder.ReadAll(recording ?? BatcSetup)
+        JsonlRecorder.ReadAll(recording ?? AppSetup)
             .Where(e => e.Connection == connection && e.Dir == "c2s")
             .Select(e => new Packet(Direction.ClientToServer, Convert.FromHexString(e.Hex)))
             .ToList();

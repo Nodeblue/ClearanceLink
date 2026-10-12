@@ -78,7 +78,7 @@ public sealed class ServerTests : IDisposable
         Assert.Contains("COM ACTIVE FREQUENCY:1 | MHz | type 4", markdown);
         Assert.Contains("`Pause`", markdown);
         Assert.Contains("server: KittyHawk", markdown);
-        Assert.Contains("client: 'BeyondATC'", markdown);
+        Assert.Contains("client: 'TestApp'", markdown);
     }
 
     [Fact]
