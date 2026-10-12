@@ -1,6 +1,6 @@
 # MSFS client event -> X-Plane 12, read by ClearanceLink.Server (MappingSet).
-# Events come from BATC's MapClientEventToSimEvent calls. Only events sent to the user aircraft are applied;
-# BATC's events to its AI aircraft (lights, throttle, gear) are ignored.
+# Events come from the ATC app's MapClientEventToSimEvent calls. Only events sent to the user aircraft are applied;
+# the app's events to its AI aircraft (lights, throttle, gear) are ignored.
 #
 #   dataref + from_units/to_units   write the event's data value, converted.
 #   command                         run an X-Plane command instead.

@@ -7,7 +7,7 @@ public sealed class DataEncoderTests
     [Fact]
     public void Float64_block_matches_the_recorded_msfs_reply()
     {
-        // First five FLOAT64 entries of BATC's define 17 as MSFS 2024 sent them (recording 20260930-174605),
+        // First five FLOAT64 entries of the ATC app's define 17 as MSFS 2024 sent them (recording 20260930-174605),
         // the same bytes DataDefinitionTests checks for the stand-in's packer.
         const string recorded = "189696C7CF663BC0ABAB350097236340F7FFFFFF2B9F2E40FAFFFFFF916276C07525F1F548B92E40";
         double[] values = [-27.401607965721354, 153.11218271715674, 15.310882568359359, -358.16064453124966, 15.361884771048361];

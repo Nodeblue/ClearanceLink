@@ -13,7 +13,7 @@ public sealed record RecordEntry
     [JsonPropertyName("conn")]
     public int Connection { get; init; }
 
-    /// <summary>"c2s" (client to server, i.e. BATC to sim) or "s2c".</summary>
+    /// <summary>"c2s" (client to server, i.e. The ATC app to sim) or "s2c".</summary>
     [JsonPropertyName("dir")]
     public string Dir { get; init; } = "";
 

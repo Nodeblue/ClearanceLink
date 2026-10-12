@@ -244,7 +244,7 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
     if (ProbeGround(p.onGround, now) && p.onGround) {
         // Park the model on its own wheels: pitched so nose and main wheels both touch, at the height that puts them
         // on the ground, both read from its .obj files with the gear down. Models that could not be read get
-        // ClearanceLink's per-type pitch and height on XPMP2's vertical offset. Above taxi speed `pos` carries BATC's
+        // ClearanceLink's per-type pitch and height on XPMP2's vertical offset. Above taxi speed `pos` carries the app's
         // pitch (take-off rotation, flare) and the wheels still set the height, so the main gear stays down.
         const Wheels* wheels = ModelWheels();
         float pitch = p.pitch;
@@ -265,8 +265,8 @@ void TrafficAircraft::UpdatePosition(float elapsed, int) {
         SetPitch(pitch + slope_.value_or(0.0f));
     }
     // Lift-off and touchdown: on the ground the height comes from the terrain and the model's wheels, in the air from
-    // BATC's altitude, and the two rarely agree, so the aircraft jumped up or down as it rotated or touched down
-    // (2026-10-04). The drawn height eases from one to the other instead; a big move (BATC placing the aircraft)
+    // the app's altitude, and the two rarely agree, so the aircraft jumped up or down as it rotated or touched down
+    // (2026-10-04). The drawn height eases from one to the other instead; a big move (the app placing the aircraft)
     // still snaps.
     {
         const float dx = float(drawInfo.x) - lastX_, dz = float(drawInfo.z) - lastZ_;

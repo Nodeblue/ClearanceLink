@@ -376,7 +376,7 @@ void MovesOnWhenUpdatesStop() {
     // 0.5 s after the blend ended, moved on as far as 5 updates; never more than 1 s ahead.
     CHECK(std::fabs(track.Drawn(10.7f).lat - 0.00005 * 6) < 1e-7);  // float times
     CHECK(std::fabs(track.Drawn(60.0f).lat - 0.00005 * 11) < 1e-7);
-    // A parked aircraft stays put, whatever speed BATC gives it (it is not always 0).
+    // A parked aircraft stays put, whatever speed the app gives it (it is not always 0).
     clink::Track parked;
     parked.Update(At(0, 0, 0, 0, 12), 10.0f);
     parked.Update(At(0, 0, 0, 0, 12), 12.0f);
@@ -386,8 +386,8 @@ void MovesOnWhenUpdatesStop() {
     CHECK(track.Drawn(10.21f).lat == 0.1);
 }
 
-void DrawsBatcPlacingAnAircraftAtOnce() {
-    // A parked aircraft that BATC moves 150 m to its gate, then keeps sending there every 2 s: drawn at the gate at
+void DrawsAppPlacingAnAircraftAtOnce() {
+    // A parked aircraft that the app moves 150 m to its gate, then keeps sending there every 2 s: drawn at the gate at
     // once and kept there, not slid across and overshot back and forth (YBBN, 2026-10-03).
     clink::Track track;
     track.Update(At(0, 0, 0, 0, 0), 10.0f);
@@ -552,7 +552,7 @@ void ProbesTerrainAtMostTenTimesASecondWhenMoving() {
     CHECK(!ShouldReprobeGround(true, true, 0.0f, -5.0f, 0.05f));
     CHECK(ShouldReprobeGround(true, true, 0.0f, -5.0f, 0.1f));
     CHECK(!ShouldReprobeGround(true, true, 0.2f, 0.5f, 1.0f));
-    // Beyond the measured slope (take-off roll, BATC placing it): at once.
+    // Beyond the measured slope (take-off roll, the app placing it): at once.
     CHECK(ShouldReprobeGround(true, true, clink::GroundSlopeProbeMeters, 0.0f, 0.02f));
     // Airborne every 0.25 s whatever it does; touchdown and lift-off at once.
     CHECK(!ShouldReprobeGround(false, false, 50.0f, 10.0f, 0.2f));
@@ -659,7 +659,7 @@ int main() {
     SteersTheNoseWheelAlongTheTurn();
     EasesHeightAcrossLiftOff();
     MovesOnWhenUpdatesStop();
-    DrawsBatcPlacingAnAircraftAtOnce();
+    DrawsAppPlacingAnAircraftAtOnce();
     ProbesTerrainAtMostTenTimesASecondWhenMoving();
     CarriesTerrainHeightAlongTheSlope();
     RunsJobsInTurnAndCancels();

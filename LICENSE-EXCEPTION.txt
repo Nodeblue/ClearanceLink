@@ -1,4 +1,4 @@
-ClearanceLink - Connect BeyondATC to X-Plane 12
+ClearanceLink - An experimental SimConnect to X-Plane 12 bridge
 Copyright (C) 2026 Nodeblue
 
 ClearanceLink is free software: you can redistribute it and/or modify it under the terms of the GNU General Public

@@ -6,7 +6,7 @@ using ClearanceLink.Server;
 namespace ClearanceLink.Host.Status;
 
 /// <summary>
-/// What the status page shows: whether X-Plane and BeyondATC are connected, which airports were sent, and a
+/// What the status page shows: whether X-Plane and the ATC app are connected, which airports were sent, and a
 /// one-line overall state. Built fresh on every request from the live server objects.
 /// </summary>
 public sealed class StatusBoard(
@@ -15,35 +15,14 @@ public sealed class StatusBoard(
     string listen,
     TimeProvider? time = null)
 {
-    /// <summary>The connection BATC's helper (simconnect_ws) opens up to BeyondATC 1.8.21; it asks for airport data.</summary>
-    public const string HelperClient = "BeyondATC";
+    /// <summary>True when the ATC app is connected (<see cref="KnownClients.AppConnected"/>).</summary>
+    public static bool AppConnected(IEnumerable<string> names, bool anyName = true) => KnownClients.AppConnected(names, anyName);
 
-    /// <summary>From BeyondATC 1.8.22 there is no helper: BeyondATC.exe asks for airport data on this connection.</summary>
-    public const string FacilitiesClient = "BATC_Facilities";
-
-    /// <summary>BeyondATC 1.8.22's third connection: it reads the user aircraft on every "Frame" event to time traffic.</summary>
-    public const string TrafficSyncClient = "BATC_TrafficSync";
-
-    /// <summary>The connection BeyondATC.exe opens; it reads the aircraft and tunes the radios.</summary>
-    public const string AppClient = "BATCDLLSimConnection";
-
-    /// <summary>True for the connection that asks for airport data, whichever BeyondATC version opened it. Names are exact, as recorded.</summary>
-    public static bool IsAirportClient(string name) =>
-        name is HelperClient or FacilitiesClient;
-
-    /// <summary>True for any connection BeyondATC opens (as opposed to another MSFS add-on).</summary>
-    public static bool IsBatcClient(string name) =>
-        IsAirportClient(name) || name is AppClient or TrafficSyncClient;
-
-    /// <summary>True when the app connection is open.</summary>
-    public static bool HasApp(IEnumerable<string> names) => names.Contains(AppClient);
-
-    /// <summary>True when BeyondATC is fully connected: its app connection and its airport-data connection.</summary>
-    public static bool BatcConnected(IEnumerable<string> names)
-    {
-        var list = names as IReadOnlyCollection<string> ?? names.ToList();
-        return HasApp(list) && list.Any(IsAirportClient);
-    }
+    /// <summary>
+    /// True when only the ATC app can reach serve (its own TCP port), so any client is the app; false while MSFS's
+    /// default connection is answered too, where other MSFS add-ons connect (<see cref="KnownClients"/>).
+    /// </summary>
+    public bool AnyClientIsTheApp { get; set; } = true;
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -70,7 +49,7 @@ public sealed class StatusBoard(
     /// <summary>The X-Plane traffic plugin's last report; null when not connected or not started.</summary>
     public Func<ClearanceLink.Host.Traffic.PluginStatus?>? Plugin { get; set; }
 
-    /// <summary>BATC's AI objects, when traffic is on.</summary>
+    /// <summary>The ATC app's AI objects, when traffic is on.</summary>
     public Func<IReadOnlyList<TrafficObject>>? Traffic { get; set; }
 
     public StatusSnapshot Snapshot()
@@ -97,7 +76,7 @@ public sealed class StatusBoard(
         var xp = xplane();
         var msfs = MsfsRunning?.Invoke() ?? false;
         return new StatusSnapshot(
-            Overall(xp, live, msfs),
+            Overall(xp, live, msfs, AnyClientIsTheApp),
             Version,
             _started,
             now,
@@ -129,35 +108,27 @@ public sealed class StatusBoard(
         typeof(StatusBoard).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev";
 
     /// <summary>The headline: what works, or the first thing the user has to start.</summary>
-    public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions, bool msfsRunning = false)
+    public static OverallStatus Overall(XPlaneStatus xplane, IReadOnlyList<SimConnectSession> sessions, bool msfsRunning = false, bool anyName = true)
     {
         var names = sessions.Select(s => s.ClientName).ToList();
-        var batc = names.Any(IsBatcClient);
-        if (msfsRunning && !batc)
+        var seen = KnownClients.Open(names, anyName) > 0;
+        if (msfsRunning && !seen)
         {
-            return new(StatusLevel.Problem, "Microsoft Flight Simulator is running. Close it so BeyondATC can connect to X-Plane.");
+            return new(StatusLevel.Problem, "Microsoft Flight Simulator is running. Close it so the ATC app can connect to X-Plane.");
         }
 
-        return (xplane.Connected, batc) switch
+        return (xplane.Connected, seen) switch
         {
             (false, false) => new(StatusLevel.Waiting, "Waiting for X-Plane. Start X-Plane 12 and load a flight."),
-            (false, true) => new(StatusLevel.Problem, "BeyondATC is connected but X-Plane is not. Check X-Plane is running with its Web API on."),
-            (true, false) => new(StatusLevel.Waiting, "X-Plane connected. Start BeyondATC."),
-            (true, true) when !BatcConnected(names) =>
-                new(StatusLevel.Waiting, "X-Plane connected. BeyondATC is still connecting."),
-            _ => new(StatusLevel.Ok, "Ready. BeyondATC is talking to X-Plane."),
+            (false, true) => new(StatusLevel.Problem, "The ATC app is connected but X-Plane is not. Check X-Plane is running with its Web API on."),
+            (true, false) => new(StatusLevel.Waiting, "X-Plane connected. Start the ATC app."),
+            (true, true) when !AppConnected(names, anyName) =>
+                new(StatusLevel.Waiting, "X-Plane connected. The ATC app is still connecting."),
+            _ => new(StatusLevel.Ok, "Ready. The ATC app is talking to X-Plane."),
         };
     }
 
-    private static string Describe(string clientName) => clientName switch
-    {
-        HelperClient => "BeyondATC helper: airport data",
-        FacilitiesClient => "BeyondATC: airport data",
-        TrafficSyncClient => "BeyondATC: traffic timing",
-        AppClient => "BeyondATC: aircraft and radios",
-        "" => "Connecting",
-        _ => $"Other MSFS add-on ({clientName}), not used",
-    };
+    private static string Describe(string clientName) => KnownClients.Describe(clientName);
 }
 
 public enum StatusLevel

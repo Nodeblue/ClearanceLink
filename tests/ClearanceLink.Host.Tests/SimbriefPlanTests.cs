@@ -92,10 +92,8 @@ public sealed class SimbriefPlanTests : IDisposable
     [Fact]
     public async Task Problems_are_said_on_the_scratchpad_and_nothing_is_saved()
     {
-        if (SimbriefPlan.PilotIdFromBatc() is null) // BeyondATC not linked to SimBrief on this machine
-        {
-            Assert.Equal("NO SIMBRIEF ID IN BEYONDATC", await new FlightPlans(() => new AppSettings(), () => _root, _ => true, new Web(Latest, Fms)).RequestAsync());
-        }
+        // No ID set and no ATC app chosen to take one from.
+        Assert.Equal("NO SIMBRIEF PILOT ID", await new FlightPlans(() => new AppSettings(), () => _root, _ => true, new Web(Latest, Fms)).RequestAsync());
 
         var html = new FlightPlans(() => new AppSettings { SimbriefId = "1" }, () => _root, _ => true, new Web(Latest, "<html>Not found</html>"));
         Assert.Equal("PLAN NOT DOWNLOADED", await html.RequestAsync());
@@ -144,14 +142,14 @@ public sealed class SimbriefPlanTests : IDisposable
     {
         var turn = TimeSpan.FromSeconds(CduPages.UpdateTurnSeconds);
         var plan = new FlightPlanView(SimbriefPlan.FromJson(Latest), DateTimeOffset.UtcNow);
-        Assert.Equal(["START BEYONDATC", "FLIGHT PLAN READY: FPLN"],
+        Assert.Equal(["START ATC APP", "FLIGHT PLAN READY: FPLN"],
             Enumerable.Range(0, 2).Select(i => CduPages.Advice(State(plan) with { Uptime = turn * i }).Text));
-        Assert.Equal("START BEYONDATC", CduPages.Advice(State(plan with { SavedAs = "YBBNYSSY.fms" }) with { Uptime = turn }).Text);
+        Assert.Equal("START ATC APP", CduPages.Advice(State(plan with { SavedAs = "YBBNYSSY.fms" }) with { Uptime = turn }).Text);
         Assert.Equal((CduKey.GoFlightPlan, "FPLN>"), (CduPages.Build(PanelPage.Status, State(plan)).Rows[5].KeyRight, CduPages.Build(PanelPage.Status, State(plan)).Rows[5].Right.Text));
     }
 
     private static PanelState State(FlightPlanView plan) => new(
-        "0.5.1", true, true, "12.4.3", false, false, 0, null, null, false, ConnectionMode.Automatic, false, true, 0, 7, TimeSpan.Zero, null, null,
+        "0.5.1", true, true, "12.4.3", 0, false, null, null, false, ConnectionMode.Automatic, false, true, 0, 7, TimeSpan.Zero, @"C:\Tower\Tower.exe", null,
         FlightPlan: plan);
 
     private static async Task WaitFor(Func<bool> done)

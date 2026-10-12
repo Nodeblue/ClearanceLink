@@ -8,7 +8,10 @@ For the maintainer. Users read [install.md](install.md).
 2. On GitHub: **Actions > Release > Run workflow** (branch `main`). It runs every test, builds the zip with the
    X-Plane plugin, checks no test data got in, tags `v<Version>` and creates a **draft** release.
 3. Open **Releases**, check the draft (notes, the zip and its `.sha256.txt`), edit the notes if you
-   like, and press **Publish release**.
+   like, and press **Publish release**. Keep the disclaimer the workflow puts at the top of the notes:
+   "**Experimental.** ClearanceLink is an independent development proof of concept: a SimConnect to X-Plane 12
+   bridge. It is not made, supported or endorsed by any developer whose app uses SimConnect, nor by Microsoft or
+   Laminar Research."
 
 Nobody sees a draft. Once published, everyone's ClearanceLink shows NEW VERSION on its ABOUT page the next time it
 starts. A version with a dash is published as a **pre-release**: testers can download it, but the update check

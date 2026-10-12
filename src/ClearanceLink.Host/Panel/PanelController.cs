@@ -113,7 +113,7 @@ public sealed class PanelController : IAsyncDisposable
         }
 
         var found = Folders();
-        var (batc, xplane) = (found.Batc, found.XPlane);
+        var (app, xplane) = (found.App, found.XPlane);
         var addOn = found.AddOn;
         var snapshot = _board?.Snapshot();
         var names = snapshot?.Clients.Select(c => c.Name).ToList() ?? [];
@@ -124,19 +124,18 @@ public sealed class PanelController : IAsyncDisposable
             Serving: snapshot is not null,
             XPlaneConnected: snapshot?.XPlane.Connected ?? false,
             XPlaneVersion: snapshot?.XPlane.Version,
-            BatcHelper: names.Any(StatusBoard.IsAirportClient),
-            BatcApp: StatusBoard.HasApp(names),
-            OtherAddOns: names.Count(n => n != "" && !StatusBoard.IsBatcClient(n)),
+            Connections: KnownClients.Open(names, _board?.AnyClientIsTheApp ?? true),
+            AppConnected: StatusBoard.AppConnected(names, _board?.AnyClientIsTheApp ?? true),
             LastAirport: airport?.Icao,
             LastAirportSource: airport?.Source,
             MsfsRunning: snapshot?.MsfsRunning ?? false,
             settings.Connection,
-            BatcRedirected: batc is not null && new BatcRedirect(batc).IsOn,
+            AppRedirected: app is not null && new AppRedirect(app).IsOn,
             settings.SessionLog,
             SessionLogBytes: log is not null && File.Exists(log) ? new FileInfo(log).Length : 0,
             settings.KeepDays,
             DateTime.Now - _started,
-            batc,
+            app?.Exe,
             xplane,
             addOn,
             snapshot?.Plugin?.Aircraft,
@@ -154,12 +153,11 @@ public sealed class PanelController : IAsyncDisposable
             _board?.FlightPlans?.View,
             LoadArmed: DateTimeOffset.UtcNow < _loadArmedUntil,
             Push: _board?.Pushbacks?.View,
-            BatcModels: found.BatcModels,
+            TrafficModels: found.TrafficModels,
             FsltlHealth: found.FsltlHealth,
             CslNames: found.CslNames,
-            BatcCommunity: found.BatcCommunity,
-            FsltlChecking: found.At < _fsltlChosenAt,
-            BatcTrafficSync: names.Contains(StatusBoard.TrafficSyncClient));
+            AppCommunity: found.AppCommunity,
+            FsltlChecking: found.At < _fsltlChosenAt);
     }
 
     /// <summary>Carries out a key; returns a short line for the scratchpad, or null.</summary>
@@ -204,8 +202,8 @@ public sealed class PanelController : IAsyncDisposable
             case CduKey.OpenStatusPage:
                 Cli.OpenInBrowser($"http://localhost:{StatusServer.DefaultPort}/");
                 return "OPENING STATUS PAGE";
-            case CduKey.StartBatc:
-                return StartBatc();
+            case CduKey.StartApp:
+                return StartApp();
             case CduKey.SessionLogOn:
             case CduKey.SessionLogOff:
                 return SetSessionLog(key == CduKey.SessionLogOn);
@@ -265,14 +263,21 @@ public sealed class PanelController : IAsyncDisposable
             return FsltlSaved;
         }
 
-        if (which == CduKey.ChooseBatcFolder)
+        if (which == CduKey.ChooseApp)
         {
-            if (BatcRedirect.FindInstallFolder(folder) is not { } found)
+            if (AtcApp.From(folder) is not { } app)
             {
-                return "NO BEYONDATC.EXE THERE";
+                return "NOT AN .EXE";
             }
 
-            settings.BatcFolder = found;
+            if (Cli.ChangeApp(settings, app) is { } problem)
+            {
+                // The old app's files couldn't be removed, or the new one's written (a protected folder).
+                PacketConsole.Info($"panel: ATC app not changed: {problem}");
+                return "RUN AS ADMINISTRATOR";
+            }
+
+            PacketConsole.Info($"panel: ATC app is {app.Exe}");
         }
         else
         {
@@ -287,7 +292,7 @@ public sealed class PanelController : IAsyncDisposable
         settings.Save(AppFolders.Default.Settings);
         RefreshFolders();
         _foldersChanged = true;
-        return which == CduKey.ChooseBatcFolder ? "BEYONDATC FOLDER SAVED" : "X-PLANE FOLDER SAVED";
+        return which == CduKey.ChooseApp ? AppSaved : "X-PLANE FOLDER SAVED";
     }
 
     private async Task<string> SetConnectionAsync(ConnectionMode mode)
@@ -300,45 +305,66 @@ public sealed class PanelController : IAsyncDisposable
                 return "CLOSE MSFS BEFORE FLYING";
             }
 
-            // Pressed again: write BeyondATC's files in case they went missing (a BeyondATC update, issue #35).
-            return Cli.ApplyConnection(settings, Folders().Batc) switch
+            // Pressed again: write the app's files in case they went missing (an app update, issue #35).
+            return Cli.ApplyConnection(settings, Folders().App) switch
             {
-                null => "BATC SET TO X-PLANE",
-                Cli.BatcNotFoundProblem => "SET BEYONDATC FOLDER",
+                null => "APP SET TO X-PLANE",
+                Cli.AppNotChosenProblem => "CHOOSE THE ATC APP",
                 _ => "RUN AS ADMINISTRATOR",
             };
         }
 
         settings.Connection = mode;
-        if (Cli.ApplyConnection(settings, Folders().Batc) is { } problem)
+        if (Cli.ApplyConnection(settings, Folders().App) is { } problem)
         {
-            // A read-only BeyondATC folder (under Program Files) needs administrator rights to take the two files.
+            // A read-only app folder (under Program Files) needs administrator rights to take the files.
             PacketConsole.Info($"panel: connection not changed: {problem}");
-            return problem == Cli.BatcNotFoundProblem ? "SET BEYONDATC FOLDER" : "RUN AS ADMINISTRATOR";
+            return problem == Cli.AppNotChosenProblem ? "CHOOSE THE ATC APP" : "RUN AS ADMINISTRATOR";
         }
 
         settings.Save(AppFolders.Default.Settings);
-        var batcWasConnected = State().BatcSeen;
+        var appWasConnected = State().AppSeen;
         await RestartAsync().ConfigureAwait(false);
-        return batcWasConnected ? "NOW RESTART BEYONDATC" : mode == ConnectionMode.Automatic ? "AUTOMATIC SELECTED" : "ALWAYS ON SELECTED";
+        return appWasConnected ? "NOW RESTART THE ATC APP" : mode == ConnectionMode.Automatic ? "AUTOMATIC SELECTED" : "ALWAYS ON SELECTED";
     }
 
-    private string StartBatc()
+    /// <summary>The ATC app's .exe chosen in the window: saved, and serve restarted so it answers the new app, unless an app is connected now.</summary>
+    public async Task<string> SetAppAsync(string exe)
     {
-        if (Folders().Batc is not { } folder)
+        var result = SetFolder(CduKey.ChooseApp, exe);
+        if (result != AppSaved)
         {
-            return "SET BEYONDATC FOLDER";
+            return result;
+        }
+
+        if (State().AppSeen)
+        {
+            return "SAVED: RESTART TO USE";
+        }
+
+        _foldersChanged = false;
+        await RestartAsync().ConfigureAwait(false);
+        return result;
+    }
+
+    private const string AppSaved = "ATC APP SAVED";
+
+    private string StartApp()
+    {
+        if (Folders().App is not { } app)
+        {
+            return "CHOOSE THE ATC APP";
         }
 
         try
         {
-            Process.Start(new ProcessStartInfo(Path.Combine(folder, "BeyondATC.exe")) { UseShellExecute = true, WorkingDirectory = folder })?.Dispose();
-            return "STARTING BEYONDATC";
+            Process.Start(new ProcessStartInfo(app.Exe) { UseShellExecute = true, WorkingDirectory = app.Folder })?.Dispose();
+            return "STARTING THE ATC APP";
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            PacketConsole.Info($"panel: could not start BeyondATC: {ex.Message}");
-            return "COULD NOT START BATC";
+            PacketConsole.Info($"panel: could not start {app.Exe}: {ex.Message}");
+            return "COULD NOT START APP";
         }
     }
 
@@ -364,7 +390,7 @@ public sealed class PanelController : IAsyncDisposable
         var settings = AppSettings.Load(AppFolders.Default.Settings);
         settings.GettingStartedDone = true;
         settings.Save(AppFolders.Default.Settings);
-        if (_foldersChanged && !State().BatcSeen)
+        if (_foldersChanged && !State().AppSeen)
         {
             _foldersChanged = false;
             await RestartAsync().ConfigureAwait(false);
@@ -568,7 +594,7 @@ public sealed class PanelController : IAsyncDisposable
         var csl = xplane is null ? [] : CslPackages(xplane, except: output);
         return new Found
         {
-            Batc = Cli.BatcFolder(none),
+            App = Cli.ChosenApp(none),
             XPlane = xplane,
             AddOn = PluginState(xplane),
             Csl = csl.Count,
@@ -579,8 +605,8 @@ public sealed class PanelController : IAsyncDisposable
             FsltlOutOfDate = fsltl is not null && output is not null && OutOfDate(fsltl, output),
             XPlaneRunning = XPlaneRunning(),
             MsfsInstalled = Fsltl.FsltlLocator.MsfsInstalled(),
-            BatcModels = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Check(fsltl) : null,
-            BatcCommunity = OperatingSystem.IsWindows() ? BatcTrafficModels.Default.Where().Community : null,
+            TrafficModels = OperatingSystem.IsWindows() ? CommunityTrafficModels.Default.Check(fsltl) : null,
+            AppCommunity = OperatingSystem.IsWindows() ? CommunityTrafficModels.Default.Where().Community : null,
             At = started,
         };
     }
@@ -720,15 +746,15 @@ public sealed class PanelController : IAsyncDisposable
                 _fsltlMessage = result.Liveries == 0 ? "CONVERT FAILED: SEE LOG" : $"{result.Liveries} LIVERIES CONVERTED";
                 _fsltlConverting = false;
                 _ = RefreshFolders();
-                // The server read the catalogue when it started; it must read the new one for BATC's aircraft to be
-                // drawn with these liveries. Not while BeyondATC is connected: a restart would drop it.
-                if (result.Liveries > 0 && !State().BatcSeen)
+                // The server read the catalogue when it started; it must read the new one for the app's aircraft to be
+                // drawn with these liveries. Not while the ATC app is connected: a restart would drop it.
+                if (result.Liveries > 0 && !State().AppSeen)
                 {
                     await RestartAsync().ConfigureAwait(false);
                 }
                 else if (result.Liveries > 0)
                 {
-                    PacketConsole.Info("fsltl: restart ClearanceLink (and BeyondATC) to draw traffic with the new models");
+                    PacketConsole.Info("fsltl: restart ClearanceLink (and the ATC app) to draw traffic with the new models");
                     _fsltlMessage = "RESTART TO USE MODELS";
                 }
             }
@@ -760,7 +786,7 @@ public sealed class PanelController : IAsyncDisposable
     /// <summary>What was last found on disk; looked up in the background at most every 10 s.</summary>
     private sealed record Found
     {
-        public string? Batc { get; init; }
+        public AtcApp? App { get; init; }
         public string? XPlane { get; init; }
         public PluginInstall.State AddOn { get; init; }
         public int Csl { get; init; }
@@ -769,9 +795,9 @@ public sealed class PanelController : IAsyncDisposable
         public bool FsltlOutOfDate { get; init; }
         public bool XPlaneRunning { get; init; }
         public bool MsfsInstalled { get; init; } = true;
-        public BatcTrafficModels.Outcome? BatcModels { get; init; }
+        public CommunityTrafficModels.Outcome? TrafficModels { get; init; }
         public string? CslNames { get; init; }
-        public string? BatcCommunity { get; init; }
+        public string? AppCommunity { get; init; }
         public Fsltl.FsltlHealth? FsltlHealth { get; init; }
         public DateTime At { get; init; }
     }

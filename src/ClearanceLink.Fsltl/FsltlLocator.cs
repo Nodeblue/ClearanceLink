@@ -15,14 +15,14 @@ public static partial class FsltlLocator
     }
 
     /// <summary>
-    /// The <c>InstalledPackagesPath</c> of a UserCfg.opt, or null. Read as BeyondATC reads it,
+    /// The <c>InstalledPackagesPath</c> of a UserCfg.opt, or null. Read as the ATC app reads it,
     /// so an
-    /// <c>InstalledPackagesPathNextBoot</c> line, which BeyondATC doesn't read, is not taken for it (issue #29).
+    /// <c>InstalledPackagesPathNextBoot</c> line, which the ATC app doesn't read, is not taken for it (issue #29).
     /// </summary>
     public static string? InstalledPackagesPath(string userCfgText) =>
         PackagesPath().Match(userCfgText) is { Success: true } m && m.Groups[1].Value.Length > 0 ? m.Groups[1].Value : null;
 
-    /// <summary>The <c>InstalledPackagesPathNextBoot</c> of a UserCfg.opt, or null. Not read by BeyondATC.</summary>
+    /// <summary>The <c>InstalledPackagesPathNextBoot</c> of a UserCfg.opt, or null. Not read by the ATC app.</summary>
     public static string? InstalledPackagesPathNextBoot(string userCfgText) =>
         NextBootPath().Match(userCfgText) is { Success: true } m && m.Groups[1].Value.Length > 0 ? m.Groups[1].Value : null;
 
@@ -45,7 +45,7 @@ public static partial class FsltlLocator
             var text = File.ReadAllText(cfg);
             if (IsStandIn(text)) continue;
             // NextBoot too: MSFS can name a new packages folder there (issue #29). FSLTL found only there is still
-            // converted; FSLTL CHECK then says BeyondATC won't see it, since BeyondATC reads InstalledPackagesPath only.
+            // converted; FSLTL CHECK then says the ATC app won't see it, since the app reads InstalledPackagesPath only.
             foreach (var packages in new[] { InstalledPackagesPath(text), InstalledPackagesPathNextBoot(text) })
             {
                 if (packages is null) continue;
@@ -82,11 +82,19 @@ public static partial class FsltlLocator
     public static bool MsfsInstalled(IEnumerable<string>? userCfgs = null) =>
         (userCfgs ?? UserCfgCandidates()).Any(f => File.Exists(f) && !IsStandIn(File.ReadAllText(f)));
 
-    /// <summary>First line of the UserCfg.opt ClearanceLink writes for BeyondATC while it runs (no MSFS 2024 on the PC).</summary>
-    public const string StandInMarker = "// ClearanceLink: lets BeyondATC find FSLTL while ClearanceLink is open; removed when it closes";
+    /// <summary>First line of the UserCfg.opt ClearanceLink writes for the ATC app while it runs (no MSFS 2024 on the PC).</summary>
+    public const string StandInMarker = "// ClearanceLink: lets the ATC app find FSLTL while ClearanceLink is open; removed when it closes";
 
-    /// <summary>Whether a UserCfg.opt is ClearanceLink's stand-in for BeyondATC, not one MSFS wrote.</summary>
-    public static bool IsStandIn(string userCfgText) => userCfgText.StartsWith(StandInMarker, StringComparison.Ordinal);
+    /// <summary>
+    /// Whether a UserCfg.opt is ClearanceLink's stand-in for the ATC app, not one MSFS wrote. Earlier versions named
+    /// the app in the first line, so only its start and end are compared.
+    /// </summary>
+    public static bool IsStandIn(string userCfgText)
+    {
+        var first = userCfgText.Split('\n', 2)[0];
+        return first.StartsWith("// ClearanceLink: lets ", StringComparison.Ordinal)
+            && first.Contains(" find FSLTL while ClearanceLink is open; removed when it closes", StringComparison.Ordinal);
+    }
 
     public static bool IsPackage(string folder) =>
         Directory.Exists(folder) && FileLookup.Resolve(folder, "SimObjects/Airplanes") is { } airplanes && Directory.Exists(airplanes);

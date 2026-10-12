@@ -5,7 +5,7 @@ namespace ClearanceLink.Airports.Tests;
 
 public sealed class AirportFacilityTests
 {
-    // The protocol version BATC opens with (only written into packet headers here).
+    // The protocol version the ATC app opens with (only written into packet headers here).
     private const uint Protocol = 6;
 
     [Theory]
@@ -110,7 +110,7 @@ public sealed class AirportFacilityTests
             Assert.InRange(Num(path, "NAME_INDEX"), 0, names.Count - 1);
         }
 
-        // Each spot has a taxi point of its own: BATC's route builder fails to load an airport where spots share one.
+        // Each spot has a taxi point of its own: The ATC app's route builder fails to load an airport where spots share one.
         var starts = paths.Where(p => Num(p, "TYPE") == 3).Select(p => Num(p, "START")).ToList();
         Assert.Equal(starts.Count, starts.Distinct().Count());
         Assert.All(starts, s => Assert.Contains(paths, p => Num(p, "TYPE") != 3 && (Num(p, "START") == s || Num(p, "END") == s)));
@@ -136,7 +136,7 @@ public sealed class AirportFacilityTests
     public void A_generated_network_for_a_strip_with_few_spots_has_no_coincident_points(int spots)
     {
         // With one spot the average of the spots is the spot itself, which put the apron point and the spot's own
-        // point on top of each other (two points at one position crash BATC 1.8.21).
+        // point on top of each other (two points at one position crash the app's 1.8.21).
         var gates = string.Join("\n", Enumerable.Range(0, spots).Select(i => $"1300 -27.4010{i}000 153.09900000 90.00 tie_down props GA {i + 1}"));
         var text = $"""
             I
@@ -200,7 +200,7 @@ public sealed class AirportFacilityTests
     [InlineData("YTWB")]
     public void No_two_taxi_points_share_a_position_and_no_spur_sits_on_its_spot(string icao)
     {
-        // MSFS has neither (YBBN recording). BATC 1.8.21 crashed in TaxiPathCalculator.ConvertFlatToTaxiPoints on
+        // MSFS has neither (YBBN recording). The app's 1.8.21 crashed in TaxiPathCalculator.ConvertFlatToTaxiPoints on
         // X-Plane data with 90 coincident point pairs on parking spots (2026-10-01).
         var network = TaxiNetwork.Build(Fixtures.Airport(icao));
         var points = network.Points;

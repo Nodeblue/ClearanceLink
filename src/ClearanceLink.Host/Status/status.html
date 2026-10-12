@@ -54,7 +54,7 @@
 <body>
 <main>
   <header>
-    <h1>ClearanceLink<span>BeyondATC for X-Plane 12</span></h1>
+    <h1>ClearanceLink<span>SimConnect to X-Plane 12 bridge</span></h1>
     <span id="version" class="empty"></span>
   </header>
 
@@ -70,23 +70,23 @@
     </section>
 
     <section class="card">
-      <h2>BeyondATC</h2>
+      <h2>ATC app</h2>
       <div id="clients"><p class="empty">Not connected yet.</p></div>
     </section>
 
     <section class="card wide">
-      <h2>Airports sent to BeyondATC</h2>
-      <div id="airports"><p class="empty">None yet. BeyondATC asks for airports when you start a flight.</p></div>
+      <h2>Airports sent to the ATC app</h2>
+      <div id="airports"><p class="empty">None yet. The ATC app asks for airports when you start a flight.</p></div>
     </section>
 
     <section class="card wide">
-      <h2>BeyondATC traffic</h2>
-      <div id="traffic"><p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p></div>
+      <h2>ATC app traffic</h2>
+      <div id="traffic"><p class="empty">None. The ATC app creates traffic once a flight has started (traffic must be on in the app).</p></div>
     </section>
 
     <section class="card wide">
       <h2>Details</h2>
-      <div class="row"><span class="k">Listening for BeyondATC on</span><span class="v"><code id="listen">–</code></span></div>
+      <div class="row"><span class="k">Listening for the ATC app on</span><span class="v"><code id="listen">–</code></span></div>
       <div class="row"><span class="k">Simulator check</span><span class="v" id="stub">–</span></div>
       <div class="row"><span class="k">Recording</span><span class="v"><code id="recording">–</code></span></div>
       <div class="row"><span class="k">Running since</span><span class="v" id="started">–</span></div>
@@ -132,14 +132,14 @@
           <div class="row"><span class="k">Last message</span><span class="v">${ago(c.secondsSinceLastPacket)}</span></div></div>`).join("");
 
     $("airports").innerHTML = s.airports.length === 0
-      ? '<p class="empty">None yet. BeyondATC asks for airports when you start a flight.</p>'
+      ? '<p class="empty">None yet. The ATC app asks for airports when you start a flight.</p>'
       : `<table><thead><tr><th>Airport</th><th>From</th><th class="num">Time</th><th class="num">At</th></tr></thead><tbody>${
-          s.airports.map(a => `<tr><td><strong>${esc(a.icao)}</strong></td><td>${a.source ? esc(a.source) : '<span class="empty">not found, BeyondATC skips it</span>'}</td><td class="num">${a.source ? a.milliseconds + " ms" : ""}</td><td class="num">${time(a.at)}</td></tr>`).join("")
+          s.airports.map(a => `<tr><td><strong>${esc(a.icao)}</strong></td><td>${a.source ? esc(a.source) : '<span class="empty">not found, the ATC app skips it</span>'}</td><td class="num">${a.source ? a.milliseconds + " ms" : ""}</td><td class="num">${time(a.at)}</td></tr>`).join("")
         }</tbody></table>`;
 
     const traffic = (s.traffic || []).filter(t => t.kind === "aircraft");
     $("traffic").innerHTML = traffic.length === 0
-      ? '<p class="empty">None. BeyondATC creates traffic once a flight has started (traffic must be on in BeyondATC).</p>'
+      ? '<p class="empty">None. The ATC app creates traffic once a flight has started (traffic must be on in the app).</p>'
       : `<p>${traffic.length} aircraft${(s.traffic.length - traffic.length) ? `, ${s.traffic.length - traffic.length} ground vehicles` : ""}. ${!s.plugin ? "Not drawn in X-Plane: the ClearanceLink plugin is not running there." : s.plugin.models === 0 ? "Not drawn in X-Plane: no CSL aircraft models found." : "Drawn in X-Plane by the ClearanceLink plugin."}</p>
          <table><thead><tr><th>Tail</th><th>Model</th><th>State</th><th class="num">Altitude</th><th class="num">Speed</th><th class="num">Heading</th><th class="num">Updated</th></tr></thead><tbody>${
           traffic.map(t => `<tr><td><strong>${esc(t.tail)}</strong></td><td>${esc(t.model)}</td><td>${t.onGround ? "ground" : "airborne"}</td><td class="num">${t.altitudeFeet} ft</td><td class="num">${t.groundSpeedKnots} kt</td><td class="num">${t.heading}°</td><td class="num">${ago(t.secondsSinceUpdate)}</td></tr>`).join("")

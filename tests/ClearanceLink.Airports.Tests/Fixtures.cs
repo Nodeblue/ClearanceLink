@@ -21,10 +21,10 @@ public static class Fixtures
         throw new FileNotFoundException($"{icao}.apt.dat not found above the test binaries");
     }
 
-    /// <summary>BATC's facility definition (444 full, 333 without taxiways).</summary>
+    /// <summary>the ATC app's facility definition (444 full, 333 without taxiways).</summary>
     public static FacilityDefinitionNode Definition(uint defineId) => FacilityDefinition.FromNames(FacilityFixture.DefinitionNames(defineId)).Root!;
 
-    /// <summary>What MSFS 2024 answered BATC for this airport, decoded.</summary>
+    /// <summary>What MSFS 2024 answered the ATC app for this airport, decoded.</summary>
     public static FacilityObject Msfs(string icao, uint defineId = 444)
     {
         var (_, packets) = FacilityFixture.Reply(icao);

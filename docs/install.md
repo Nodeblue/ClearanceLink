@@ -1,13 +1,14 @@
 # Download and install
 
-ClearanceLink is free and experimental, by Nodeblue. It is not made, supported or endorsed by BeyondATC, Microsoft
-or Laminar Research.
+ClearanceLink is a free, experimental SimConnect to X-Plane 12 bridge by Nodeblue: a development proof of concept.
+It is not made, supported or endorsed by any developer whose app uses SimConnect, nor by Microsoft or Laminar Research.
 
 ## What you need
 - Windows 10 or 11 (64-bit).
 - X-Plane 12.1.4 or later.
-- BeyondATC, installed as usual. It stays set up for MSFS too.
-- For traffic: [FSLTL](https://fslivetrafficliveries.com/) (free). BeyondATC creates no traffic without it.
+- An ATC app that uses SimConnect, installed as usual. It stays set up for MSFS too. You choose its .exe on the
+  WELCOME pages.
+- For traffic: [FSLTL](https://fslivetrafficliveries.com/) (free), if your ATC app uses it.
 
 You don't need MSFS or .NET installed.
 
@@ -37,7 +38,7 @@ When ClearanceLink starts it asks GitHub whether a newer release exists. If ther
 installs anything itself. To stop the check, run `ClearanceLink.exe settings update-check off` in a command prompt.
 
 ## Updating
-1. Close BeyondATC and ClearanceLink.
+1. Close the ATC app and ClearanceLink.
 2. Download the new zip and **Unblock** it as above.
 3. Unzip it into your ClearanceLink folder and choose **Replace the files**. Your settings and logs are kept: they live
    in `%LOCALAPPDATA%\ClearanceLink`, not in this folder.
@@ -45,7 +46,7 @@ installs anything itself. To stop the check, run `ClearanceLink.exe settings upd
    (X-Plane keeps the plugin locked while it runs).
 
 ## Removing ClearanceLink
-1. On **SETUP**, if CONNECTION is **ALWAYS ON**, choose **AUTOMATIC** first, so BeyondATC goes back to MSFS.
+1. On **SETUP**, if CONNECTION is **ALWAYS ON**, choose **AUTOMATIC** first, so the ATC app goes back to MSFS.
 2. Close ClearanceLink and delete its folder.
 3. Optional: delete `X-Plane 12\Resources\plugins\ClearanceLink` (the traffic plugin), the converted FSLTL models in
    `X-Plane 12\Custom Data\CSL\ClearanceLink-FSLTL`, and `%LOCALAPPDATA%\ClearanceLink` (settings and logs). Close ClearanceLink first: while it is open,

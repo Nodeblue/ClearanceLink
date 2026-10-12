@@ -70,7 +70,7 @@ public sealed class UpdateCheckTests
     [Fact]
     public void About_page_shows_a_newer_version_with_a_key_to_its_download_page()
     {
-        var state = new PanelState("0.5.0", true, true, "12.4.3", true, true, 0, null, null, false, ConnectionMode.Automatic,
+        var state = new PanelState("0.5.0", true, true, "12.4.3", 2, true, null, null, false, ConnectionMode.Automatic,
             false, true, 0, 7, TimeSpan.Zero, null, null);
         Assert.DoesNotContain(CduPages.Build(PanelPage.About, state).Rows, r => r.KeyRight == CduKey.OpenUpdatePage);
 

@@ -4,7 +4,7 @@ using System.Xml.Linq;
 namespace ClearanceLink.Fsltl;
 
 /// <summary>One FSLTL livery: an <c>[FLTSIM.n]</c> entry of an aircraft.cfg, with its model and texture folders resolved.</summary>
-/// <param name="Title">The MSFS title BeyondATC asks for, e.g. "FSLTL A20N BAW British Airways".</param>
+/// <param name="Title">The MSFS title the ATC app asks for, e.g. "FSLTL A20N BAW British Airways".</param>
 /// <param name="Key">One word, unique in the package: the CSL livery name (XPMP2 splits xsb_aircraft.txt on spaces).</param>
 /// <param name="ModelFiles">The model's glTF files, most detailed first (the XML's LODs).</param>
 /// <param name="TextureFolders">Where the model's textures are looked up, in order (the livery's own folder, then fallbacks).</param>

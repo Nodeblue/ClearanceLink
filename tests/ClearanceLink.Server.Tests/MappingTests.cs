@@ -5,12 +5,12 @@ namespace ClearanceLink.Server.Tests;
 
 public sealed class MappingTests
 {
-    // The two blocks BATC needs to show "connected" (recorded 2026-09-30): the helper's define 300 and BATC's define 17.
+    // The two blocks the ATC app needs to show "connected" (recorded 2026-09-30): the helper's define 300 and the ATC app's define 17.
     public static TheoryData<int, uint> ConnectedBlocks => new() { { 1, 300 }, { 2, 17 } };
 
     [Theory]
     [MemberData(nameof(ConnectedBlocks))]
-    public void Every_simvar_in_batcs_core_blocks_is_mapped(int connection, uint defineId)
+    public void Every_simvar_in_the_apps_core_blocks_is_mapped(int connection, uint defineId)
     {
         var mappings = Fixtures.Mappings();
         var datums = Fixtures.ClientPackets(connection)
@@ -130,7 +130,7 @@ public sealed class MappingTests
     [InlineData("feet", "meters", false)]
     [InlineData("number", "enum", false)] // two unit-less names: nothing to convert
     [InlineData("knots", "knots", false)]
-    [InlineData("meters", "", false)] // empty: the client's default units (BATC's WING SPAN)
+    [InlineData("meters", "", false)] // empty: the client's default units (the ATC app's WING SPAN)
     [InlineData("feet", "knots", true)] // different dimensions
     [InlineData("furlongs", "feet", true)] // unknown name
     [InlineData("number", "feet", true)]

@@ -5,7 +5,7 @@ using ClearanceLink.Protocol;
 namespace ClearanceLink.Recorder;
 
 /// <summary>
-/// Samples the high-rate streams so a recording stays a manageable size. BATC writes AI aircraft positions
+/// Samples the high-rate streams so a recording stays a manageable size. The ATC app writes AI aircraft positions
 /// (SetDataOnSimObject) and polls user-aircraft data (SimObjectData) hundreds of times a second; one sample per
 /// stream per interval is plenty for analysis. Everything else is always recorded. Forwarding is never affected.
 /// </summary>

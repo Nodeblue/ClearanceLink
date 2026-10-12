@@ -5,7 +5,7 @@ Date: 2026-10-04. Status: accepted.
 ## Context
 ClearanceLink is about to be shared with other simmers. They need one place to download it, a way to hear about new
 versions, and a plugin that stays in step with the app. Ben has no code-signing certificate, so Windows treats
-ClearanceLink.exe as coming from an unknown publisher. BeyondATC runs only on Windows.
+ClearanceLink.exe as coming from an unknown publisher. The ATC app runs only on Windows.
 
 ## Decision
 - **Releases live on GitHub.** The Release workflow (`.github/workflows/release.yml`), started by hand on main,
@@ -19,7 +19,7 @@ ClearanceLink.exe as coming from an unknown publisher. BeyondATC runs only on Wi
 - **Updating is unzipping over the old folder.** Settings and logs live in `%LOCALAPPDATA%\ClearanceLink`, so nothing
   is lost. The plugin travels in the zip; SETUP already compares the installed plugin file by file and offers
   UPDATE> (X-Plane must be closed, it locks the plugin).
-- **The plugin is built for Windows only.** BeyondATC is Windows-only, so a Linux or Mac plugin has no users. The
+- **The plugin is built for Windows only.** The ATC app is Windows-only, so a Linux or Mac plugin has no users. The
   CMake files still build on Linux for local testing; CI no longer does.
 
 ## Alternatives

@@ -3,8 +3,8 @@ using System.Diagnostics;
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// Starts the do-nothing FlightSimulator2024 process BATC looks for before it connects (see
-/// docs/research/batc-call-inventory.md), unless one is already running, and stops it again on exit.
+/// Starts the do-nothing FlightSimulator2024 process some apps (the ATC app among them) look for before they connect (see
+/// docs/research/atc-app-call-inventory.md), unless one is already running, and stops it again on exit.
 /// </summary>
 public sealed class StubLauncher : IDisposable
 {
@@ -62,7 +62,7 @@ public sealed class StubLauncher : IDisposable
 
         if (FindExecutable(explicitPath) is not { } path)
         {
-            return $"stub: {ProcessName} executable not found next to ClearanceLink; BATC will say the sim is not running (use --stub <path>)";
+            return $"stub: {ProcessName} executable not found next to ClearanceLink; the ATC app may say the sim is not running (use --stub <path>)";
         }
 
         _started = Process.Start(new ProcessStartInfo(path, ["--parent", Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)])
@@ -78,59 +78,59 @@ public sealed class StubLauncher : IDisposable
         return $"stub: started {path} (pid {_started?.Id})";
     }
 
-    /// <summary>How long BeyondATC stays connected before the stand-in is closed.</summary>
-    public static readonly TimeSpan BatcSettled = TimeSpan.FromSeconds(5);
+    /// <summary>How long the ATC app stays connected before the stand-in is closed.</summary>
+    public static readonly TimeSpan AppSettled = TimeSpan.FromSeconds(5);
 
-    // MSFS changes and BeyondATC's connections are followed on different threads.
+    // MSFS changes and the app's connections are followed on different threads.
     private readonly Lock _gate = new();
-    private bool _pausedForBatc;
-    private DateTimeOffset? _batcSince;
+    private bool _pausedForApp;
+    private DateTimeOffset? _appSince;
 
     /// <summary>
-    /// BeyondATC only looks for the FlightSimulator2024 process when it connects (Ben's PC, 2026-10-05), but some X-Plane
+    /// The ATC app only looks for the FlightSimulator2024 process when it connects (Ben's PC, 2026-10-05), but some X-Plane
     /// add-ons that also support MSFS (FlightSimBuilder HUB) will not connect to X-Plane while one runs. So the stand-in
-    /// runs only while BeyondATC is not connected: closed once both its connections have been open for
-    /// <see cref="BatcSettled"/>, started again as soon as either drops. Called about once a second; returns a log
+    /// runs only while the app is not connected: closed once it has been connected (<see cref="Status.StatusBoard.AppConnected"/>) for
+    /// <see cref="AppSettled"/>, started again as soon as that drops. Called about once a second; returns a log
     /// line when something changed, else null.
     /// </summary>
-    public string? FollowBatc(bool batcConnected, bool msfsRunning, DateTimeOffset now)
+    public string? FollowApp(bool appConnected, bool msfsRunning, DateTimeOffset now)
     {
         lock (_gate)
         {
-            return Follow(batcConnected, msfsRunning, now);
+            return Follow(appConnected, msfsRunning, now);
         }
     }
 
-    private string? Follow(bool batcConnected, bool msfsRunning, DateTimeOffset now)
+    private string? Follow(bool appConnected, bool msfsRunning, DateTimeOffset now)
     {
-        if (!batcConnected)
+        if (!appConnected)
         {
-            _batcSince = null;
-            if (!_pausedForBatc)
+            _appSince = null;
+            if (!_pausedForApp)
             {
                 return null;
             }
 
-            _pausedForBatc = false;
-            return msfsRunning ? null : Start(_explicitPath) + " for BeyondATC to connect";
+            _pausedForApp = false;
+            return msfsRunning ? null : Start(_explicitPath) + " for the ATC app to connect";
         }
 
-        _batcSince ??= now;
-        if (_started is null || now - _batcSince < BatcSettled)
+        _appSince ??= now;
+        if (_started is null || now - _appSince < AppSettled)
         {
             return null;
         }
 
-        _pausedForBatc = true;
-        return StopLocked("BeyondATC is connected");
+        _pausedForApp = true;
+        return StopLocked("the ATC app is connected");
     }
 
-    /// <summary>Starts the stand-in again after <see cref="Stop"/> (MSFS closed again), unless BeyondATC is connected.</summary>
+    /// <summary>Starts the stand-in again after <see cref="Stop"/> (MSFS closed again), unless the ATC app is connected.</summary>
     public string Restart()
     {
         lock (_gate)
         {
-            return _pausedForBatc ? "stub: not needed while BeyondATC is connected"
+            return _pausedForApp ? "stub: not needed while the ATC app is connected"
                 : _started is null ? Start(_explicitPath) : "stub: already running";
         }
     }

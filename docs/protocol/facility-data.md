@@ -1,13 +1,13 @@
-# Facility data as BATC requests it and MSFS 2024 answers it
+# Facility data as the ATC app requests it and MSFS 2024 answers it
 
-Source: pass-through recordings on Ben's PC, 2026-09-30 (`20260930-165631-record.jsonl`, `20260930-174605-record.jsonl`), BATC 1.8.21.EA against MSFS 2024 1.8.16.0. Fixture: `recordings/samples/batc-1.8.21-facilities.jsonl`: the 573 `AddToFacilityDefinition` calls, then the request, MSFS's full reply and `FacilityDataEnd` for YBBN (define 444, 8,610 packets), YTWB (define 444, 583 packets) and YBAF (define 333, a surrounding airport, 76 packets). Three string tails of leftover memory bytes (airport NAME64) were zeroed; nothing else was changed.
+Source: pass-through recordings on Ben's PC, 2026-09-30 (`20260930-165631-record.jsonl`, `20260930-174605-record.jsonl`), the app's 1.8.21.EA against MSFS 2024 1.8.16.0. Fixture: `recordings/samples/atc-app-1.8.21-facilities.jsonl`: the 573 `AddToFacilityDefinition` calls, then the request, MSFS's full reply and `FacilityDataEnd` for YBBN (define 444, 8,610 packets), YTWB (define 444, 583 packets) and YBAF (define 333, a surrounding airport, 76 packets). Three string tails of leftover memory bytes (airport NAME64) were zeroed; nothing else was changed.
 
-Everything below is read off the recordings. Sizes were checked by adding up the fields in the order BATC defined them.
+Everything below is read off the recordings. Sizes were checked by adding up the fields in the order the app defined them.
 
 ## Request side
-- `simconnect_ws` builds two definitions once per session, right after it first receives aircraft data: define **444** (318 fields, everything) and define **333** (255 fields: the same without `TAXI_PARKING`, `TAXI_NAME`, `TAXI_PATH` and `TAXI_POINT`).
+- The app's helper program builds two definitions once per session, right after it first receives aircraft data: define **444** (318 fields, everything) and define **333** (255 fields: the same without `TAXI_PARKING`, `TAXI_NAME`, `TAXI_PATH` and `TAXI_POINT`).
 - `RequestFacilityData(defineId, requestId, icao, region="")`. 444 is used for the departure and destination airports, 333 for surrounding airports (one request about every 3 s). Request ids count up from 1.
-- An airport MSFS does not have is answered with `Exception` 1, index 3, carrying the request's send id. BATC retries it once a minute.
+- An airport MSFS does not have is answered with `Exception` 1, index 3, carrying the request's send id. The app retries it once a minute.
 
 ## Reply side
 One `FacilityData` packet per object, then `FacilityDataEnd(requestId)`.
@@ -23,7 +23,7 @@ One `FacilityData` packet per object, then `FacilityDataEnd(requestId)`.
 YTWB with define 444, as a run-length sequence of `type x count`:
 `0x1, 1x1, 23x6, 1x1, 23x6, 15x36, 17x7, 16x270, 3x4, 14x215, 2x4, 5x1 (6x1 7x2)x3 8x3 9x3, 5x1 (6x1 7x2)x3 8x3 9x3`
 
-### Types seen and their data blocks (with BATC's definitions)
+### Types seen and their data blocks (with the app's definitions)
 
 | Type | Object | Bytes | Fields in order |
 |---|---|---|---|
@@ -60,7 +60,7 @@ YTWB with define 444, as a run-length sequence of `type x count`:
 | TAXI_POINT | TYPE 1 normal, 5 hold short, 6 (two at YBBN, probably ILS hold short). |
 | TAXI_PARKING | TYPE 2 GA small, 3 GA medium, 4 GA large, 8/9/10 gate small/medium/heavy, 12 fuel, 13 vehicles. NAME 1 PARKING, 10 GATE, 12-37 GATE_A-Z; SUFFIX uses the same values for a letter after the number. RADIUS in metres. |
 | APPROACH | TYPE 4 ILS, 10 RNAV. SUFFIX is the ASCII letter ('0', 48, when there is none). |
-| Legs | TYPE is the ARINC path terminator in alphabetical order (AF 1, CA 2, CF 4, DF 7, IF 15, RF 17, TF 18, VM 22). FIX_TYPE is an ASCII letter (W 87 waypoint, R 82 runway). APPROACH_ALT_DESC 0 none, 1 at, 2 at or above, 3 at or below, 4 between (ALTITUDE1 upper). Altitudes in metres. SPEED_LIMIT -1 when none, else knots with APPROACH_SPEED_DESC 3. COURSE and THETA in degrees. MSFS's FIX_LATITUDE/LONGITUDE are sometimes far from the fix (CF01L at YBAF's position), so BATC probably does not rely on them. |
+| Legs | TYPE is the ARINC path terminator in alphabetical order (AF 1, CA 2, CF 4, DF 7, IF 15, RF 17, TF 18, VM 22). FIX_TYPE is an ASCII letter (W 87 waypoint, R 82 runway). APPROACH_ALT_DESC 0 none, 1 at, 2 at or above, 3 at or below, 4 between (ALTITUDE1 upper). Altitudes in metres. SPEED_LIMIT -1 when none, else knots with APPROACH_SPEED_DESC 3. COURSE and THETA in degrees. MSFS's FIX_LATITUDE/LONGITUDE are sometimes far from the fix (CF01L at YBAF's position), so the app probably does not rely on them. |
 
 ### Size of the job (MSFS data)
 | Airport | Packets | Runways | Starts | Taxi points | Taxi paths | Parking | Taxi names | Frequencies |
@@ -80,7 +80,7 @@ Fixtures: `tests/ClearanceLink.Airports.Tests/fixtures/YBBN.apt.dat` and `YTWB.a
 
 Consequences for the generator:
 1. **Scenery priority.** An airport can be defined in several scenery packs; X-Plane uses the first one in `Custom Scenery/scenery_packs.ini` (here `Orbx_A_YBBNv2_Brisbane` comes before `*GLOBAL_AIRPORTS*`). ClearanceLink must read the same one, or gates and taxiways will not match what the pilot sees. Payware apt.dat files must not be committed.
-2. **Airports with no taxi network.** YTWB has no 1200/1201/1202 rows at all, only pavement and ramp starts. MSFS gave BATC 215 taxi points and 270 paths there. A fallback is needed (at least: connect each ramp start to the runways), otherwise BATC has nothing to route on.
+2. **Airports with no taxi network.** YTWB has no 1200/1201/1202 rows at all, only pavement and ramp starts. MSFS gave the app 215 taxi points and 270 paths there. A fallback is needed (at least: connect each ramp start to the runways), otherwise the app has nothing to route on.
 3. **MSFS's graph is denser.** Its taxi points include parking connectors and hold-short points; X-Plane's 1202 edges carry the taxiway name and runway "hot zone" flags instead. Parking radius and type have to be derived from the 1300 row's aircraft classes and the 1301 width code.
 4. **Procedures.** CIFP files are in `Custom Data/CIFP/<ICAO>.dat` when a navdata update is installed (here Navigraph AIRAC 2609), otherwise `Resources/default data/CIFP/`. They are licensed data: do not commit them; write test fixtures by hand.
 5. `1302 transition_level` is written as `11000` in the Gateway file and `110` in the Orbx one.

@@ -21,7 +21,7 @@ float AdvanceAngle(float deg, float rpm, float seconds, float maxDegPerSecond);
 float SteeringAngleDeg(float yawDegPerSecond, float speedKt, float wheelbaseM, float maxDeg = 70.0f);
 
 // Smooths a drawn height (or any value) that switches source, e.g. between the wheels-on-terrain height on the ground
-// and BATC's altitude in the air at lift-off and touchdown: when the target jumps, the drawn value carries on from
+// and the app's altitude in the air at lift-off and touchdown: when the target jumps, the drawn value carries on from
 // where it was and eases onto the new target, `seconds` being the time to close most (95%) of the gap.
 class Smoothed {
 public:
@@ -42,7 +42,7 @@ constexpr float GroundSlopeProbeMeters = 8.0f;
 // Whether to probe the terrain under an aircraft again this frame. Each probe on the ground is three
 // XPLMProbeTerrainXYZ calls (under it, and ahead and behind for the slope). An aircraft on the ground is probed again
 // once it has moved 25 cm or turned 1 degree, but at most every 0.1 s, unless it has moved further than the slope
-// was measured (8 m: fast on the runway, or placed by BATC); parked, every 5 s. Airborne, every 0.25 s (only the
+// was measured (8 m: fast on the runway, or placed by the app); parked, every 5 s. Airborne, every 0.25 s (only the
 // `ground` report needs it). Taxiing at 15 m/s used to probe every frame; now it is 10 times a second.
 // `movedM` and `turnedDeg` are since the last probe, `ageS` its age; `probedOnGround` whether it was taken on the
 // ground (with the slope), so touchdown probes at once.
@@ -59,7 +59,7 @@ float GroundYAlongSlope(float probeY, float slopeDeg, float headingDeg, float dx
 // One aircraft's updates from ClearanceLink and where to draw it between them. It is drawn one update interval behind,
 // blending from where it was drawn when the latest update came to that update, so turns, climbs and pitch changes are
 // smooth. Once that runs out (updates stopped), it moves on at the speed measured between the last two updates
-// received, for at most a second. A move far faster than its speed (BATC placing an aircraft) is drawn at once.
+// received, for at most a second. A move far faster than its speed (the app placing an aircraft) is drawn at once.
 class Track {
 public:
     void Update(const Pos& pos, float now);

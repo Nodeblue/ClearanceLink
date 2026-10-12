@@ -30,28 +30,35 @@ public sealed record SimbriefFlight(string RequestId, string Origin, string Dest
 }
 
 /// <summary>
-/// Fetches the user's latest SimBrief plan (the one BeyondATC downloads from SimBrief itself) and its X-Plane 11/12
+/// Fetches the user's latest SimBrief plan (the one the ATC app downloads from SimBrief itself) and its X-Plane 11/12
 /// flight plan (.fms), in which SimBrief has already expanded the airways and added the runways, SID and STAR. Used by
 /// the window's FPLN page and `clearancelink simbrief`; nothing is fetched unless the user asks. The SimBrief pilot ID
-/// comes from BeyondATC's own setting, or from settings simbrief-id. Any failure (offline, no plan, SimBrief error)
-/// gives null and a log line, never an error.
+/// comes from settings simbrief-id, or from the ATC app's own saved settings. Any failure (offline, no plan, SimBrief
+/// error) gives null and a log line, never an error.
 /// </summary>
 public static class SimbriefPlan
 {
-    /// <summary>BeyondATC's Unity PlayerPrefs; its SimBrief pilot ID is a DWORD named simbriefId_h&lt;hash&gt; (Ben's PC, 2026-10-05).</summary>
-    public const string BatcPrefsKey = @"Software\Skirmish Mode Games, Inc\BeyondATC";
-
-    public const string BatcPrefsValue = "simbriefId_h";
+    /// <summary>
+    /// The name of the Unity PlayerPrefs value (under <see cref="AtcApp.PrefsKey"/>) an app may keep its SimBrief pilot
+    /// ID in: a DWORD named simbriefId_h&lt;hash&gt; (the ATC app on Ben's PC, 2026-10-05).
+    /// </summary>
+    public const string PrefsValue = "simbriefId_h";
 
     /// <summary>X-Plane's flight plan folder, relative to the X-Plane folder.</summary>
     public static readonly string PlansFolder = Path.Combine("Output", "FMS plans");
 
-    /// <summary>The SimBrief pilot ID: settings simbrief-id when set, else BeyondATC's. Null when neither is known.</summary>
-    public static string? PilotId(AppSettings settings) => settings.SimbriefId is { Length: > 0 } id ? id : PilotIdFromBatc();
+    /// <summary>The SimBrief pilot ID: settings simbrief-id when set, else the ATC app's. Null when neither is known.</summary>
+    public static string? PilotId(AppSettings settings, AtcApp? app = null) =>
+        settings.SimbriefId is { Length: > 0 } id ? id : PilotIdFromApp(app ?? AtcApp.From(settings.AppExe));
 
-    /// <summary>The pilot ID BeyondATC saved when the user linked SimBrief, or null.</summary>
-    public static string? PilotIdFromBatc()
+    /// <summary>The pilot ID the ATC app saved when the user linked SimBrief in it, or null (none, or not a Unity app).</summary>
+    public static string? PilotIdFromApp(AtcApp? app)
     {
+        if (app?.PrefsKey is not { } key)
+        {
+            return null;
+        }
+
         if (!OperatingSystem.IsWindows())
         {
             return null;
@@ -59,7 +66,7 @@ public static class SimbriefPlan
 
         try
         {
-            using var prefs = Registry.CurrentUser.OpenSubKey(BatcPrefsKey);
+            using var prefs = Registry.CurrentUser.OpenSubKey(key);
             if (prefs is null)
             {
                 return null;
@@ -67,7 +74,7 @@ public static class SimbriefPlan
 
             foreach (var name in prefs.GetValueNames())
             {
-                if (name.StartsWith(BatcPrefsValue, StringComparison.Ordinal) && prefs.GetValue(name) is int id && id > 0)
+                if (name.StartsWith(PrefsValue, StringComparison.Ordinal) && prefs.GetValue(name) is int id && id > 0)
                 {
                     return id.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }

@@ -1,19 +1,19 @@
-# ADR-0013: Pushback with Better Pushback, from BeyondATC's clearance
+# ADR-0013: Pushback with Better Pushback, from the ATC app's clearance
 
 Date: 2026-10-05. Status: accepted.
 
 ## Context
-In MSFS, BeyondATC (1.8.21) drives GSX for pushback: it subscribes to `L:FSDT_GSX_PUSHBACK_STATUS`, opens GSX's menu
+In MSFS, the ATC app (1.8.21) drives GSX for pushback: it subscribes to `L:FSDT_GSX_PUSHBACK_STATUS`, opens GSX's menu
 and picks item 4 ("Request pushback") through `L:FSDT_GSX_MENU_OPEN` / `L:FSDT_GSX_MENU_CHOICE`, and reads GSX's menu
 text from a file in GSX's own folder, found through the registry (`HKCU\Software\Fsdreamteam`, `root`). X-Plane has no
-GSX. Ben uses Better Pushback 1.14 (the maintained olivierbutler fork) and asked whether BeyondATC's pushback, including
-its "face east" instruction, could drive it. Research and test results: `docs/research/batc-gsx-pushback.md`.
+GSX. Ben uses Better Pushback 1.14 (the maintained olivierbutler fork) and asked whether the ATC app's pushback, including
+its "face east" instruction, could drive it. Research and test results: `docs/research/atc-app-pushback.md`.
 
 ## Decision
-- **The clearance comes from BeyondATC's log.** BeyondATC writes each instruction to its `Player.log` as plain text
+- **The clearance comes from the ATC app's log.** The ATC app writes each instruction to its `Player.log` as plain text
   (`[Instruction] ..., pushback and engine start approved. Face east.`). ClearanceLink follows the log (new lines only)
-  and shows the approval and direction on a new PUSH page. BeyondATC's GSX L:var writes stay ignored.
-- **The approval calls the tug, as with GSX, and the pilot can switch that off.** In MSFS BeyondATC requests GSX's
+  and shows the approval and direction on a new PUSH page. The ATC app's GSX L:var writes stay ignored.
+- **The approval calls the tug, as with GSX, and the pilot can switch that off.** In MSFS the ATC app requests GSX's
   pushback itself at the approval; the pilot only releases the parking brake. TUG on the PUSH page is AUTO by default (Ben
   chose this on 2026-10-05 after first trying a key-only version) or MANUAL, saved as `pushAutomatic` in
   settings.json. MANUAL waits for CALL TUG; STATUS says PUSHBACK APPROVED: PUSH meanwhile. TAIL LEFT, TAIL RIGHT and
@@ -30,7 +30,7 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
   length dataref.
 
 ## Alternatives
-- **Pretend to be GSX** (registry key, menu file, L:var status 1-2-3-0 back to BeyondATC). Writes into the registry and
+- **Pretend to be GSX** (registry key, menu file, L:var status 1-2-3-0 back to the ATC app). Writes into the registry and
   a fake GSX folder, and GSX's menu protocol isn't documented; the direction still isn't in it.
 - **Better Pushback's planned push.** Its routes are saved per stand and chosen with a key or a click in its planner;
   there is no command or dataref to set a route or heading.
@@ -42,5 +42,5 @@ its "face east" instruction, could drive it. Research and test results: `docs/re
   southwest and disconnected the tug (2026-10-05); the automatic call worked there the same day.
 - Better Pushback can't move some aircraft at all (the Aerobask Phenom 300, even with its own planned push); the page
   says NOT MOVING: PRESS STOP after 40 s with the brake off.
-- Depends on the wording of BeyondATC's log lines; a change there stops the clearance showing, and the TAIL keys
+- Depends on the wording of the ATC app's log lines; a change there stops the clearance showing, and the TAIL keys
   still work.

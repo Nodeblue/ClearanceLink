@@ -1,10 +1,10 @@
-# BeyondATC's GSX pushback and Better Pushback
+# The ATC app's GSX pushback and Better Pushback
 
 Research for ADR-0013, 2026-10-05.
 
-## What BeyondATC does with GSX (MSFS)
-Source: pass-through recording of BeyondATC 1.8.21 against MSFS 2024 with GSX, Ben's PC
-(`recordings/local/20260930-174605`, not committed), and BeyondATC's `Player.log`.
+## What the app does with GSX (MSFS)
+Source: pass-through recording of the app's 1.8.21 against MSFS 2024 with GSX, Ben's PC
+(`recordings/local/20260930-174605`, not committed), and the app's `Player.log`.
 - Subscribes to `L:FSDT_GSX_PUSHBACK_STATUS` once a second.
 - On pushback approval writes `L:FSDT_GSX_MENU_OPEN` = 1, then `L:FSDT_GSX_MENU_CHOICE` = 4 ("Request pushback").
 - Watches the status go 0, 1, 2, 3 and back to 0.

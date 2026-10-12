@@ -5,13 +5,13 @@ using YamlDotNet.Serialization.NamingConventions;
 namespace ClearanceLink.Host.Traffic;
 
 /// <summary>
-/// What the plugin is asked to draw for one BATC model title: an ICAO type and, when known, an ICAO airline and the
+/// What the plugin is asked to draw for one the ATC app model title: an ICAO type and, when known, an ICAO airline and the
 /// CSL livery key of an imported FSLTL livery (an exact match in XPMP2).
 /// </summary>
 public readonly record struct TrafficModel(string IcaoType, string? IcaoAirline, string? Livery = null);
 
 /// <summary>
-/// Turns BATC's MSFS model titles (FSLTL_B738_Qantas, Asobo PassiveAircraft King Air 350i) into an ICAO type and
+/// Turns the ATC app's MSFS model titles (FSLTL_B738_Qantas, Asobo PassiveAircraft King Air 350i) into an ICAO type and
 /// airline for the plugin's CSL matching. The rules are data: mapping/traffic-models.yaml.
 /// </summary>
 public sealed partial class TrafficModels

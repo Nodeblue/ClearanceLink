@@ -3,7 +3,7 @@ using System.Globalization;
 namespace ClearanceLink.Airports.Tests;
 
 /// <summary>
-/// Synthetic X-Plane taxi networks laid out in metres that used to give two taxi points one position (BATC 1.8.21
+/// Synthetic X-Plane taxi networks laid out in metres that used to give two taxi points one position (the app's 1.8.21
 /// crashed on coincident points; MSFS keeps lead-in points 5.6 m or more from their spots).
 /// </summary>
 public sealed class TaxiNetworkSpacingTests

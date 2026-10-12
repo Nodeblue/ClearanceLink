@@ -160,8 +160,8 @@ public sealed class SimConnectSession(
                 await RequestFacilityAsync(S(f, "icao"), U(f, "defineId"), U(f, "requestId"), sendId).ConfigureAwait(false);
                 break;
 
-            // Without a traffic registry these stay unanswered, as in the stand-in test of 2026-09-30 where BATC ran
-            // fine without them: BATC waits for the livery list before creating AI traffic, so traffic stays off.
+            // Without a traffic registry these stay unanswered, as in the stand-in test of 2026-09-30 where the ATC app ran
+            // fine without them: The ATC app waits for the livery list before creating AI traffic, so traffic stays off.
             case 0x5B when liveries is not null: // EnumerateSimObjectsAndLiveries
                 await SendLiveriesAsync(U(f, "requestId")).ConfigureAwait(false);
                 break;
@@ -240,7 +240,7 @@ public sealed class SimConnectSession(
         {
             if (traffic?.Find(request.ObjectId) is { } ai)
             {
-                // BATC polls its AI aircraft with ONCE requests (defines 18, 19, 20) to keep them on the ground.
+                // The ATC app polls its AI aircraft with ONCE requests (defines 18, 19, 20) to keep them on the ground.
                 if (request.Period is not (SimConnectPeriod.Once or SimConnectPeriod.Never))
                 {
                     LogOnce(
@@ -288,9 +288,9 @@ public sealed class SimConnectSession(
             return;
         }
 
-        // Zeros would put the aircraft at 0,0 and BATC would load the wrong airports, so say nothing until X-Plane has
-        // delivered a position. A zero clock is as bad: BeyondATC 1.8.22 reads it as year 1 and its live-traffic time
-        // check overflows, stopping the flight load at 25% (issue #36). BATC keeps asking (it polls with ONCE), and
+        // Zeros would put the aircraft at 0,0 and the ATC app would load the wrong airports, so say nothing until X-Plane has
+        // delivered a position. A zero clock is as bad: The app's 1.8.22 reads it as year 1 and its live-traffic time
+        // check overflows, stopping the flight load at 25% (issue #36). The ATC app keeps asking (it polls with ONCE), and
         // periodic requests retry on the next tick.
         if (!xplane.IsConnected
             || datums.Any(d => IsPosition(d.Name) && resolver.Resolve(d.Name, d.Units).Status != ResolveStatus.Ok)
@@ -350,7 +350,7 @@ public sealed class SimConnectSession(
 
     private async Task ApplyEventAsync(uint objectId, uint eventId, uint data)
     {
-        // BATC also sends events (lights, throttle, gear) to its AI aircraft: kept with the object for the traffic
+        // The ATC app also sends events (lights, throttle, gear) to its AI aircraft: kept with the object for the traffic
         // plugin; only the user aircraft's events map to X-Plane.
         if (objectId is not (0 or UserObjectId))
         {
@@ -408,7 +408,7 @@ public sealed class SimConnectSession(
         catch (Exception ex) when (ex is IOException or InvalidOperationException or TimeoutException or HttpRequestException or OperationCanceledException)
         {
             // OperationCanceledException: HttpClient's 5 s timeout (X-Plane busy loading scenery) is a TaskCanceledException;
-            // it must not reach the connection loop, which would drop BATC.
+            // it must not reach the connection loop, which would drop the ATC app.
             log($"#{connectionId} {name} failed: {ex.Message}");
         }
     }
@@ -448,7 +448,7 @@ public sealed class SimConnectSession(
         var created = traffic!.Create(connectionId, kind, S(f, "containerTitle"), S(f, "livery"), S(f, "tailNumber"), position);
         if (position is { } start && GroundFeet(created) is { } groundAtStart && start.AltitudeFeet - groundAtStart < 50)
         {
-            created.Set("SIM ON GROUND", 1, _time.GetUtcNow()); // parked: BATC does not always set the init position's on-ground flag
+            created.Set("SIM ON GROUND", 1, _time.GetUtcNow()); // parked: The ATC app does not always set the init position's on-ground flag
         }
 
         Stats.Count("AI objects created", _time.GetUtcNow());
@@ -528,18 +528,18 @@ public sealed class SimConnectSession(
 
         target.Set(datum.Name, value, now);
 
-        // MSFS answered GROUND VELOCITY for BATC's frozen AI with about the airspeed BATC wrote (254 kt for 249 kt at
+        // MSFS answered GROUND VELOCITY for the ATC app's frozen AI with about the airspeed the ATC app wrote (254 kt for 249 kt at
         // FL224, recording 20260930-174605), not the speed its position writes imply, so mirror that.
         if (datum.Name.Equals("AIRSPEED INDICATED", StringComparison.OrdinalIgnoreCase))
         {
             target.Set("GROUND VELOCITY", value, now);
         }
 
-        // On the ground BATC writes height above ground instead of altitude (define 5, define 14); in the air it writes
+        // On the ground the ATC app writes height above ground instead of altitude (define 5, define 14); in the air it writes
         // altitude (define 4). SIM ON GROUND follows from whichever it wrote.
         if (datum.Name.Equals("PLANE ALT ABOVE GROUND", StringComparison.OrdinalIgnoreCase))
         {
-            target.Set("SIM ON GROUND", value < 50 ? 1 : 0, now); // BATC writes the CG height: 10-15 ft for a taxiing A320 (live test 2026-10-01)
+            target.Set("SIM ON GROUND", value < 50 ? 1 : 0, now); // The ATC app writes the CG height: 10-15 ft for a taxiing A320 (live test 2026-10-01)
             if (GroundFeet(target) is { } groundFeet)
             {
                 target.Set("PLANE ALTITUDE", groundFeet + value, now);
@@ -650,7 +650,7 @@ public sealed class SimConnectSession(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Rule 2: an airport we cannot build (a damaged apt.dat or CIFP file) gets the "no such airport"
-                // exception below, so BATC carries on instead of waiting for an answer that never comes.
+                // exception below, so the ATC app carries on instead of waiting for an answer that never comes.
                 log($"#{connectionId} RequestFacilityData {icao} define {defineId}: failed: {ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
                 answer = null;
             }
@@ -669,7 +669,7 @@ public sealed class SimConnectSession(
             }
         }
 
-        // MSFS answers an airport it does not have with exception 1, index 3 (recorded for YSAM); BATC carries on.
+        // MSFS answers an airport it does not have with exception 1, index 3 (recorded for YSAM); the ATC app carries on.
         log($"#{connectionId} RequestFacilityData {icao} define {defineId}: no data, sent exception");
         Stats.Airport(new AirportServed(icao, null, 0, 0, _time.GetUtcNow()));
         await SendExceptionAsync(SimConnectException.Error, sendId, 3).ConfigureAwait(false);

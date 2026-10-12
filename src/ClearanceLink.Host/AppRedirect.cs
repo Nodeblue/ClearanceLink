@@ -1,16 +1,13 @@
-using Microsoft.Win32;
-
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// Points BeyondATC at ClearanceLink, or back at MSFS. Up to 1.8.21, BATC connects from two programs: its helper
-/// simconnect_ws.exe (BeyondATC_Data\StreamingAssets) and BeyondATC.exe itself. Each reads a SimConnect.cfg next to
-/// it, so a cfg naming ClearanceLink's TCP port in both folders redirects BATC without touching MSFS
-/// (docs/research/batc-call-inventory.md). From 1.8.22 there is no helper and all connections come from BeyondATC.exe,
-/// so only the cfg next to it is read; the StreamingAssets one stays for older versions. Removing them sends BATC back
-/// to MSFS's default pipe.
+/// Points the ATC app at ClearanceLink, or back at MSFS. A SimConnect client reads a SimConnect.cfg next to its .exe, so a
+/// cfg naming ClearanceLink's TCP port there redirects that app only, without touching MSFS
+/// (docs/research/atc-app-call-inventory.md). A Unity app may also run a helper from <c>&lt;Name&gt;_Data\StreamingAssets</c>
+/// (the app's versions up to 1.8.21 did), so when that folder exists a cfg goes there too. Removing them sends the app
+/// back to MSFS's default pipe.
 /// </summary>
-public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.DefaultPort)
+public sealed class AppRedirect(AtcApp app, int port = AppRedirect.DefaultPort)
 {
     public const int DefaultPort = 5112;
 
@@ -19,7 +16,7 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
 
     public enum FileState
     {
-        /// <summary>No SimConnect.cfg: BATC connects to MSFS.</summary>
+        /// <summary>No SimConnect.cfg: the app connects to MSFS.</summary>
         Missing,
 
         /// <summary>A SimConnect.cfg pointing at ClearanceLink.</summary>
@@ -29,36 +26,24 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
         Other,
     }
 
-    public string InstallFolder { get; } = installFolder;
+    public AtcApp App { get; } = app;
 
-    /// <summary>The two places BATC reads a SimConnect.cfg from.</summary>
-    public IReadOnlyList<string> Files =>
-    [
-        Path.Combine(InstallFolder, FileName),
-        Path.Combine(InstallFolder, "BeyondATC_Data", "StreamingAssets", FileName),
-    ];
+    /// <summary>The places the app reads a SimConnect.cfg from: next to its .exe, and its StreamingAssets folder when it has one.</summary>
+    public IReadOnlyList<string> Files
+    {
+        get
+        {
+            var files = new List<string> { Path.Combine(App.Folder, FileName) };
+            if (App.DataFolder is { } data && Directory.Exists(Path.Combine(data, "StreamingAssets")))
+            {
+                files.Add(Path.Combine(data, "StreamingAssets", FileName));
+            }
+
+            return files;
+        }
+    }
 
     public string Content => $"[SimConnect]\r\nProtocol=IPv4\r\nAddress=127.0.0.1\r\nPort={port}\r\n";
-
-    /// <summary>
-    /// BeyondATC's folder: the one given, else its uninstall entry's install location, else the usual places.
-    /// Null when none of them holds BeyondATC.exe.
-    /// </summary>
-    public static string? FindInstallFolder(string? explicitFolder = null)
-    {
-        var candidates = new List<string?> { explicitFolder };
-        if (explicitFolder is null)
-        {
-            candidates.AddRange(UninstallLocations());
-            candidates.Add(@"C:\BeyondATC");
-            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BeyondATC"));
-        }
-
-        return candidates
-            .Where(c => !string.IsNullOrWhiteSpace(c))
-            .Select(c => c!.Trim().TrimEnd('\\', '/'))
-            .FirstOrDefault(c => File.Exists(Path.Combine(c, "BeyondATC.exe")));
-    }
 
     public FileState StateOf(string file)
     {
@@ -89,10 +74,10 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
         return ours ? FileState.ClearanceLink : FileState.Other;
     }
 
-    /// <summary>True when both files point at ClearanceLink.</summary>
+    /// <summary>True when every file points at ClearanceLink.</summary>
     public bool IsOn => Files.All(f => StateOf(f) == FileState.ClearanceLink);
 
-    /// <summary>True when ClearanceLink can create files in both of BeyondATC's folders (not a protected folder).</summary>
+    /// <summary>True when ClearanceLink can create files in the app's folders (not a protected folder).</summary>
     public bool CanWrite()
     {
         foreach (var file in Files)
@@ -114,7 +99,7 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
     }
 
     /// <summary>
-    /// Writes both files. Another SimConnect.cfg already there is kept as SimConnect.cfg.clearancelink-backup.
+    /// Writes the files. Another SimConnect.cfg already there is kept as SimConnect.cfg.clearancelink-backup.
     /// Throws <see cref="RedirectFailedException"/> when a file cannot be written (a read-only or protected folder).
     /// </summary>
     public IReadOnlyList<string> SwitchOn()
@@ -204,40 +189,9 @@ public sealed class BatcRedirect(string installFolder, int port = BatcRedirect.D
             }
         }
     }
-
-    private static IEnumerable<string?> UninstallLocations()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            yield break;
-        }
-
-        const string uninstall = @"Software\Microsoft\Windows\CurrentVersion\Uninstall";
-        foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
-        {
-            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-            {
-                using var root = RegistryKey.OpenBaseKey(hive == Registry.CurrentUser ? RegistryHive.CurrentUser : RegistryHive.LocalMachine, view)
-                    .OpenSubKey(uninstall);
-                if (root is null)
-                {
-                    continue;
-                }
-
-                foreach (var name in root.GetSubKeyNames())
-                {
-                    using var app = root.OpenSubKey(name);
-                    if (app?.GetValue("DisplayName") is string display && display.StartsWith("BeyondATC", StringComparison.OrdinalIgnoreCase))
-                    {
-                        yield return app.GetValue("InstallLocation") as string;
-                    }
-                }
-            }
-        }
-    }
 }
 
-/// <summary>BeyondATC's SimConnect.cfg could not be written or removed (a read-only or protected folder).</summary>
+/// <summary>The app's SimConnect.cfg could not be written or removed (a read-only or protected folder).</summary>
 public sealed class RedirectFailedException(string message, string file, Exception inner) : IOException(message, inner)
 {
     public string FilePath { get; } = file;

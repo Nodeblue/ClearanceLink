@@ -8,19 +8,14 @@ namespace ClearanceLink.Host.Support;
 public sealed record SupportSources(
     string AppVersion,
     AppFolders Folders,
-    string? BatcFolder,
+    AtcApp? App,
     string? XPlaneFolder,
-    string? BatcLogFolder,
-    Redactor Redactor)
-{
-    /// <summary>BeyondATC's Player.log folder for the current Windows user.</summary>
-    public static string DefaultBatcLogFolder =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "AppData", "LocalLow", "Skirmish Mode Games, Inc", "BeyondATC");
-}
+    string? AppLogFolder,
+    Redactor Redactor);
 
 /// <summary>
-/// Builds one zip a user can send for troubleshooting: about.txt (versions, folders, BATC redirect state), settings,
-/// the newest session logs and recording, BeyondATC's Player.log and the end of X-Plane's Log.txt. Every text file
+/// Builds one zip a user can send for troubleshooting: about.txt (versions, folders, the ATC app's redirect state), settings,
+/// the newest session logs and recording, the ATC app's Player.log (for a Unity app) and the end of X-Plane's Log.txt. Every text file
 /// goes through the <see cref="Redactor"/> first.
 /// </summary>
 public static class SupportBundle
@@ -29,7 +24,7 @@ public static class SupportBundle
     public const long TailBytes = 5 * 1024 * 1024;
     public const long MaxRecordingBytes = 300L * 1024 * 1024;
 
-    private static readonly string[] WatchedProcesses = ["FlightSimulator2024", "FlightSimulator", "BeyondATC", "simconnect_ws", "X-Plane"];
+    private static readonly string[] WatchedProcesses = ["FlightSimulator2024", "FlightSimulator", "X-Plane"];
 
     public static string Create(SupportSources src, DateTime now)
     {
@@ -65,24 +60,24 @@ public static class SupportBundle
                 }
             }
 
-            if (src.BatcLogFolder is { } batcLogs)
+            if (src.AppLogFolder is { } appLogs)
             {
                 foreach (var name in new[] { "Player.log", "Player-prev.log" })
                 {
-                    var file = Path.Combine(batcLogs, name);
+                    var file = Path.Combine(appLogs, name);
                     if (File.Exists(file))
                     {
-                        AddText(zip, $"beyondatc/{name}", file, src, notes, TailBytes);
+                        AddText(zip, $"app/{name}", file, src, notes, TailBytes);
                     }
                 }
             }
 
-            if (src.BatcFolder is { } batc)
+            if (src.App is { } app)
             {
-                foreach (var file in new BatcRedirect(batc).Files.Where(File.Exists))
+                foreach (var file in new AppRedirect(app).Files.Where(File.Exists))
                 {
-                    var where = Path.GetDirectoryName(file)!.Length > batc.Length ? "StreamingAssets-" : "";
-                    AddText(zip, $"beyondatc/{where}SimConnect.cfg", file, src, notes);
+                    var where = Path.GetDirectoryName(file)!.Length > app.Folder.Length ? "StreamingAssets-" : "";
+                    AddText(zip, $"app/{where}SimConnect.cfg", file, src, notes);
                 }
             }
 
@@ -105,10 +100,10 @@ public static class SupportBundle
         text.Add($"ClearanceLink {src.AppVersion} support file, made {now:yyyy-MM-dd HH:mm:ss}");
         text.Add($"Windows: {Environment.OSVersion}, {(Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit")}");
         text.Add("");
-        if (src.BatcFolder is { } batc)
+        if (src.App is { } app)
         {
-            text.Add($"BeyondATC: {batc} (version {FileVersion(Path.Combine(batc, "BeyondATC.exe"))})");
-            var redirect = new BatcRedirect(batc);
+            text.Add($"ATC app: {app.Exe} (version {FileVersion(app.Exe)})");
+            var redirect = new AppRedirect(app);
             foreach (var file in redirect.Files)
             {
                 text.Add($"  {redirect.StateOf(file),-9} {file}");
@@ -116,7 +111,7 @@ public static class SupportBundle
         }
         else
         {
-            text.Add("BeyondATC: not found");
+            text.Add("ATC app: not chosen");
         }
 
         if (src.XPlaneFolder is { } xplane)
@@ -130,9 +125,9 @@ public static class SupportBundle
             text.Add("X-Plane: not found");
         }
 
-        var running = WatchedProcesses
+        var running = WatchedProcesses.Concat(src.App is { } chosen ? [chosen.Name] : [])
             .Where(name => Process.GetProcessesByName(name).Length > 0);
-        text.Add($"Running now: {string.Join(", ", running.DefaultIfEmpty("none of MSFS, BeyondATC, X-Plane"))}");
+        text.Add($"Running now: {string.Join(", ", running.DefaultIfEmpty("none of MSFS, the ATC app, X-Plane"))}");
         if (notes.Count > 0)
         {
             text.Add("");
@@ -163,7 +158,7 @@ public static class SupportBundle
     {
         try
         {
-            // Shared read: the log being written right now, or BeyondATC's open Player.log.
+            // Shared read: the log being written right now, or the ATC app's open Player.log.
             using var input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             var cut = tailBytes > 0 && input.Length > tailBytes;
             if (cut)

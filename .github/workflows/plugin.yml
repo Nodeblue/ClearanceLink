@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    # Windows only: BeyondATC runs only on Windows, so nobody can use a Linux or Mac build of the plugin.
+    # Windows only: the ATC app runs only on Windows, so nobody can use a Linux or Mac build of the plugin.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

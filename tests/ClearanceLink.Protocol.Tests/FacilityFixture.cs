@@ -3,7 +3,7 @@ using ClearanceLink.Protocol;
 
 namespace ClearanceLink.Protocol.Tests;
 
-/// <summary>Reads recordings/samples/batc-1.8.21-facilities.jsonl without depending on the Recorder project.</summary>
+/// <summary>Reads recordings/samples/atc-app-1.8.21-facilities.jsonl without depending on the Recorder project.</summary>
 public static class FacilityFixture
 {
     private static readonly Lazy<List<JsonElement>> Rows = new(Load);
@@ -32,13 +32,13 @@ public static class FacilityFixture
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var path = Path.Combine(dir.FullName, "recordings", "samples", "batc-1.8.21-facilities.jsonl");
+            var path = Path.Combine(dir.FullName, "recordings", "samples", "atc-app-1.8.21-facilities.jsonl");
             if (File.Exists(path))
             {
                 return File.ReadLines(path).Select(l => JsonDocument.Parse(l).RootElement.Clone()).ToList();
             }
         }
 
-        throw new FileNotFoundException("batc-1.8.21-facilities.jsonl not found above the test binaries");
+        throw new FileNotFoundException("atc-app-1.8.21-facilities.jsonl not found above the test binaries");
     }
 }

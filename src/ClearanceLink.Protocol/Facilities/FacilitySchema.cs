@@ -14,7 +14,7 @@ public enum FacilityFieldType
 public readonly record struct FacilityField(string Name, FacilityFieldType Type, int Size);
 
 /// <summary>
-/// The facility object types and the byte layout of the fields BATC asks for, as MSFS 2024 sends them.
+/// The facility object types and the byte layout of the fields the ATC app asks for, as MSFS 2024 sends them.
 /// Read off recorded replies (docs/protocol/facility-data.md): each object's data block is its requested fields in
 /// definition order, packed with no padding. Type codes are SIMCONNECT_FACILITY_DATA_TYPE.
 /// </summary>

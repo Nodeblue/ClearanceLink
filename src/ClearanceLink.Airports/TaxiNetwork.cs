@@ -229,7 +229,7 @@ public sealed class TaxiNetwork
         MsfsCodes.Runway(runway.End1.Number).Number >= MsfsCodes.Runway(runway.End2.Number).Number;
 
     /// <summary>
-    /// Joins each parking spot to the nearest taxiway through a taxi point of its own, as MSFS does (BATC fails to
+    /// Joins each parking spot to the nearest taxiway through a taxi point of its own, as MSFS does (the ATC app fails to
     /// load an airport where parking spots share a point). The point splits the taxiway where the spot projects onto
     /// it; when that is at a taxiway's end, a short spur from the end node toward the spot is added instead.
     /// </summary>
@@ -292,7 +292,7 @@ public sealed class TaxiNetwork
             else
             {
                 // X-Plane's taxi route runs into the spot: put the spur back along the route, clear of the spot.
-                // A point on or near the spot made BATC 1.8.21 drop the airport's gate links (2026-10-01).
+                // A point on or near the spot made the app's 1.8.21 drop the airport's gate links (2026-10-01).
                 var other = node == path.Start ? path.End : path.Start;
                 var taken = backSpurs.GetValueOrDefault((node, other));
                 backSpurs[(node, other)] = taken + 1;
@@ -356,7 +356,7 @@ public sealed class TaxiNetwork
 
     /// <summary>
     /// Moves every taxi point that lies within <see cref="SpurMeters"/> of a parking spot (X-Plane routes end or pass
-    /// at the spot) that far from the spot, toward its neighbours. MSFS has no taxi point on a spot, and BATC 1.8.21
+    /// at the spot) that far from the spot, toward its neighbours. MSFS has no taxi point on a spot, and the app's 1.8.21
     /// merged such points with its gate points and then failed on the missing ones (2026-10-01).
     /// </summary>
     private void ShiftPointsOffSpots(LocalFrame frame, List<(double X, double Z)> local)
@@ -413,7 +413,7 @@ public sealed class TaxiNetwork
 
     /// <summary>
     /// Final pass: no two taxi points closer than <see cref="MinSeparationMeters"/>. Back-spurs, split points, the split
-    /// clamp and X-Plane's own nodes can coincide, and BATC 1.8.21 crashed on two points at one position. The later
+    /// clamp and X-Plane's own nodes can coincide, and the app's 1.8.21 crashed on two points at one position. The later
     /// point of a close pair (a generated one where possible) is nudged along one of its paths, or failing that a short
     /// way off it, never nearer a parking spot than <see cref="SpurMeters"/> (or than it already was).
     /// </summary>
@@ -617,13 +617,13 @@ public sealed class TaxiNetwork
             }
         }
 
-        // Each spot gets its own point a little way toward the apron point, joined to it (BATC needs one point per spot).
+        // Each spot gets its own point a little way toward the apron point, joined to it (the ATC app needs one point per spot).
         for (var p = 0; p < Parking.Count; p++)
         {
             var spot = frame.ToLocal(Parking[p].Start.Latitude, Parking[p].Start.Longitude);
             var toHub = Distance(spot, hub);
             // A spot next to the apron point gets its point behind the parked aircraft, never on the apron point or
-            // on the spot (two points at one position crashed BATC 1.8.21).
+            // on the spot (two points at one position crashed the app's 1.8.21).
             var back = (Parking[p].Heading + 180) * Math.PI / 180;
             var along = Math.Min(15, toHub / 2) / toHub;
             var spur = toHub < SpurMeters * 2

@@ -1,6 +1,6 @@
 # ClearanceLink ↔ X-Plane plugin protocol
 
-The X-Plane plugin (`plugin/`, ADR-0004) draws BATC's AI traffic with XPMP2 and CSL models and reports the terrain
+The X-Plane plugin (`plugin/`, ADR-0004) draws the ATC app's AI traffic with XPMP2 and CSL models and reports the terrain
 height under each aircraft. ClearanceLink and the plugin talk over UDP on the local machine:
 
 | Direction | Address | Notes |
@@ -43,7 +43,7 @@ parts hidden by `ANIM_hide`/`ANIM_show` left out. Bluebell keeps its gear retrac
 animation (B738 and E190 read on Ben's PC, 2026-10-03), so the raw `VT` points are not where the wheels are drawn.
 The nose wheel is the lowest point the `gear_ratio` animations move in the front 35% of the model, the main wheels
 the lowest one behind that. On the ground the plugin adds the pitch that puts both on level ground, sets the height
-from the wheels so the lower one touches (this also keeps the main gear down while BATC rotates for take-off), and
+from the wheels so the lower one touches (this also keeps the main gear down while the app rotates for take-off), and
 draws the model with the bogie value it measured. The bogie dataref is XPMP2's
 `libxplanemp/gear/tire_vertical_deflection_mtr`, or World Traffic's `cjs/world_traffic/main_gear_deflection`, which
 Bluebell's virtual-airline repaints use (95 models; B772_PAY drawn at touchdown tilt at YBBN, 2026-10-03). The plugin
@@ -63,14 +63,14 @@ build's `tools` folder) prints the fit for every model of a CSL library as CSV. 
 `ClearanceLink: ground fit <csl id>: nose wheel 0.52 m above mains, pitch -1.98 deg, wheels 3.33 m below the model origin
 (CSL offset 3.31 m)` or `ClearanceLink: ground fit <csl id>: none (<reason>), drawn level`.
 
-BATC writes each moving AI aircraft about 55 times a second (one every 16.7 ms in the 2026-09-30 MSFS recording).
+The app writes each moving AI aircraft about 55 times a second (one every 16.7 ms in the 2026-09-30 MSFS recording).
 ClearanceLink sends the latest state 10 times a second, and a parked aircraft whose state has not changed only every 2 s.
 Plugin 0.3.1+ draws each aircraft one update interval behind and blends between its last two `pos` lines (position,
 height, heading the short way round, pitch, bank, gear, flaps), so turns, climbs and the flare are smooth; a new `pos`
 blends on from where the aircraft is drawn, so nothing jumps. If updates stop, it moves on as it moved between the last
-two updates, for at most 1 s (0.3.2+; 0.3.1 used `gsKt`, which is BATC's airspeed and not always 0 for a stopped
+two updates, for at most 1 s (0.3.2+; 0.3.1 used `gsKt`, which is the app's airspeed and not always 0 for a stopped
 aircraft, so parked aircraft slid forward and back). Positions more than 1 km apart, or a move faster than twice
-`gsKt` plus 15 m/s, are drawn at once: BATC placing a parked aircraft 100 m+ away was slid across and the move-on then
+`gsKt` plus 15 m/s, are drawn at once: the app placing a parked aircraft 100 m+ away was slid across and the move-on then
 overshot, back and forth, until 0.4.3 (YBBN, 2026-10-03). Since 0.4.3 the move-on speed comes from the last two `pos`
 lines received (not the blended point), and is 0 when they are more than 1 s apart (ClearanceLink's keep-alives).
 
@@ -85,7 +85,7 @@ about 15 m/s was probed (three probes) every frame.
 | Line | Meaning |
 |---|---|
 | `status <version> <aircraft> <models> <cslFolders>` | Sent every second. `models` is the number of CSL models loaded (0 means traffic cannot be drawn: no CSL package found). `cslFolders` is a `;`-separated list (rest of the line), `-` if none. |
-| `ground <id> <elevFt>` | Terrain elevation (MSL, feet) under aircraft `id`, from X-Plane's terrain probe. Sent about every 0.25 s per aircraft. This is what BATC's `GROUND ALTITUDE` for an AI object should return. |
+| `ground <id> <elevFt>` | Terrain elevation (MSL, feet) under aircraft `id`, from X-Plane's terrain probe. Sent about every 0.25 s per aircraft. This is what the app's `GROUND ALTITUDE` for an AI object should return. |
 | `error <id> <message...>` | The aircraft could not be created (for example no CSL model matched). |
 | `fms ok` / `fms error <why...>` | 0.5.3+: answer to `fms`. `ok` means X-Plane accepted the call (it does not say whether the aircraft's FMS uses it). |
 
@@ -102,5 +102,5 @@ No CSL models are shipped with ClearanceLink; their licences allow free download
 
 ## Settings in X-Plane
 
-Plugins > ClearanceLink > Show tail labels turns the labels (BATC's registrations) on or off. They are off by default;
+Plugins > ClearanceLink > Show tail labels turns the labels (the app's registrations) on or off. They are off by default;
 the choice is kept in `Resources/plugins/ClearanceLink/settings.txt` (`labels=1`), which `clearancelink plugin install` keeps.

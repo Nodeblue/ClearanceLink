@@ -21,11 +21,11 @@ public interface IPluginTraffic
 }
 
 /// <summary>
-/// Sends BATC's AI aircraft (<see cref="TrafficRegistry"/>) to the X-Plane plugin 10 times a second (parked ones, whose
-/// state has not changed, every 2 s), and answers BATC's ground height questions with the terrain the plugin finds
+/// Sends the ATC app's AI aircraft (<see cref="TrafficRegistry"/>) to the X-Plane plugin 10 times a second (parked ones, whose
+/// state has not changed, every 2 s), and answers the ATC app's ground height questions with the terrain the plugin finds
 /// under each aircraft. Pushback tugs and other
 /// non-aircraft objects are not drawn. Re-sends <c>add</c> now and then so a plugin that restarted (or an X-Plane
-/// started after BATC created its traffic) still gets every aircraft.
+/// started after the ATC app created its traffic) still gets every aircraft.
 /// </summary>
 public sealed class TrafficBridge(
     TrafficRegistry registry,
@@ -47,8 +47,8 @@ public sealed class TrafficBridge(
     private const double FeetToMeters = 0.3048;
 
     /// <summary>
-    /// Below this on the ground the nose is drawn level: BATC's parked pitch is MSFS's model attitude, which lifts a CSL
-    /// model's nose wheel off X-Plane's ground (live test 2026-10-01). Faster, BATC's pitch shows the take-off rotation.
+    /// Below this on the ground the nose is drawn level: The ATC app's parked pitch is MSFS's model attitude, which lifts a CSL
+    /// model's nose wheel off X-Plane's ground (live test 2026-10-01). Faster, the ATC app's pitch shows the take-off rotation.
     /// </summary>
     private const double RotateKnots = 40;
 
@@ -63,7 +63,7 @@ public sealed class TrafficBridge(
     /// <summary>How many syncs a removed aircraft's `del` is sent on.</summary>
     public const int RemoveRepeats = 3;
 
-    /// <summary>The plugin's id (1..16777215) for an AI object; BATC's object ids are larger than the plugin allows.</summary>
+    /// <summary>The plugin's id (1..16777215) for an AI object; the ATC app's object ids are larger than the plugin allows.</summary>
     public uint? PluginId(uint objectId) => _drawn.TryGetValue(objectId, out var d) ? d.PluginId : null;
 
     public void Sync()
@@ -94,7 +94,7 @@ public sealed class TrafficBridge(
         if (noModels != _noModels)
         {
             _noModels = noModels;
-            if (noModels) log($"traffic: the X-Plane plugin has no CSL aircraft models; {aircraft.Count} BeyondATC aircraft are not drawn (install Bluebell or convert FSLTL)");
+            if (noModels) log($"traffic: the X-Plane plugin has no CSL aircraft models; {aircraft.Count} ATC app aircraft are not drawn (install Bluebell or convert FSLTL)");
         }
 
         // Plugin 0.4.0+ parks each model on its own wheels and takes the per-type pitch only as a fallback; older ones
@@ -176,7 +176,7 @@ public sealed class TrafficBridge(
             o.AltitudeFeet,
             o.HeadingTrue,
             o.OnGround && o.GroundSpeedKnots < RotateKnots ? groundPitch : -o.PitchDegrees,
-            // Wings level while on the ground: BATC keeps writing a bank on the take-off roll (live test 2026-10-03, YBBN:
+            // Wings level while on the ground: The ATC app keeps writing a bank on the take-off roll (live test 2026-10-03, YBBN:
             // a departure drawn leaning left down the runway), which tips a model on its wheels.
             o.OnGround ? 0 : -o.BankDegrees,
             o.GroundSpeedKnots,
@@ -190,14 +190,14 @@ public sealed class TrafficBridge(
 
     private static double Gear(TrafficObject o, double? groundFeet)
     {
-        // Wheels are always down on the ground: BATC's gear writes and events for parked AI did not say so (live test
+        // Wheels are always down on the ground: The ATC app's gear writes and events for parked AI did not say so (live test
         // 2026-10-01, YBBN: aircraft at the gates drawn with the gear up).
         if (o.OnGround)
         {
             return 1;
         }
 
-        // In the air: BATC's GEAR_UP / GEAR_DOWN events. Its gear position writes are not used: it writes 0 once when it
+        // In the air: The ATC app's GEAR_UP / GEAR_DOWN events. Its gear position writes are not used: it writes 0 once when it
         // creates an aircraft (parked ones too) and not again, so that value goes stale.
         return o.LatestEvent("GEAR_UP", "GEAR_DOWN") switch
         {
@@ -234,7 +234,7 @@ public sealed class TrafficBridge(
         : o.Has("TURB ENG N1:1") ? Ratio(o.Get("TURB ENG N1:1") / 100)
         : 0;
 
-    /// <summary>The light's SimVar when BATC wrote it, else the last *_SET event it sent.</summary>
+    /// <summary>The light's SimVar when the ATC app wrote it, else the last *_SET event it sent.</summary>
     private static bool Light(TrafficObject o, string simVar, string setEvent) =>
         o.Has(simVar) ? o.Get(simVar) != 0 : o.Events.TryGetValue(setEvent, out var on) && on != 0;
 

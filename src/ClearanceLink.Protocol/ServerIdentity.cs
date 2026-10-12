@@ -1,7 +1,7 @@
 namespace ClearanceLink.Protocol;
 
 /// <summary>
-/// What the fake server claims to be in its reply to Open. BATC's simconnect_ws decides which sim it is talking to
+/// What the fake server claims to be in its reply to Open. The app's helper decides which sim it is talking to
 /// from the application name and version in this reply, so the values must match a real recording.
 /// </summary>
 public sealed record ServerIdentity(
@@ -18,7 +18,7 @@ public sealed record ServerIdentity(
     /// <summary>Placeholder: not yet recorded from a real MSFS 2020.</summary>
     public static readonly ServerIdentity Msfs2020 = new("KittyHawk", 11, 0, 282174, 999, 11, 0, 62651, 3);
 
-    /// <summary>Recorded from MSFS 2024 1.8.16.0 on 2026-09-30 (docs/research/batc-call-inventory.md).</summary>
+    /// <summary>Recorded from MSFS 2024 1.8.16.0 on 2026-09-30 (docs/research/atc-app-call-inventory.md).</summary>
     public static readonly ServerIdentity Msfs2024 = new("SunRise", 12, 2, 282174, 999, 12, 2, 0, 0);
 
     public static ServerIdentity FromName(string name) => name.ToLowerInvariant() switch

@@ -7,6 +7,14 @@ namespace ClearanceLink.Fsltl.Tests;
 public sealed class FsltlTests
 {
     [Fact]
+    public void Stand_in_user_cfg_is_recognised_whatever_app_an_earlier_version_named()
+    {
+        Assert.True(FsltlLocator.IsStandIn($"{FsltlLocator.StandInMarker} (pid 42)\r\nInstalledPackagesPath \"C:\\x\"\r\n"));
+        Assert.True(FsltlLocator.IsStandIn("// ClearanceLink: lets Tower find FSLTL while ClearanceLink is open; removed when it closes (pid 42)\r\n"));
+        Assert.False(FsltlLocator.IsStandIn("InstalledPackagesPath \"C:\\MSFS\"\r\n// ClearanceLink: lets Tower find FSLTL while ClearanceLink is open; removed when it closes"));
+    }
+
+    [Fact]
     public void Cfg_values_drop_quotes_and_comments_and_ignore_case()
     {
         var cfg = CfgFile.Parse("[FLTSIM.0]\r\ntitle = \"FSLTL A20N; BAW\" ; comment\r\nModel=BAW ; x\r\n");
@@ -65,7 +73,7 @@ public sealed class FsltlTests
     {
         Assert.Equal(@"D:\MSFS\Packages", FsltlLocator.InstalledPackagesPath("Version 1\nInstalledPackagesPath \"D:\\MSFS\\Packages\"\n"));
         Assert.Null(FsltlLocator.InstalledPackagesPath("Version 1\n"));
-        // BeyondATC skips InstalledPackagesPathNextBoot, wherever it is in the file (issue #29).
+        // The ATC app skips InstalledPackagesPathNextBoot, wherever it is in the file (issue #29).
         var both = "InstalledPackagesPathNextBoot \"D:\\MSFS2024 Packages\"\nInstalledPackagesPath \"C:\\Roaming\\Packages\"\n";
         Assert.Equal(@"C:\Roaming\Packages", FsltlLocator.InstalledPackagesPath(both));
         Assert.Equal(@"D:\MSFS2024 Packages", FsltlLocator.InstalledPackagesPathNextBoot(both));

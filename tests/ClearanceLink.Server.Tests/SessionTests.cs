@@ -6,7 +6,7 @@ using ClearanceLink.Server;
 
 namespace ClearanceLink.Server.Tests;
 
-/// <summary>Drives a session with BATC's recorded setup packets and checks what it would send back.</summary>
+/// <summary>Drives a session with the ATC app's recorded setup packets and checks what it would send back.</summary>
 public sealed class SessionTests
 {
     private readonly List<Packet> _sent = [];
@@ -14,7 +14,7 @@ public sealed class SessionTests
     private readonly InMemoryXPlane _xp = Fixtures.ParkedAtYbbn();
 
     [Fact]
-    public async Task Batc_setup_gets_open_reply_and_define_17_from_xplane()
+    public async Task The_apps_setup_gets_open_reply_and_define_17_from_xplane()
     {
         var session = NewSession();
         foreach (var packet in Fixtures.ClientPackets(2))
@@ -73,12 +73,12 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task Batc_1_8_22_traffic_sync_setup_is_answered_quietly()
+    public async Task The_apps_1_8_22_traffic_sync_setup_is_answered_quietly()
     {
-        // BATC_TrafficSync defines two user-aircraft blocks and subscribes to "Frame"; with no Frame events BeyondATC
-        // keeps its older traffic updates on BATCDLLSimConnection (docs/protocol/simconnect.md).
+        // The traffic-timing connection defines two user-aircraft blocks and subscribes to "Frame"; with no Frame events the ATC app
+        // keeps its older traffic updates on its main connection (docs/protocol/simconnect.md).
         var session = NewSession();
-        foreach (var packet in Fixtures.ClientPackets(6, Fixtures.Batc1822Setup))
+        foreach (var packet in Fixtures.ClientPackets(6, Fixtures.App1822Setup))
         {
             await session.HandleAsync(packet);
         }
@@ -107,8 +107,8 @@ public sealed class SessionTests
     [Fact]
     public async Task No_aircraft_data_until_xplane_reports_the_time()
     {
-        // Issue #36: X-Plane had sent the position but not yet the clock, so BATC got ZULU TIME 0 and ABSOLUTE TIME 0,
-        // and BeyondATC 1.8.22's live-traffic time check threw an OverflowException.
+        // Issue #36: X-Plane had sent the position but not yet the clock, so the ATC app got ZULU TIME 0 and ABSOLUTE TIME 0,
+        // and the app's 1.8.22's live-traffic time check threw an OverflowException.
         var session = NewSession();
         Assert.True(_xp.TryGetNumber("sim/time/zulu_time_sec", out var zulu));
         Assert.True(_xp.TryGetNumber("sim/time/local_date_days", out var date));
@@ -142,7 +142,7 @@ public sealed class SessionTests
     public async Task Com_set_event_writes_xplane_frequency_in_khz()
     {
         var session = NewSession();
-        await session.HandleAsync(TestPackets.Open("BATCDLLSimConnection"));
+        await session.HandleAsync(TestPackets.Open("TestApp"));
         await session.HandleAsync(TestPackets.MapClientEventToSimEvent(24, "COM_RADIO_SET_HZ"));
         await session.HandleAsync(TestPackets.MapClientEventToSimEvent(22, "COM_STBY_RADIO_SET_HZ"));
         await session.HandleAsync(TestPackets.MapClientEventToSimEvent(35, "XPNDR_SET"));
@@ -287,7 +287,7 @@ public sealed class SessionTests
     private const int ExpectedDefine17Size = (15 * 8) + (3 * 4) + (17 * 4);
 
     [Fact]
-    public async Task Facility_source_that_throws_gets_the_msfs_exception_so_batc_carries_on()
+    public async Task Facility_source_that_throws_gets_the_msfs_exception_so_the_app_carries_on()
     {
         var session = NewSession(facilities: new ThrowingSource());
         await session.HandleAsync(TestPackets.Open());

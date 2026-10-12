@@ -12,10 +12,10 @@ Before publishing a release that includes the importer, ask the FSLTL team for t
 
 Re-checked against XPMP2 v3.7.0's source (`src/CSLModels.cpp`) and our plugin/host code. Corrections to the first pass:
 
-1. **The 100% name match is partly circular.** `mapping/liveries.json` (the model list ClearanceLink offers BATC) was captured from this same MSFS install, so of course it matches. For Ben it holds; for another user with a different FSLTL version it may not. Fix: the importer writes its own catalogue, and ClearanceLink should offer BATC the titles the user actually imported (plus Bluebell-backed ones), not Ben's list.
-2. **On-demand import does not fit XPMP2.** XPMP2 scans CSL packages when they are loaded, so converting a livery the first time BATC asks for it would not show until X-Plane reloads plugins. Import up front (all, or a filter such as types/airlines) instead.
+1. **The 100% name match is partly circular.** `mapping/liveries.json` (the model list ClearanceLink offers the ATC app) was captured from this same MSFS install, so of course it matches. For Ben it holds; for another user with a different FSLTL version it may not. Fix: the importer writes its own catalogue, and ClearanceLink should offer the ATC app the titles the user actually imported (plus Bluebell-backed ones), not Ben's list.
+2. **On-demand import does not fit XPMP2.** XPMP2 scans CSL packages when they are loaded, so converting a livery the first time the ATC app asks for it would not show until X-Plane reloads plugins. Import up front (all, or a filter such as types/airlines) instead.
 3. **One texture per OBJ.** An X-Plane `.obj` has exactly one texture, but FSLTL airliners have two materials (livery atlas + a separate window/porthole material). XPMP2 allows several `OBJ8` lines per CSL entry, so each material becomes its own `.obj` drawn together.
-4. **Livery keys must be one word.** XPMP2 tokenises `xsb_aircraft.txt` on whitespace, so the exact BATC title cannot be the `LIVERY` key. Use the FSLTL folder name (plus the `[FLTSIM.n]` index when a folder has several) and look it up from the title in ClearanceLink. Today ClearanceLink sends no livery to the plugin at all (`TrafficBridge.cs:96` passes `null`).
+4. **Livery keys must be one word.** XPMP2 tokenises `xsb_aircraft.txt` on whitespace, so the ATC app's exact title cannot be the `LIVERY` key. Use the FSLTL folder name (plus the `[FLTSIM.n]` index when a folder has several) and look it up from the title in ClearanceLink. Today ClearanceLink sends no livery to the plugin at all (`TrafficBridge.cs:96` passes `null`).
 5. **Per-livery textures are cheap in XPMP2.** `OBJ8 SOLID YES model.obj livery.dds` makes XPMP2 write a small `.xpmp2.obj` copy with the texture swapped, so one converted model serves all its liveries; only textures are per livery.
 6. **Texture conversion is cheaper than first stated.** FSLTL DDS files already contain mipmaps, so a 4096 DXT1/DXT5 texture becomes 2048 or 1024 by dropping the top mip levels: no decode, no quality loss, near-instant. Only BC7 (about 36% of livery textures) needs decoding and re-encoding, unless X-Plane 12 accepts BC7 (not documented; to be tested).
 7. **LOD makes the frame cost lower than estimated.** FSLTL ships LOD0 and LOD3 meshes for most airliners; both can go in one `.obj` with `ATTR_LOD`, so distant traffic draws the ~1-2k triangle version.
@@ -44,9 +44,9 @@ Re-checked against XPMP2 v3.7.0's source (`src/CSLModels.cpp`) and our plugin/ho
 - Format mix: DXT5 1,874, BC7 1,073, DXT1 440, BC5 (normal maps) 257. X-Plane is safest with DXT1/DXT5, so BC7 needs re-encoding.
 - Materials are MSFS PBR: albedo (`_T`), occlusion/roughness/metallic (`_M`), separate emissive for windows. X-Plane OBJ wants albedo + optional normal (roughness/metal in its channels) + `_LIT`. A first version can use albedo only plus a lit texture from the emissive window texture.
 
-## Name matching with BATC
+## Name matching with the ATC app
 
-Excellent. Every one of the 3,211 FSLTL titles in this package appears verbatim in BATC's model list (`mapping/liveries.json`, 3,202 FSLTL entries), and each title maps to exactly one folder and texture. So the importer can key the CSL entries on BATC's exact title, and the plugin can do an exact match instead of today's closest-Bluebell guess. The 831 `-STUB` liveries are FSLTL placeholders (generic white or base texture with a code), and should rank below a real livery.
+Excellent. Every one of the 3,211 FSLTL titles in this package appears verbatim in the ATC app's model list (`mapping/liveries.json`, 3,202 FSLTL entries), and each title maps to exactly one folder and texture. So the importer can key the CSL entries on the ATC app's exact title, and the plugin can do an exact match instead of today's closest-Bluebell guess. The 831 `-STUB` liveries are FSLTL placeholders (generic white or base texture with a code), and should rank below a real livery.
 
 ## Frame-rate and memory cost vs Bluebell
 
@@ -72,9 +72,9 @@ A C# importer in `ClearanceLink.Host` (fits the existing stack, unit-testable on
 1. **Find FSLTL:** read MSFS's `UserCfg.opt` `InstalledPackagesPath` (2020 and 2024), look for `fsltl-traffic-base`. Let the user browse if not found.
 2. **Parse liveries:** each `aircraft.cfg` `[FLTSIM.n]` gives title, ICAO type, airline, model folder and texture folder, following `base_container` and `texture.CFG` fallbacks.
 3. **Convert each base model once** (about 100 airliner models, not 3,211): glTF + Asobo vertex packing to OBJ8, flatten node transforms, axis swap, map animations to XPMP2 datarefs, pick a lower LOD when LOD0 is too heavy.
-4. **Convert each livery texture:** decode BC7/DXT, resize to the chosen size, write DXT5 `.dds`. BCnEncoder.NET (MIT) or Microsoft's texconv (MIT) can do this. About 3,200 textures; at 2048 the output is about 18 GB, at 1024 about 4.5 GB. Importing only the liveries BATC actually requests, on demand, is an option that keeps disk use small.
-5. **Write `xsb_aircraft.txt`:** one `OBJ8_AIRCRAFT` per livery, the shared `.obj` with that livery's texture, `ICAO`/`AIRLINE` plus the exact BATC title as the livery key.
-6. **Plugin side (small):** pass the BATC title through as the livery so XPMP2 matches exactly; the 0.4.0 wheel fit already works from `.obj` files, so ground placement comes for free.
+4. **Convert each livery texture:** decode BC7/DXT, resize to the chosen size, write DXT5 `.dds`. BCnEncoder.NET (MIT) or Microsoft's texconv (MIT) can do this. About 3,200 textures; at 2048 the output is about 18 GB, at 1024 about 4.5 GB. Importing only the liveries the ATC app actually requests, on demand, is an option that keeps disk use small.
+5. **Write `xsb_aircraft.txt`:** one `OBJ8_AIRCRAFT` per livery, the shared `.obj` with that livery's texture, `ICAO`/`AIRLINE` plus the ATC app's exact title as the livery key.
+6. **Plugin side (small):** pass the ATC app's title through as the livery so XPMP2 matches exactly; the 0.4.0 wheel fit already works from `.obj` files, so ground placement comes for free.
 
 Rough size: a working importer for the FAIB-family airliners (most of the liveries) is a few focused days of agent work; the long tail of model families with different exporters (FSPX, TFS, babylon.js-exported models) and material polish takes longer. The main technical risks are axis/transform conventions per exporter and getting gear/wheel animations right, both checkable automatically with the existing wheel-fit tool.
 

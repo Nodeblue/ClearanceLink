@@ -1,4 +1,4 @@
-// ClearanceLink X-Plane plugin: draws BeyondATC's AI traffic sent by ClearanceLink, and reports terrain height under it.
+// ClearanceLink X-Plane plugin: draws the ATC app's AI traffic sent by ClearanceLink, and reports terrain height under it.
 // Protocol: docs/protocol/plugin.md.
 #include "CslFolders.h"
 #include "Protocol.h"
@@ -128,7 +128,7 @@ void Handle(const clink::Message& message, float now) {
         if (XPMPGetNumberOfInstalledModels() == 0 && g_aircraft.find(add->id) == g_aircraft.end()) {
             if (g_refusedForNoModels.insert(add->id).second)
                 g_socket.Reply(clink::FormatError(add->id, "no CSL models installed"));
-            LogOnce("no CSL aircraft models found; BeyondATC's traffic is not drawn (install Bluebell or convert FSLTL)");
+            LogOnce("no CSL aircraft models found; the ATC app's traffic is not drawn (install Bluebell or convert FSLTL)");
             return;
         }
         try {
@@ -262,7 +262,7 @@ void MenuHandler(void*, void* item) {
 PLUGIN_API int XPluginStart(char* name, char* signature, char* description) {
     std::strcpy(name, "ClearanceLink");
     std::strcpy(signature, "com.nodeblue.clearancelink");
-    std::strcpy(description, "Draws BeyondATC traffic sent by ClearanceLink");
+    std::strcpy(description, "Draws ATC app traffic sent by ClearanceLink");
     XPLMEnableFeature("XPLM_USE_NATIVE_PATHS", 1);
     return 1;
 }

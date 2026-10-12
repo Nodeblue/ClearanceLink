@@ -3,21 +3,21 @@ using ClearanceLink.Fsltl;
 namespace ClearanceLink.Host;
 
 /// <summary>
-/// BeyondATC lists its traffic models only from MSFS 2024's Community folder: it
+/// The ATC app lists its traffic models only from MSFS 2024's Community folder: it
 /// reads <c>InstalledPackagesPath</c> from MSFS 2024's UserCfg.opt (the Microsoft Store copy, else the Steam copy) and
 /// looks in <c>&lt;path&gt;\community</c> for a folder whose name contains fsltl-traffic-base (or AIG's or FS Traffic's).
 /// With no MSFS 2024 on the PC it finds none and says "No traffic liveries found". So while ClearanceLink runs, when
 /// MSFS 2024 has no UserCfg.opt, this writes one in the Steam place pointing at the FSLTL package ClearanceLink uses,
 /// and removes it again on close (ADR-0014). A real MSFS 2024's files are never changed.
 /// </summary>
-public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, string linkFolder, int? ownerPid = null, Func<int, bool>? isAlive = null)
+public sealed class CommunityTrafficModels(string storeUserCfg, string steamUserCfg, string linkFolder, int? ownerPid = null, Func<int, bool>? isAlive = null)
 {
     private const string FolderMadeLine = "// ClearanceLink made this folder";
 
     private readonly int _owner = ownerPid ?? Environment.ProcessId;
     private readonly Func<int, bool> _isAlive = isAlive ?? ProcessAlive;
 
-    /// <summary>Folder names BeyondATC takes as traffic model packages (it checks "contains", lower case).</summary>
+    /// <summary>Folder names the ATC app takes as traffic model packages (it checks "contains", lower case).</summary>
     public static readonly IReadOnlyList<string> PackageNames =
         [FsltlCatalog.PackageName, "aig-aitraffic-oci", "justflight-aircraft-traffic-fleet", "justflight-fstraffic", "gamod1-models"];
 
@@ -26,13 +26,13 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
         /// <summary>MSFS 2024's Community folder already holds traffic models; nothing changed.</summary>
         Found,
 
-        /// <summary>No MSFS 2024: ClearanceLink's UserCfg.opt now points BeyondATC at FSLTL.</summary>
+        /// <summary>No MSFS 2024: ClearanceLink's UserCfg.opt now points the ATC app at FSLTL.</summary>
         Pointed,
 
-        /// <summary>MSFS 2024 is installed but its Community folder has no traffic models; BeyondATC shows no traffic.</summary>
+        /// <summary>MSFS 2024 is installed but its Community folder has no traffic models; the ATC app shows no traffic.</summary>
         NotInMsfs2024,
 
-        /// <summary>No MSFS 2024 and ClearanceLink doesn't know an FSLTL folder; BeyondATC shows no traffic.</summary>
+        /// <summary>No MSFS 2024 and ClearanceLink doesn't know an FSLTL folder; the ATC app shows no traffic.</summary>
         NoFsltl,
 
         /// <summary>The file or link could not be written.</summary>
@@ -45,23 +45,23 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
     public sealed record Result(Outcome Outcome, string Line);
 
     /// <summary>MSFS 2024's two UserCfg.opt places, and a link folder under ClearanceLink's own folder.</summary>
-    public static BatcTrafficModels Default
+    public static CommunityTrafficModels Default
     {
         get
         {
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            return new BatcTrafficModels(
+            return new CommunityTrafficModels(
                 Path.Combine(local, "Packages", "Microsoft.Limitless_8wekyb3d8bbwe", "LocalCache", "UserCfg.opt"),
                 Path.Combine(roaming, "Microsoft Flight Simulator 2024", "UserCfg.opt"),
-                Path.Combine(Support.AppFolders.Default.Root, "BeyondATC packages"));
+                Path.Combine(Support.AppFolders.Default.Root, "traffic packages"));
         }
     }
 
     /// <summary>The UserCfg.opt ClearanceLink writes when there is no MSFS 2024 (the Steam place).</summary>
     public string StandInFile => steamUserCfg;
 
-    /// <summary>Whether a Community folder holds a package BeyondATC takes as traffic models.</summary>
+    /// <summary>Whether a Community folder holds a package the ATC app takes as traffic models.</summary>
     public static bool HasTrafficModels(string community)
     {
         try
@@ -77,7 +77,7 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
     }
 
     /// <summary>
-    /// What <see cref="Provide"/> would do, without writing anything: for the window's warning that BeyondATC will
+    /// What <see cref="Provide"/> would do, without writing anything: for the window's warning that the ATC app will
     /// find no traffic models (<see cref="Outcome.NotInMsfs2024"/> or <see cref="Outcome.NoFsltl"/>).
     /// </summary>
     public Outcome Check(string? fsltl)
@@ -99,7 +99,7 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
     }
 
     /// <summary>
-    /// Makes sure BeyondATC will find FSLTL (<paramref name="fsltl"/>: the fsltl-traffic-base folder ClearanceLink uses,
+    /// Makes sure the ATC app will find FSLTL (<paramref name="fsltl"/>: the fsltl-traffic-base folder ClearanceLink uses,
     /// or null). Never throws for a file problem: <see cref="Outcome.Failed"/>.
     /// </summary>
     public Result Provide(string? fsltl)
@@ -111,30 +111,30 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
                 // A stand-in left by a crash goes now that MSFS 2024 has its own file.
                 Remove(onlyOurs: false);
                 var (community, nextBoot) = Where();
-                // MSFS 2024 can also name an InstalledPackagesPathNextBoot folder; BeyondATC doesn't read it (issue #29).
+                // MSFS 2024 can also name an InstalledPackagesPathNextBoot folder; the ATC app doesn't read it (issue #29).
                 var notRead = nextBoot is not null && !string.Equals(nextBoot, community, StringComparison.OrdinalIgnoreCase)
-                    ? $"; UserCfg.opt's InstalledPackagesPathNextBoot names {nextBoot}{(HasTrafficModels(nextBoot) ? ", which has traffic models" : "")}, but BeyondATC doesn't read that line"
+                    ? $"; UserCfg.opt's InstalledPackagesPathNextBoot names {nextBoot}{(HasTrafficModels(nextBoot) ? ", which has traffic models" : "")}, but the ATC app doesn't read that line"
                     : "";
                 return community is not null && HasTrafficModels(community)
-                    ? new(Outcome.Found, $"batc-models: BeyondATC finds traffic models in MSFS 2024's {community} ({cfg})")
-                    : new(Outcome.NotInMsfs2024, $"batc-models: BeyondATC looks for traffic models only in MSFS 2024's {community ?? cfg} ({cfg}) and there are none{notRead}; install FSLTL for MSFS 2024 there or BeyondATC shows no traffic");
+                    ? new(Outcome.Found, $"traffic-models: the ATC app finds traffic models in MSFS 2024's {community} ({cfg})")
+                    : new(Outcome.NotInMsfs2024, $"traffic-models: the ATC app looks for traffic models only in MSFS 2024's {community ?? cfg} ({cfg}) and there are none{notRead}; install FSLTL for MSFS 2024 there or the ATC app shows no traffic");
             }
 
             if (OwnerOf(steamUserCfg) is { } other && other != _owner && _isAlive(other))
             {
-                return new(Outcome.PointedByAnother, $"batc-models: another ClearanceLink (pid {other}) already points BeyondATC at FSLTL");
+                return new(Outcome.PointedByAnother, $"traffic-models: another ClearanceLink (pid {other}) already points the ATC app at FSLTL");
             }
 
             if (fsltl is null)
             {
                 Remove();
-                return new(Outcome.NoFsltl, "batc-models: no MSFS 2024 and no FSLTL folder; BeyondATC shows no traffic until FSLTL is set up on the TRAFFIC page");
+                return new(Outcome.NoFsltl, "traffic-models: no MSFS 2024 and no FSLTL folder; the ATC app shows no traffic until FSLTL is set up on the TRAFFIC page");
             }
 
             fsltl = Path.GetFullPath(fsltl);
             if (fsltl.StartsWith(@"\\", StringComparison.Ordinal) || fsltl.Contains('%', StringComparison.Ordinal) || fsltl.Contains('"', StringComparison.Ordinal))
             {
-                return new(Outcome.Failed, $"batc-models: can't point BeyondATC at FSLTL in {fsltl} (a network folder, or a % or \" in its name); move FSLTL to a local folder without those");
+                return new(Outcome.Failed, $"traffic-models: can't point the ATC app at FSLTL in {fsltl} (a network folder, or a % or \" in its name); move FSLTL to a local folder without those");
             }
 
             var target = PackagesFolderFor(fsltl);
@@ -145,11 +145,11 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
             Directory.CreateDirectory(folder);
             File.WriteAllText(steamUserCfg,
                 $"{FsltlLocator.StandInMarker} (pid {_owner})\r\n{(folderMade ? FolderMadeLine + "\r\n" : "")}InstalledPackagesPath \"{target}\"\r\n");
-            return new(Outcome.Pointed, $"batc-models: no MSFS 2024; BeyondATC pointed at FSLTL in {fsltl} until ClearanceLink closes ({steamUserCfg})");
+            return new(Outcome.Pointed, $"traffic-models: no MSFS 2024; the ATC app pointed at FSLTL in {fsltl} until ClearanceLink closes ({steamUserCfg})");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new(Outcome.Failed, $"batc-models: could not point BeyondATC at FSLTL ({ex.Message}); BeyondATC may show no traffic");
+            return new(Outcome.Failed, $"traffic-models: could not point the ATC app at FSLTL ({ex.Message}); the ATC app may show no traffic");
         }
     }
 
@@ -164,7 +164,7 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
         {
             if (!File.Exists(steamUserCfg))
             {
-                return RemoveLink() ? $"batc-models: removed the link in {linkFolder}" : null;
+                return RemoveLink() ? $"traffic-models: removed the link in {linkFolder}" : null;
             }
 
             var text = File.ReadAllText(steamUserCfg);
@@ -182,11 +182,11 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
             }
 
             RemoveLink();
-            return $"batc-models: removed {steamUserCfg}";
+            return $"traffic-models: removed {steamUserCfg}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return $"batc-models: could not remove {steamUserCfg} ({ex.Message})";
+            return $"traffic-models: could not remove {steamUserCfg} ({ex.Message})";
         }
     }
 
@@ -195,7 +195,26 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
     /// deleting ClearanceLink's folder can never reach FSLTL through it (Windows PowerShell 5.1's Remove-Item -Recurse
     /// follows junctions). Provide makes it again in milliseconds.
     /// </summary>
-    private bool RemoveLink()
+    private bool RemoveLink() => RemoveLink(linkFolder);
+
+    /// <summary>
+    /// Removes the link a version up to 0.7.6 made under its old folder name (<see cref="Support.OldNames.TrafficLinkFolder"/>),
+    /// next to <c>linkFolder</c>, so it can't be followed into FSLTL. Returns a line, or null when there was none.
+    /// </summary>
+    public string? RemoveOldLink()
+    {
+        var old = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(linkFolder))!, Support.OldNames.TrafficLinkFolder);
+        try
+        {
+            return RemoveLink(old) ? $"traffic-models: removed the link an earlier version left in {old}" : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"traffic-models: could not remove the link in {old} ({ex.Message})";
+        }
+    }
+
+    private static bool RemoveLink(string linkFolder)
     {
         var link = new DirectoryInfo(Path.Combine(linkFolder, "Community", FsltlCatalog.PackageName));
         if (link.LinkTarget is null)
@@ -244,10 +263,10 @@ public sealed class BatcTrafficModels(string storeUserCfg, string steamUserCfg, 
         }
     }
 
-    /// <summary>MSFS 2024's own UserCfg.opt, the way BeyondATC picks it (Store first), ignoring ClearanceLink's.</summary>
+    /// <summary>MSFS 2024's own UserCfg.opt, the way the ATC app picks it (Store first), ignoring ClearanceLink's.</summary>
     /// <summary>
-    /// With MSFS 2024 installed: the Community folder BeyondATC reads (null when UserCfg.opt names none), and the one
-    /// UserCfg.opt's InstalledPackagesPathNextBoot names, if any (BeyondATC doesn't read that line). Both null without
+    /// With MSFS 2024 installed: the Community folder the ATC app reads (null when UserCfg.opt names none), and the one
+    /// UserCfg.opt's InstalledPackagesPathNextBoot names, if any (the ATC app doesn't read that line). Both null without
     /// MSFS 2024 or when the file can't be read.
     /// </summary>
     public (string? Community, string? NextBoot) Where()

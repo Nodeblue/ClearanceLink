@@ -34,9 +34,9 @@ public class PacketTests
     [Fact]
     public void Decodes_open_fields()
     {
-        var f = PacketDecoder.Decode(TestPackets.Open("BeyondATC"));
+        var f = PacketDecoder.Decode(TestPackets.Open("TestApp"));
 
-        Assert.Equal("BeyondATC", f["appName"]);
+        Assert.Equal("TestApp", f["appName"]);
         Assert.Equal("RS", f["alias"]);
         Assert.Equal(12u, f["versionMajor"]);
         Assert.Equal(282174u, f["buildMajor"]);
